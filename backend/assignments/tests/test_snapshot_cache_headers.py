@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 from assignments.models import Assignment
 from people.models import Person
 from projects.models import Project
+from core.week_utils import sunday_of_week
 
 
 def _current_sunday() -> str:
@@ -26,10 +27,13 @@ class SnapshotCacheHeaderTests(TestCase):
         )
         self.client.force_authenticate(self.user)
 
-        person = Person.objects.create(name='Snapshot Header Person')
+        self.person = Person.objects.create(
+            name='Snapshot Header Person',
+            hire_date=date.today() + timedelta(days=10),
+        )
         project = Project.objects.create(name='Snapshot Header Project')
         Assignment.objects.create(
-            person=person,
+            person=self.person,
             project=project,
             weekly_hours={_current_sunday(): 6},
             is_active=True,
@@ -48,3 +52,12 @@ class SnapshotCacheHeaderTests(TestCase):
         cache_control = response.headers.get('Cache-Control', '')
         self.assertIn('max-age=20', cache_control)
         self.assertIn('stale-while-revalidate=30', cache_control)
+
+    def test_grid_snapshot_includes_first_eligible_week(self):
+        response = self.client.get('/api/assignments/grid_snapshot/?weeks=1')
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        person = payload['people'][0]
+        self.assertIn('firstEligibleWeek', person)
+        expected = sunday_of_week(self.person.hire_date).isoformat()
+        self.assertEqual(person['firstEligibleWeek'], expected)

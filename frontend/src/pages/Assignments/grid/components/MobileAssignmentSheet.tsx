@@ -42,6 +42,10 @@ const MobileAssignmentSheet: React.FC<Props> = ({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const { data: roleOptions = [] } = useProjectRoles(person?.department ?? null, { includeInactive: true });
+  const firstEligibleWeek = React.useMemo(() => {
+    const raw = (person as any)?.firstEligibleWeek;
+    return typeof raw === 'string' && raw ? raw : null;
+  }, [person]);
 
   React.useEffect(() => {
     if (!assignment) return;
@@ -68,6 +72,7 @@ const MobileAssignmentSheet: React.FC<Props> = ({
     setError(null);
     try {
       for (const week of weeks) {
+        if (firstEligibleWeek && week.date < firstEligibleWeek) continue;
         const initial = assignment.weeklyHours?.[week.date] ?? 0;
         const next = parseFloat(localHours[week.date] ?? '0');
         if (!Number.isFinite(next)) continue;
@@ -121,10 +126,13 @@ const MobileAssignmentSheet: React.FC<Props> = ({
               ))}
             </select>
           </div>
+          {firstEligibleWeek ? (
+            <div className="text-xs text-[var(--muted)]">Available starting {firstEligibleWeek}</div>
+          ) : null}
           <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
             {weeks.map((week) => (
               <label key={week.date} className="flex items-center justify-between text-sm">
-                <span className="text-[var(--muted)]">{week.display}</span>
+                <span className={`text-[var(--muted)] ${firstEligibleWeek && week.date < firstEligibleWeek ? 'opacity-60' : ''}`}>{week.display}</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -132,8 +140,8 @@ const MobileAssignmentSheet: React.FC<Props> = ({
                   className="w-24 ml-3 border border-[var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[var(--text)]"
                   value={localHours[week.date] ?? ''}
                   onChange={(e) => setLocalHours((prev) => ({ ...prev, [week.date]: e.target.value }))}
-                  disabled={!canEditAssignments}
-                  readOnly={!canEditAssignments}
+                  disabled={!canEditAssignments || Boolean(firstEligibleWeek && week.date < firstEligibleWeek)}
+                  readOnly={!canEditAssignments || Boolean(firstEligibleWeek && week.date < firstEligibleWeek)}
                 />
               </label>
             ))}

@@ -4,7 +4,7 @@ import path from 'path'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
-import path from 'path'
+import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json'
 
 // https://vitejs.dev/config/
@@ -13,6 +13,7 @@ const RELEASE = process.env.VITE_APP_VERSION || (pkg as any).version || 'dev';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const PWA_ENABLED = env.VITE_PWA_ENABLED !== 'false'
   // Try to read HOST_IP from repo root .env as a fallback when running outside Docker
   let hostFromParentEnv: string | undefined
   try {
@@ -32,6 +33,42 @@ export default defineConfig(({ mode }) => {
   return {
   plugins: [
     react(),
+    VitePWA({
+      disable: !PWA_ENABLED,
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'autoUpdate',
+      includeAssets: ['brand/icon-192.png', 'brand/icon-512.png'],
+      manifest: {
+        name: 'Workload Tracker',
+        short_name: 'Workload',
+        description: 'Workload Tracker companion app',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        background_color: '#0f172a',
+        theme_color: '#0f172a',
+        icons: [
+          {
+            src: '/brand/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: '/brand/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+        ],
+      },
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
     // Bundle analyzer - only in build mode
     visualizer({
       filename: 'dist/stats.html',

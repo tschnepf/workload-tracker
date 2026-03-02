@@ -35,6 +35,7 @@ export interface AssignmentRowProps {
   personDepartmentId?: number | null;
   onAutoHoursReplace?: (assignment: Assignment, personId: number) => void;
   onAutoHoursSupplement?: (assignment: Assignment, personId: number) => void;
+  firstEligibleWeek?: string | null;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
@@ -64,6 +65,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
   personDepartmentId,
   onAutoHoursReplace,
   onAutoHoursSupplement,
+  firstEligibleWeek,
 }) => {
   const isSelected = (week: string) => {
     const inMulti = selectedCells.some(cell =>
@@ -82,6 +84,9 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
     editingCell?.personId === personId &&
     editingCell?.assignmentId === assignment.id &&
     editingCell?.week === week;
+
+  const isWeekLocked = (week: string) => Boolean(firstEligibleWeek && week < firstEligibleWeek);
+  const lockedTooltip = firstEligibleWeek ? `Available starting ${firstEligibleWeek}` : undefined;
 
   const project = (projectsById as Map<number, any>).get(assignment.project);
   const clientName = project?.client || '';
@@ -130,6 +135,8 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
           weekKey={monday.date}
           isSelected={isSelected(monday.date)}
           isEditing={isEditing(monday.date)}
+          isLocked={isWeekLocked(monday.date)}
+          lockedTooltip={lockedTooltip}
           currentHours={assignment.weeklyHours?.[monday.date] || 0}
           onSelect={(isShift) => onCellSelect(personId, assignment.id, monday.date, isShift)}
           onMouseDown={() => onCellMouseDown(personId, assignment.id, monday.date)}

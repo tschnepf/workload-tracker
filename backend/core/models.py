@@ -338,6 +338,10 @@ class NotificationPreference(models.Model):
     email_pre_deliverable_reminders = models.BooleanField(default=True)
     reminder_days_before = models.PositiveIntegerField(default=1)
     daily_digest = models.BooleanField(default=False)
+    web_push_enabled = models.BooleanField(default=False)
+    push_pre_deliverable_reminders = models.BooleanField(default=True)
+    push_daily_digest = models.BooleanField(default=False)
+    push_assignment_changes = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -355,6 +359,30 @@ class NotificationLog(models.Model):
 
     class Meta:
         ordering = ['-sent_at']
+
+
+class WebPushSubscription(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='web_push_subscriptions')
+    endpoint = models.TextField(unique=True)
+    p256dh = models.TextField()
+    auth = models.TextField()
+    expiration_time = models.BigIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+        indexes = [
+            models.Index(fields=['user', 'is_active'], name='idx_push_sub_user_active'),
+            models.Index(fields=['is_active', 'updated_at'], name='idx_push_sub_active_updated'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"WebPushSubscription({self.user_id}, active={self.is_active})"
 
 
 class UtilizationScheme(models.Model):

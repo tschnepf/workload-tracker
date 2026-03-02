@@ -19,7 +19,7 @@ server {
     add_header Cross-Origin-Resource-Policy "same-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     # Mirror Django's CSP for static assets
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; frame-ancestors 'none'; report-uri /csp-report/" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; report-uri /csp-report/" always;
 
     # Static files - Django static files
     location /static/ {
@@ -126,6 +126,18 @@ server {
         access_log off;
     }
 
+    # PWA shell artifacts: always revalidate to avoid sticky old SW/manifest versions.
+    location = /sw.js {
+        alias /var/www/frontend/sw.js;
+        expires -1;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+    location = /manifest.webmanifest {
+        alias /var/www/frontend/manifest.webmanifest;
+        expires 1h;
+        add_header Cache-Control "no-cache";
+    }
+
     # Frontend application - Serve React static build
     location / {
         alias /var/www/frontend/;
@@ -145,4 +157,3 @@ server {
     location ~ /\. { deny all; access_log off; log_not_found off; }
     location ~* \.(env|log|ini|conf|bak|swp|tmp)$ { deny all; access_log off; log_not_found off; }
 }
-

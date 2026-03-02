@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.test import override_settings
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -97,3 +98,63 @@ class AuthEndpointsTests(TestCase):
         self.assertEqual(self.client.get('/api/auth/me/').status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.patch('/api/auth/settings/', { 'settings': {} }, format='json').status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.post('/api/auth/link_person/', { 'person_id': None }, format='json').status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_notification_preferences_push_fields_roundtrip(self):
+        self._auth(self.user)
+        response = self.client.get('/api/auth/notification-preferences/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('webPushEnabled', response.data)
+        self.assertIn('pushPreDeliverableReminders', response.data)
+        self.assertIn('pushDailyDigest', response.data)
+        self.assertIn('pushAssignmentChanges', response.data)
+
+        payload = {
+            'emailPreDeliverableReminders': True,
+            'reminderDaysBefore': 2,
+            'dailyDigest': True,
+            'webPushEnabled': True,
+            'pushPreDeliverableReminders': True,
+            'pushDailyDigest': True,
+            'pushAssignmentChanges': False,
+        }
+        response = self.client.put('/api/auth/notification-preferences/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['webPushEnabled'])
+        self.assertTrue(response.data['pushDailyDigest'])
+        self.assertFalse(response.data['pushAssignmentChanges'])
+
+    def test_push_subscription_crud(self):
+        self._auth(self.user)
+        create_payload = {
+            'endpoint': 'https://example.test/subscription/abc',
+            'expirationTime': None,
+            'keys': {'p256dh': 'p256dh-key', 'auth': 'auth-key'},
+        }
+        created = self.client.post('/api/auth/push-subscriptions/', create_payload, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        sub_id = created.data['id']
+
+        listed = self.client.get('/api/auth/push-subscriptions/')
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(listed.data), 1)
+        self.assertEqual(listed.data[0]['id'], sub_id)
+
+        deleted = self.client.delete(f'/api/auth/push-subscriptions/{sub_id}/')
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
+
+    @override_settings(
+        WEB_PUSH_TEST_STAFF_ONLY=True,
+        WEB_PUSH_ENABLED=True,
+        WEB_PUSH_VAPID_PUBLIC_KEY='public',
+        WEB_PUSH_VAPID_PRIVATE_KEY='private',
+        WEB_PUSH_SUBJECT='mailto:test@example.com',
+    )
+    def test_push_test_staff_only(self):
+        self._auth(self.user)
+        forbidden = self.client.post('/api/auth/push/test/', {}, format='json')
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+        self._auth(self.staff)
+        allowed = self.client.post('/api/auth/push/test/', {}, format='json')
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        self.assertTrue(allowed.data.get('queued'))

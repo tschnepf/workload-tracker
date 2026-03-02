@@ -3,12 +3,19 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
-import { authApi, peopleApi } from '@/services/api';
+import {
+  authApi,
+  peopleApi,
+  systemApi,
+  type NotificationPreferences,
+  type PushSubscriptionItem,
+} from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
 import Toast from '@/components/ui/Toast';
 import Layout from '@/components/layout/Layout';
 import { setSettings } from '@/store/auth';
 import { setColorScheme } from '@/theme/themeManager';
+import { base64UrlToUint8Array, isWebPushSupported } from '@/utils/push';
 
 const Profile: React.FC = () => {
   const auth = useAuth();
@@ -25,6 +32,15 @@ const Profile: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const updatePersonMutation = useUpdatePerson();
   const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences | null>(null);
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const [pushPermission, setPushPermission] = useState<string>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported',
+  );
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushServerEnabled, setPushServerEnabled] = useState(false);
+  const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+  const [pushSubscriptions, setPushSubscriptions] = useState<PushSubscriptionItem[]>([]);
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
 
@@ -48,7 +64,127 @@ const Profile: React.FC = () => {
     })();
   }, [auth.person?.id]);
 
+  useAuthenticatedEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [prefs, caps] = await Promise.all([
+          authApi.getNotificationPreferences(),
+          systemApi.getCapabilities(),
+        ]);
+        if (cancelled) return;
+        setNotificationPrefs(prefs);
+        setPushServerEnabled(Boolean(caps?.pwa?.enabled && caps?.pwa?.pushEnabled));
+        setVapidPublicKey(caps?.pwa?.vapidPublicKey || null);
+      } catch {
+        if (!cancelled) {
+          setToast({ message: 'Failed to load notification preferences', type: 'error' });
+        }
+      }
+      try {
+        const subs = await authApi.listPushSubscriptions();
+        if (!cancelled) setPushSubscriptions(subs);
+      } catch {
+        // ignore subscription list failures
+      }
+
+      if (!cancelled) {
+        const supported = (
+          typeof window !== 'undefined'
+          && isWebPushSupported()
+        );
+        setPushSupported(Boolean(supported));
+        if ('Notification' in window) {
+          setPushPermission(Notification.permission);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationPrefs?.webPushEnabled) return;
+    if (!pushSupported || !pushServerEnabled || !vapidPublicKey) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    upsertCurrentBrowserSubscription().catch(() => {
+      // best effort refresh on load
+    });
+  }, [notificationPrefs?.webPushEnabled, pushSupported, pushServerEnabled, vapidPublicKey]);
+
   const canEditName = !!auth.person?.id;
+
+  async function saveNotificationPrefs(next: NotificationPreferences) {
+    setNotificationBusy(true);
+    try {
+      const saved = await authApi.updateNotificationPreferences(next);
+      setNotificationPrefs(saved);
+      return saved;
+    } finally {
+      setNotificationBusy(false);
+    }
+  }
+
+  async function refreshPushSubscriptions() {
+    try {
+      const subs = await authApi.listPushSubscriptions();
+      setPushSubscriptions(subs);
+    } catch {
+      // ignore list refresh failure
+    }
+  }
+
+  async function upsertCurrentBrowserSubscription() {
+    if (!pushSupported || !vapidPublicKey) {
+      throw new Error('Push is not available in this browser or server key is missing.');
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToUint8Array(vapidPublicKey),
+      });
+    }
+    const json = subscription.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+      throw new Error('Subscription payload is incomplete.');
+    }
+    await authApi.upsertPushSubscription({
+      endpoint: json.endpoint,
+      expirationTime: json.expirationTime ?? null,
+      keys: {
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+      },
+    });
+    await refreshPushSubscriptions();
+  }
+
+  async function disableBrowserPushSubscriptions() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      try {
+        await subscription.unsubscribe();
+      } catch {
+        // ignore local unsubscribe failures
+      }
+    }
+    const subs = [...pushSubscriptions];
+    for (const sub of subs) {
+      try {
+        await authApi.deletePushSubscription(sub.id);
+      } catch {
+        // ignore and continue best effort cleanup
+      }
+    }
+    await refreshPushSubscriptions();
+  }
 
   return (<>
     <Layout>
@@ -104,6 +240,133 @@ const Profile: React.FC = () => {
               <option value="sky">Sky</option>
             </select>
           </div>
+        </div>
+
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Notifications</h2>
+          {!notificationPrefs ? (
+            <div className="text-sm text-[var(--muted)]">Loading notification preferences…</div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs text-[var(--muted)]">
+                Push support: {pushSupported ? 'available' : 'not available'} | Permission: {pushPermission}
+              </div>
+              {!pushServerEnabled ? (
+                <div className="text-xs text-amber-300">
+                  Push is currently disabled by server configuration.
+                </div>
+              ) : null}
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.webPushEnabled}
+                  disabled={notificationBusy || !pushSupported || !pushServerEnabled}
+                  onChange={async (e) => {
+                    const enabled = (e.target as HTMLInputElement).checked;
+                    const original = notificationPrefs;
+                    try {
+                      const saved = await saveNotificationPrefs({
+                        ...notificationPrefs,
+                        webPushEnabled: enabled,
+                      });
+                      if (!enabled) {
+                        await disableBrowserPushSubscriptions();
+                        setToast({ message: 'Push notifications disabled', type: 'info' });
+                        return;
+                      }
+                      if ('Notification' in window && Notification.permission === 'default') {
+                        const perm = await Notification.requestPermission();
+                        setPushPermission(perm);
+                      } else if ('Notification' in window) {
+                        setPushPermission(Notification.permission);
+                      }
+                      if (!('Notification' in window) || Notification.permission !== 'granted') {
+                        setToast({ message: 'Notification permission is not granted in this browser', type: 'warning' });
+                        await saveNotificationPrefs({ ...saved, webPushEnabled: false });
+                        return;
+                      }
+                      await upsertCurrentBrowserSubscription();
+                      setToast({ message: 'Push notifications enabled', type: 'success' });
+                    } catch (err: any) {
+                      setNotificationPrefs(original);
+                      setToast({ message: err?.message || 'Failed to update push settings', type: 'error' });
+                    }
+                  }}
+                />
+                Enable push notifications
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushPreDeliverableReminders}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushPreDeliverableReminders: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update reminder push preference', type: 'error' });
+                    }
+                  }}
+                />
+                Push pre-deliverable reminders
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushDailyDigest}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushDailyDigest: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update digest push preference', type: 'error' });
+                    }
+                  }}
+                />
+                Push daily digest
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushAssignmentChanges}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushAssignmentChanges: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update assignment push preference', type: 'error' });
+                    }
+                  }}
+                />
+                Push assignment changes
+              </label>
+
+              <div className="flex items-center gap-2 pt-2">
+                <Button
+                  disabled={!notificationPrefs.webPushEnabled || notificationBusy}
+                  onClick={async () => {
+                    try {
+                      await authApi.testPush();
+                      setToast({ message: 'Test notification queued', type: 'success' });
+                    } catch (err: any) {
+                      setToast({ message: err?.message || 'Failed to send test notification', type: 'error' });
+                    }
+                  }}
+                >
+                  Send Test Notification
+                </Button>
+                <span className="text-xs text-[var(--muted)]">
+                  Active subscriptions: {pushSubscriptions.length}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mb-6">

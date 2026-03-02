@@ -6,6 +6,8 @@ export interface WeekCellProps {
   weekKey: string;
   isSelected: boolean;
   isEditing: boolean;
+  isLocked?: boolean;
+  lockedTooltip?: string;
   currentHours: number;
   onSelect: (isShift: boolean) => void;
   onMouseDown: () => void;
@@ -18,23 +20,26 @@ export interface WeekCellProps {
   deliverablesForWeek: Deliverable[];
 }
 
-const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, currentHours, onSelect, onMouseDown, onMouseEnter, onEditStart, onEditSave, onEditCancel, editingValue, onEditValueChange, deliverablesForWeek }) => {
+const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, isLocked = false, lockedTooltip, currentHours, onSelect, onMouseDown, onMouseEnter, onEditStart, onEditSave, onEditCancel, editingValue, onEditValueChange, deliverablesForWeek }) => {
   const { entries, hasDeliverable, tooltip, colorFor } = useDeliverableBars(deliverablesForWeek);
+  const title = isLocked ? (lockedTooltip || tooltip) : tooltip;
 
   return (
     <div
       className={`
-        relative cursor-pointer transition-colors border-l border-[var(--border)]
-        ${isSelected ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : 'hover:bg-[var(--surfaceHover)]'}
+        relative transition-colors border-l border-[var(--border)]
+        ${isLocked ? 'cursor-not-allowed bg-[var(--surface)]/70' : 'cursor-pointer'}
+        ${!isLocked && isSelected ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}
+        ${!isLocked && !isSelected ? 'hover:bg-[var(--surfaceHover)]' : ''}
       `}
       data-week-cell-editing={isEditing ? 'true' : undefined}
-      onClick={(e) => onSelect((e as any).shiftKey)}
-      onMouseDown={(e) => { e.preventDefault(); onMouseDown(); }}
-      onMouseEnter={() => onMouseEnter()}
-      onDoubleClick={() => onEditStart()}
-      title={tooltip}
+      onClick={(e) => { if (!isLocked) onSelect((e as any).shiftKey); }}
+      onMouseDown={(e) => { if (isLocked) return; e.preventDefault(); onMouseDown(); }}
+      onMouseEnter={() => { if (!isLocked) onMouseEnter(); }}
+      onDoubleClick={() => { if (!isLocked) onEditStart(); }}
+      title={title}
     >
-      {isEditing ? (
+      {isEditing && !isLocked ? (
         <input
           type="number"
           value={editingValue}
@@ -47,7 +52,7 @@ const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, currentHours
           autoFocus
         />
       ) : (
-        <div className="h-8 flex items-center justify-center text-xs text-[var(--text)]">
+        <div className={`h-8 flex items-center justify-center text-xs ${isLocked ? 'text-[var(--muted)]' : 'text-[var(--text)]'}`}>
           {currentHours > 0 ? currentHours : ''}
         </div>
       )}

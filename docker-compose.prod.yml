@@ -91,6 +91,7 @@ services:
         VITE_API_URL: /api
         VITE_OPENAPI_MIGRATION_ENABLED: "true"
         VITE_COOKIE_REFRESH_AUTH: "true"
+        VITE_PWA_ENABLED: ${VITE_PWA_ENABLED:-"true"}
         # All endpoint paths migrated to typed client; flags retired
 
   # Nginx reverse proxy and static file server

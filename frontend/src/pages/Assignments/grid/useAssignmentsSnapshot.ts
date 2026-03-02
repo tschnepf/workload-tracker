@@ -78,6 +78,7 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
       name: p.name,
       weeklyCapacity: p.weeklyCapacity,
       department: p.department ?? null,
+      firstEligibleWeek: p.firstEligibleWeek ?? null,
       assignments: [],
       isExpanded: false,
     }));

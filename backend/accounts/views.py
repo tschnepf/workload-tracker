@@ -3,9 +3,9 @@ from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.throttling import UserRateThrottle
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 
 from .models import UserProfile, AdminAuditLog
 from .permissions import IsAdminOrManager, is_admin_user
@@ -24,16 +24,19 @@ from .serializers import (
     InviteUserRequestSerializer,
     AdminLinkUserPersonRequestSerializer,
     NotificationPreferencesSerializer,
+    PushSubscriptionUpsertSerializer,
+    PushSubscriptionItemSerializer,
 )
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
-from core.models import NotificationPreference
+from core.models import NotificationPreference, WebPushSubscription
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
+from core.webpush import build_push_payload, queue_push_to_users, web_push_configured
 
 
 class HotEndpointThrottle(UserRateThrottle):
@@ -471,8 +474,100 @@ class NotificationPreferencesView(APIView):
         pref.email_pre_deliverable_reminders = data['emailPreDeliverableReminders']
         pref.reminder_days_before = data['reminderDaysBefore']
         pref.daily_digest = data['dailyDigest']
-        pref.save(update_fields=['email_pre_deliverable_reminders', 'reminder_days_before', 'daily_digest', 'updated_at'])
+        pref.web_push_enabled = data.get('webPushEnabled', pref.web_push_enabled)
+        pref.push_pre_deliverable_reminders = data.get(
+            'pushPreDeliverableReminders',
+            pref.push_pre_deliverable_reminders,
+        )
+        pref.push_daily_digest = data.get('pushDailyDigest', pref.push_daily_digest)
+        pref.push_assignment_changes = data.get('pushAssignmentChanges', pref.push_assignment_changes)
+        pref.save(
+            update_fields=[
+                'email_pre_deliverable_reminders',
+                'reminder_days_before',
+                'daily_digest',
+                'web_push_enabled',
+                'push_pre_deliverable_reminders',
+                'push_daily_digest',
+                'push_assignment_changes',
+                'updated_at',
+            ]
+        )
         return Response(NotificationPreferencesSerializer.from_model(pref))
+
+
+class PushSubscriptionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=PushSubscriptionItemSerializer(many=True))
+    def get(self, request):
+        qs = WebPushSubscription.objects.filter(user=request.user).order_by('-updated_at')
+        payload = [PushSubscriptionItemSerializer.from_model(item) for item in qs]
+        return Response(payload)
+
+    @extend_schema(request=PushSubscriptionUpsertSerializer, responses=PushSubscriptionItemSerializer)
+    def post(self, request):
+        ser = PushSubscriptionUpsertSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        keys = data.get('keys') or {}
+
+        subscription, _ = WebPushSubscription.objects.update_or_create(
+            endpoint=data['endpoint'],
+            defaults={
+                'user': request.user,
+                'p256dh': keys.get('p256dh', ''),
+                'auth': keys.get('auth', ''),
+                'expiration_time': data.get('expirationTime'),
+                'is_active': True,
+                'last_error': '',
+            },
+        )
+        return Response(PushSubscriptionItemSerializer.from_model(subscription), status=status.HTTP_201_CREATED)
+
+
+class PushSubscriptionDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={204: None})
+    def delete(self, request, subscription_id: int):
+        deleted, _ = WebPushSubscription.objects.filter(
+            id=subscription_id,
+            user=request.user,
+        ).delete()
+        if deleted == 0:
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PushTestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=inline_serializer(
+        name='PushTestResponse',
+        fields={
+            'queued': serializers.BooleanField(),
+            'detail': serializers.CharField(),
+        },
+    ))
+    def post(self, request):
+        if getattr(django_settings, 'WEB_PUSH_TEST_STAFF_ONLY', True) and not (
+            request.user.is_staff or request.user.is_superuser
+        ):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not web_push_configured():
+            return Response({'detail': 'Web push not configured', 'queued': False}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = build_push_payload(
+            event_type='push.test',
+            title='Workload Tracker',
+            body='This is a test notification.',
+            url='/my-work',
+            tag='push.test',
+        )
+        queue_push_to_users([request.user.id], payload, preference_field=None)
+        return Response({'queued': True, 'detail': 'Test notification queued'})
 
 
 class AdminAuditLogsView(APIView):

@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from django.db.models import Prefetch
 from django.core.cache import cache
 import logging
+from people.eligibility import is_hired_in_week, is_hired_on_date
 
 logger = logging.getLogger('cache_performance')
 
@@ -30,8 +31,12 @@ class CapacityAnalysisService:
             return cached
         logger.info("Cache MISS: %s", key, extra={'cache_hit': False})
 
+        people = list(people_queryset)
+        today = date.today()
         result: List[Dict] = []
-        for p in people_queryset:
+        for p in people:
+            if not is_hired_on_date(getattr(p, "hire_date", None), today):
+                continue
             util = p.get_utilization_over_weeks_sunday(weeks=weeks)
             result.append({
                 'id': p.id,
@@ -64,9 +69,6 @@ class CapacityAnalysisService:
         start_sunday = sunday_of_week(today)
         week_starts = [start_sunday + timedelta(weeks=w) for w in range(weeks)]
 
-        # Total capacity across team (constant across weeks)
-        total_capacity_per_week = sum((p.weekly_capacity or 0) for p in people_queryset)
-
         def hours_for_week(assignment, sunday_date: date) -> float:
             wh = assignment.weekly_hours or {}
             key = sunday_date.strftime('%Y-%m-%d')
@@ -90,16 +92,22 @@ class CapacityAnalysisService:
             return cached
         logger.info("Cache MISS: %s", key, extra={'cache_hit': False})
 
+        people = list(people_queryset)
         forecast: List[Dict] = []
         for week_start in week_starts:
+            total_capacity_per_week = 0.0
             total_allocated = 0.0
             overallocated = []
-            for p in people_queryset:
+            for p in people:
+                if not is_hired_in_week(getattr(p, "hire_date", None), week_start):
+                    continue
+                cap = float(p.weekly_capacity or 0)
+                total_capacity_per_week += cap
                 person_alloc = 0.0
                 for a in getattr(p, 'assignments').all():
                     person_alloc += hours_for_week(a, week_start)
                 total_allocated += person_alloc
-                if person_alloc > (p.weekly_capacity or 0):
+                if person_alloc > cap:
                     overallocated.append({'id': p.id, 'name': p.name})
 
             team_util = round((total_allocated / total_capacity_per_week * 100), 1) if total_capacity_per_week else 0

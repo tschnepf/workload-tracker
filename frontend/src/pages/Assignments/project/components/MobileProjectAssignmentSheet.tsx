@@ -8,6 +8,7 @@ type Props = {
   weeks: WeekHeader[];
   onClose: () => void;
   onSaveHours: (assignmentId: number, week: string, hours: number) => Promise<void>;
+  firstEligibleWeek?: string | null;
   canEditAssignments: boolean;
 };
 
@@ -16,6 +17,7 @@ const MobileProjectAssignmentSheet: React.FC<Props> = ({
   weeks,
   onClose,
   onSaveHours,
+  firstEligibleWeek,
   canEditAssignments,
 }) => {
   const [localHours, setLocalHours] = React.useState<Record<string, string>>({});
@@ -44,6 +46,7 @@ const MobileProjectAssignmentSheet: React.FC<Props> = ({
     setError(null);
     try {
       for (const week of weeks) {
+        if (firstEligibleWeek && week.date < firstEligibleWeek) continue;
         const initial = assignment.weeklyHours?.[week.date] ?? 0;
         const next = parseFloat(localHours[week.date] ?? '0');
         if (!Number.isFinite(next)) continue;
@@ -71,10 +74,13 @@ const MobileProjectAssignmentSheet: React.FC<Props> = ({
           <label className="text-xs text-[var(--muted)] block mb-1">Role on Project</label>
           <div className="text-sm text-[var(--text)]">{assignment.roleName || 'Unassigned role'}</div>
         </div>
+        {firstEligibleWeek ? (
+          <div className="text-xs text-[var(--muted)]">Available starting {firstEligibleWeek}</div>
+        ) : null}
         <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
           {weeks.map((week) => (
             <label key={week.date} className="flex items-center justify-between text-sm">
-              <span className="text-[var(--muted)]">{week.display}</span>
+              <span className={`text-[var(--muted)] ${firstEligibleWeek && week.date < firstEligibleWeek ? 'opacity-60' : ''}`}>{week.display}</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -82,8 +88,8 @@ const MobileProjectAssignmentSheet: React.FC<Props> = ({
                 className="w-24 ml-3 border border-[var(--border)] rounded px-2 py-1 bg-[var(--surface)] text-[var(--text)]"
                 value={localHours[week.date] ?? ''}
                 onChange={(e) => setLocalHours((prev) => ({ ...prev, [week.date]: e.target.value }))}
-                disabled={!canEditAssignments}
-                readOnly={!canEditAssignments}
+                disabled={!canEditAssignments || Boolean(firstEligibleWeek && week.date < firstEligibleWeek)}
+                readOnly={!canEditAssignments || Boolean(firstEligibleWeek && week.date < firstEligibleWeek)}
               />
             </label>
           ))}

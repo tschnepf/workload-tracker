@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -35,6 +37,13 @@ class DashboardBootstrapApiTests(TestCase):
         Project.objects.create(name='Nova', status='planning', is_active=True)
 
     def test_bootstrap_returns_dashboard_project_counts_and_people_meta(self):
+        future_person = Person.objects.create(
+            name='Future Engineer',
+            department=self.department,
+            role=self.role,
+            weekly_capacity=40,
+            hire_date=date.today() + timedelta(days=14),
+        )
         response = self.client.get('/api/dashboard/bootstrap/?weeks=2')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -51,6 +60,7 @@ class DashboardBootstrapApiTests(TestCase):
 
         people_meta_ids = [row.get('id') for row in payload.get('peopleMeta', [])]
         self.assertIn(self.person.id, people_meta_ids)
+        self.assertNotIn(future_person.id, people_meta_ids)
 
     def test_bootstrap_respects_feature_flag(self):
         original = settings.FEATURES.get('FF_MODERATE_PAGES_SNAPSHOTS', True)

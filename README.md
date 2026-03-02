@@ -351,6 +351,12 @@ Set at minimum:
 - `CSRF_TRUSTED_ORIGINS=https://smc-projects.com,https://www.smc-projects.com`
 - `COOKIE_REFRESH_AUTH=true`
 - `SECURE_SSL_REDIRECT=true`
+- `PWA_ENABLED=true` (installable app shell)
+- `WEB_PUSH_ENABLED=true` only after setting `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT`
+
+Notes:
+- Service workers and web push require HTTPS in production.
+- Keep `WEB_PUSH_TEST_STAFF_ONLY=true` to restrict `/api/auth/push/test/` to staff/superusers.
 
 ### 6. Generate strong secrets
 Run these on the Unraid host and paste values into your source env file(s):

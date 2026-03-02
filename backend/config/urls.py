@@ -109,6 +109,15 @@ def readiness_check(request):
                 name='CapabilitiesIntegrations',
                 fields={'enabled': serializers.BooleanField()},
             ),
+            'pwa': inline_serializer(
+                name='CapabilitiesPwa',
+                fields={
+                    'enabled': serializers.BooleanField(),
+                    'pushEnabled': serializers.BooleanField(),
+                    'vapidPublicKey': serializers.CharField(allow_null=True, required=False),
+                    'offlineMode': serializers.CharField(),
+                },
+            ),
         },
     )
 )
@@ -133,6 +142,12 @@ def capabilities_view(request):
             'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
         },
         'personalDashboard': True,
+        'pwa': {
+            'enabled': bool(getattr(settings, 'PWA_ENABLED', True)),
+            'pushEnabled': bool(getattr(settings, 'WEB_PUSH_ENABLED', False)),
+            'vapidPublicKey': getattr(settings, 'WEB_PUSH_VAPID_PUBLIC_KEY', '') or None,
+            'offlineMode': 'shell',
+        },
     }
     # Advertise department-scoped project roles capability to gate UIs if desired
     try:

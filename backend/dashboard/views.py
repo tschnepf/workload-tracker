@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from django.conf import settings
 from people.models import Person
+from people.eligibility import active_people_on_or_before
 from assignments.models import Assignment
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 import logging
@@ -63,6 +64,7 @@ class DashboardView(APIView):
                     'weeks': weeks,
                     'department': department_filter if department_filter is not None else 'all',
                     'vertical': vertical_filter if vertical_filter is not None else 'all',
+                    'hire_eligibility_version': 2,
                 },
             )
             try:
@@ -77,7 +79,7 @@ class DashboardView(APIView):
         week_end = week_start + timedelta(days=6)
         
         # Get active people, optionally filtered by department
-        active_people = Person.objects.filter(is_active=True)
+        active_people = active_people_on_or_before(Person.objects.filter(is_active=True), today)
         if department_filter:
             active_people = active_people.filter(department_id=department_filter)
         if vertical_filter:
@@ -199,6 +201,7 @@ class DashboardView(APIView):
         
         # Get total active assignments, optionally filtered by department
         assignments_qs = Assignment.objects.filter(is_active=True, person__is_active=True)
+        assignments_qs = assignments_qs.filter(person_id__in=active_people.values('id'))
         if department_filter:
             assignments_qs = assignments_qs.filter(person__department_id=department_filter)
         if vertical_filter:
@@ -210,6 +213,7 @@ class DashboardView(APIView):
         recent_assignment_qs = Assignment.objects.filter(
             created_at__gte=timezone.now() - timedelta(days=7)
         ).select_related('person', 'project', 'role_on_project_ref')
+        recent_assignment_qs = recent_assignment_qs.filter(person_id__in=active_people.values('id'))
         
         if department_filter:
             recent_assignment_qs = recent_assignment_qs.filter(person__department_id=department_filter)
@@ -332,13 +336,14 @@ class DashboardBootstrapView(APIView):
                 cache_key = build_aggregate_cache_key(
                     'dashboard.bootstrap',
                     request,
-                    filters={
-                        'weeks': weeks,
-                        'department': department_filter if department_filter is not None else 'all',
-                        'include_children': 1 if include_children else 0,
-                        'vertical': vertical_filter if vertical_filter is not None else 'all',
-                    },
-                )
+                filters={
+                    'weeks': weeks,
+                    'department': department_filter if department_filter is not None else 'all',
+                    'include_children': 1 if include_children else 0,
+                    'vertical': vertical_filter if vertical_filter is not None else 'all',
+                    'hire_eligibility_version': 2,
+                },
+            )
                 cached = cache.get(cache_key)
                 if cached is not None:
                     return Response(cached)
@@ -360,11 +365,12 @@ class DashboardBootstrapView(APIView):
             key = row.get('status') or 'Unknown'
             project_counts_by_status[key] = int(row.get('count') or 0)
 
-        people_qs = (
+        people_qs = active_people_on_or_before(
             Person.objects
             .select_related('role')
             .filter(is_active=True)
-            .only('id', 'is_active', 'hire_date', 'role_id', 'role__name', 'department_id')
+            .only('id', 'is_active', 'hire_date', 'role_id', 'role__name', 'department_id'),
+            date.today(),
         )
         if vertical_filter is not None:
             people_qs = people_qs.filter(department__vertical_id=vertical_filter)

@@ -1,9 +1,11 @@
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
+from accounts.models import UserProfile
 from assignments.models import Assignment
 from assignments.models import AssignmentWeekHour
 from people.models import Person
@@ -29,6 +31,10 @@ class BulkUpdateHoursTests(TestCase):
 
         self.project = Project.objects.create(name='Bulk Update Project')
         self.person = Person.objects.create(name='Bulk Person')
+        self.affected_user = User.objects.create_user(username='recipient', password='x')
+        profile, _ = UserProfile.objects.get_or_create(user=self.affected_user)
+        profile.person = self.person
+        profile.save(update_fields=['person', 'updated_at'])
         sunday = _current_sunday()
         self.assignment_a = Assignment.objects.create(
             person=self.person,
@@ -80,3 +86,56 @@ class BulkUpdateHoursTests(TestCase):
     def test_bulk_update_hours_requires_non_empty_updates(self):
         response = self.client.patch('/api/assignments/bulk_update_hours/', {'updates': []}, format='json')
         self.assertEqual(response.status_code, 400)
+
+    def test_bulk_update_hours_rejects_pre_hire_week_writes(self):
+        sunday_date = date.fromisoformat(self.sunday)
+        self.person.hire_date = sunday_date + timedelta(days=14)
+        self.person.save(update_fields=['hire_date', 'updated_at'])
+
+        response = self.client.patch(
+            '/api/assignments/bulk_update_hours/',
+            {
+                'updates': [
+                    {'assignmentId': self.assignment_a.id, 'weeklyHours': {self.sunday: 6}},
+                ]
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body.get('code'), 'PRE_HIRE_WEEK_LOCKED')
+        self.assertEqual(body.get('detail'), 'Cannot assign hours before employee hire week')
+
+    def test_create_assignment_rejects_pre_hire_week_writes(self):
+        sunday_date = date.fromisoformat(self.sunday)
+        self.person.hire_date = sunday_date + timedelta(days=14)
+        self.person.save(update_fields=['hire_date', 'updated_at'])
+
+        response = self.client.post(
+            '/api/assignments/',
+            {
+                'person': self.person.id,
+                'project': self.project.id,
+                'weeklyHours': {self.sunday: 8},
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body.get('code'), 'PRE_HIRE_WEEK_LOCKED')
+        self.assertEqual(body.get('detail'), 'Cannot assign hours before employee hire week')
+
+    @override_settings(WEB_PUSH_ENABLED=True, WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED=True)
+    @patch('assignments.views.queue_push_to_users')
+    def test_bulk_update_hours_queues_assignment_push_summary(self, queue_mock):
+        payload = {
+            'updates': [
+                {'assignmentId': self.assignment_b.id, 'weeklyHours': {self.sunday: 14}},
+            ]
+        }
+        response = self.client.patch('/api/assignments/bulk_update_hours/', payload, format='json')
+        self.assertEqual(response.status_code, 200)
+        queue_mock.assert_called_once()
+        args, kwargs = queue_mock.call_args
+        self.assertEqual(args[0], [self.affected_user.id])
+        self.assertEqual(kwargs.get('preference_field'), 'push_assignment_changes')

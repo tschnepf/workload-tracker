@@ -103,6 +103,7 @@ services:
       - VITE_API_URL=/api
       - VITE_OPENAPI_MIGRATION_ENABLED=true
       - VITE_COOKIE_REFRESH_AUTH=${VITE_COOKIE_REFRESH_AUTH:-true}
+      - VITE_PWA_ENABLED=${VITE_PWA_ENABLED:-true}
       # Retired flags: all endpoints migrated to typed client
     depends_on:
       - backend

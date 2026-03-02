@@ -164,6 +164,39 @@ class ForecastPlannerApiTests(TestCase):
         self.assertAlmostEqual(status_weekly.get("scheduledIncludedByWeek", [0])[0], 20.0, places=2)
         self.assertAlmostEqual(status_weekly.get("scheduledExcludedByWeek", [0])[0], 10.0, places=2)
 
+    def test_evaluate_excludes_person_assigned_hours_before_hire_week(self):
+        sunday = date.today() - timedelta(days=(date.today().weekday() + 1) % 7)
+        week0 = sunday.isoformat()
+        week1 = (sunday + timedelta(days=7)).isoformat()
+        future_person = Person.objects.create(
+            name="Future Planner Person",
+            department=self.department,
+            role=self.people_role,
+            weekly_capacity=40,
+            is_active=True,
+            hire_date=sunday + timedelta(days=9),  # Mid-week in week1
+        )
+        Assignment.objects.create(
+            person=future_person,
+            project=self.active_project,
+            weekly_hours={week0: 7, week1: 9},
+            is_active=True,
+        )
+
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            "/api/reports/forecast/evaluate/",
+            {"weeks": 8, "statusKeys": ["active"], "projects": []},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        chart_data = resp.json()["result"]["chartData"]
+        status_weekly = ((chart_data.get("statusSeries") or {}).get("weekly") or {})
+        included = status_weekly.get("scheduledIncludedByWeek") or []
+        self.assertGreaterEqual(len(included), 2)
+        self.assertAlmostEqual(included[0], 20.0, places=2)
+        self.assertAlmostEqual(included[1], 9.0, places=2)
+
     def test_confidence_series_enabled_when_probability_weighting(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.post(

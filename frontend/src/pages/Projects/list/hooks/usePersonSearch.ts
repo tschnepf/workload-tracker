@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import type { Person } from '@/types/models';
 import { peopleApi, jobsApi } from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -26,6 +26,7 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
   const [results, setResults] = useState<PersonWithAvailability[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [srAnnouncement, setSrAnnouncement] = useState('');
+  const requestSeqRef = useRef(0);
 
   const debounced = useDebounce(text, 300);
 
@@ -44,16 +45,45 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
   };
 
   const performSearch = useCallback(async (searchTerm: string) => {
-    let filtered = people;
-    if (searchTerm.length > 0) {
-      filtered = people.filter(person =>
-        person.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(person.role || '').toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    const requestId = ++requestSeqRef.current;
+    const normalizedTerm = searchTerm.trim().toLowerCase();
+
+    let candidates = people;
+    if (normalizedTerm.length >= 2) {
+      try {
+        const remote = await peopleApi.search(normalizedTerm, 50, { vertical: vertical ?? undefined });
+        if (requestId !== requestSeqRef.current) return;
+        const localById = new Map<number, Person>();
+        people.forEach((p) => {
+          if (p.id == null) return;
+          localById.set(p.id, p);
+        });
+        candidates = remote.map((row) => {
+          const local = localById.get(row.id);
+          if (local) return local;
+          return {
+            id: row.id,
+            name: row.name,
+            roleName: row.roleName ?? null,
+            department: row.department ?? null,
+            isActive: true,
+          } as Person;
+        });
+      } catch {
+        candidates = people;
+      }
+    }
+
+    let filtered = candidates;
+    if (normalizedTerm.length > 0) {
+      filtered = candidates.filter(person => {
+        const roleText = String((person as any).roleName ?? person.role ?? '').toLowerCase();
+        return person.name.toLowerCase().includes(normalizedTerm) || roleText.includes(normalizedTerm);
+      });
     }
 
     const commonSkills = ['heat', 'lighting', 'hvac', 'autocad', 'python', 'design', 'mechanical', 'electrical'];
-    const detectedSkills = commonSkills.filter(skill => searchTerm.toLowerCase().includes(skill));
+    const detectedSkills = commonSkills.filter(skill => normalizedTerm.includes(skill));
 
     let scoreMap: Record<number, number> = {};
     if (detectedSkills.length > 0) {
@@ -74,6 +104,7 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
         scoreMap = {};
       }
     }
+    if (requestId !== requestSeqRef.current) return;
 
     const peopleWithData = filtered.map((person) => {
       const availability = availabilityMap[person.id!] || { availableHours: 0, utilizationPercent: 0, totalHours: 0, capacity: person.weeklyCapacity || 36 };
@@ -86,13 +117,14 @@ export function usePersonSearch({ people, availabilityMap, deptState, candidates
       } as PersonWithAvailability;
     });
 
+    const maxResults = 5;
     const sorted = peopleWithData
       .sort((a, b) => {
         if (a.skillMatchScore !== b.skillMatchScore) return b.skillMatchScore - a.skillMatchScore;
         if ((b.availableHours ?? 0) !== (a.availableHours ?? 0)) return (b.availableHours ?? 0) - (a.availableHours ?? 0);
         return a.name.localeCompare(b.name);
       })
-      .slice(0, 5);
+      .slice(0, maxResults);
 
     if (!areResultsEqual(results, sorted)) setResults(sorted);
     const announcement = `Found ${sorted.length} people matching your search. ${sorted.filter(p => p.hasSkillMatch).length} with skill matches.`;

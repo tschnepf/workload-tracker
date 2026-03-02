@@ -29,6 +29,11 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const nav = useNavigation();
@@ -39,6 +44,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const auth = useAuth();
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  );
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const hideGlobalVerticalFilter = location.pathname.startsWith('/departments/manager');
   const showGlobalVerticalFilter = !hideGlobalVerticalFilter;
   const hideGlobalDepartmentFilter =
@@ -93,6 +102,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
+  }, []);
+
+  useEffect(() => {
+    function onOnline() {
+      setIsOnline(true);
+    }
+    function onOffline() {
+      setIsOnline(false);
+    }
+    function onBeforeInstallPrompt(e: Event) {
+      e.preventDefault();
+      setInstallPromptEvent(e as BeforeInstallPromptEvent);
+    }
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
+    };
   }, []);
 
   // Clear local pending-path marker when navigation finishes
@@ -175,7 +205,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             onLogout={async () => { try { await performLogout(); } finally { navigate('/login', { replace: true }); } }}
             onOpenSidebar={() => setMobileSidebarOpen(true)}
             hamburgerRef={hamburgerRef}
+            canInstall={!!installPromptEvent}
+            onInstall={async () => {
+              if (!installPromptEvent) return;
+              try {
+                await installPromptEvent.prompt();
+                await installPromptEvent.userChoice;
+              } finally {
+                setInstallPromptEvent(null);
+              }
+            }}
           />
+          {!isOnline ? (
+            <div className="px-3 py-2 text-xs bg-amber-900/40 border-b border-amber-700 text-amber-100">
+              Offline mode: app shell is available, but live data requires a connection.
+            </div>
+          ) : null}
           <MainWithDensity ariaBusy={nav.state !== 'idle'}>
             <ProjectQuickViewPopoverProvider>
               <ProjectDetailsDrawerProvider>
@@ -237,7 +282,9 @@ const TopBarInner: React.FC<{
   onLogout: () => Promise<void> | void;
   onOpenSidebar: () => void;
   hamburgerRef: React.RefObject<HTMLButtonElement>;
-}> = ({ authPresent, showVerticalFilter, showDepartmentFilter, onLogout, onOpenSidebar, hamburgerRef }) => {
+  canInstall: boolean;
+  onInstall: () => Promise<void> | void;
+}> = ({ authPresent, showVerticalFilter, showDepartmentFilter, onLogout, onOpenSidebar, hamburgerRef, canInstall, onInstall }) => {
   const { left } = useTopBarSlotValues();
   return (
     <div
@@ -284,6 +331,18 @@ const TopBarInner: React.FC<{
         </div>
       </div>
       <div className="flex items-center gap-2 min-w-0 ml-auto">
+        {canInstall && (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Install app"
+            onClick={onInstall}
+            className="px-2 py-1 text-xs sm:text-sm"
+            style={{ minHeight: 32 }}
+          >
+            Install App
+          </Button>
+        )}
         {authPresent && (
           <Button
             variant="ghost"

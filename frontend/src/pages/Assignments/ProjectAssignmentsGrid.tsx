@@ -837,6 +837,25 @@ const ProjectAssignmentsGrid: React.FC = () => {
     return map;
   }, [assignmentsData]);
 
+  const firstEligibleWeekForAssignment = useCallback((assignmentId: number): string | null => {
+    const assignment = assignmentById.get(assignmentId);
+    if (!assignment || assignment.person == null) return null;
+    const person = peopleById.get(Number(assignment.person));
+    const raw = (person as any)?.firstEligibleWeek;
+    return typeof raw === 'string' && raw ? raw : null;
+  }, [assignmentById, peopleById]);
+
+  const isWeekLockedForAssignment = useCallback((assignmentId: number, weekKey: string): boolean => {
+    const firstEligibleWeek = firstEligibleWeekForAssignment(assignmentId);
+    return Boolean(firstEligibleWeek && weekKey < firstEligibleWeek);
+  }, [firstEligibleWeekForAssignment]);
+
+  const showPreHireWeekMessageForAssignment = useCallback((assignmentId: number) => {
+    const firstEligibleWeek = firstEligibleWeekForAssignment(assignmentId);
+    const suffix = firstEligibleWeek ? ` Available starting ${firstEligibleWeek}.` : '';
+    showToastBus(`Cannot assign hours before employee hire week.${suffix}`, 'warning');
+  }, [firstEligibleWeekForAssignment]);
+
   const assignmentsRef = useRef<Assignment[]>([]);
   const assignmentEventQueueRef = useRef<AssignmentEvent[]>([]);
   const assignmentFlushTimerRef = useRef<number | null>(null);
@@ -1022,10 +1041,15 @@ const ProjectAssignmentsGrid: React.FC = () => {
     }
   };
 
-  const updateAssignmentHours = async (projectId: number, assignmentId: number, week: string, hours: number) => {
+  const updateAssignmentHours = async (projectId: number, assignmentId: number, week: string, hours: number): Promise<boolean> => {
+    if (isWeekLockedForAssignment(assignmentId, week)) {
+      showPreHireWeekMessageForAssignment(assignmentId);
+      markSaveState('error', 'Pre-hire week locked');
+      return false;
+    }
     markSaveState('saving', 'Saving...');
     const assignment = assignmentById.get(assignmentId);
-    if (!assignment) return;
+    if (!assignment) return false;
     const isPlaceholder = assignment.person == null;
     const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
     const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
@@ -1033,6 +1057,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     try {
       await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi, { skipIfMatch: isPlaceholder });
       markSaveState('saved', 'Saved', 1200);
+      return true;
     } catch (e: any) {
       setAssignmentsData(prev => prev.map(a => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
       showToastBus(e?.message || 'Failed to update hours', 'error');
@@ -1051,6 +1076,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           },
         },
       });
+      return false;
     }
   };
 
@@ -1155,7 +1181,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
     };
   }, [enqueueAssignmentEvent]);
 
-  const updateMultipleCells = async (cells: Array<{ rowKey: string; weekKey: string }>, hours: number) => {
+  const updateMultipleCells = async (cells: Array<{ rowKey: string; weekKey: string }>, hours: number): Promise<boolean> => {
+    for (const cell of cells) {
+      const [, assignmentIdStr] = cell.rowKey.split(':');
+      const assignmentId = Number(assignmentIdStr);
+      if (!Number.isFinite(assignmentId)) continue;
+      if (isWeekLockedForAssignment(assignmentId, cell.weekKey)) {
+        showPreHireWeekMessageForAssignment(assignmentId);
+        markSaveState('error', 'Pre-hire week locked');
+        return false;
+      }
+    }
     markSaveState('saving', 'Saving...');
     const updates = new Map<number, Record<string, number>>();
     cells.forEach((cell) => {
@@ -1177,6 +1213,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         await updateAssignment(payload[0].assignmentId, { weeklyHours: payload[0].weeklyHours }, assignmentsApi, { skipIfMatch: isPlaceholder });
       }
       markSaveState('saved', 'Saved', 1200);
+      return true;
     } catch (e: any) {
       showToastBus(e?.message || 'Failed to update hours', 'error');
       markSaveState('error', 'Save failed');
@@ -1194,6 +1231,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           },
         },
       });
+      return false;
     }
   };
 
@@ -1206,7 +1244,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
     if (!targets.length) return;
     markSaveState('saving', 'Copying hours...');
     try {
-      await updateMultipleCells(targets, sourceHours);
+      const saved = await updateMultipleCells(targets, sourceHours);
+      if (!saved) {
+        markSaveState('error', 'Copy forward failed');
+        return;
+      }
       markSaveState('saved', `Copied ${sourceHours}h`, 1400);
       showToastBus(`Copied ${sourceHours}h to ${targets.length} cells`, 'success');
     } catch {
@@ -1227,7 +1269,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
       const cells = selectedCells.map((cell) => ({ rowKey: `${cell.projectId}:${cell.assignmentId}`, weekKey: cell.week }));
       markSaveState('saving', 'Pasting...');
       try {
-        await updateMultipleCells(cells, matrix[0][0]);
+        const saved = await updateMultipleCells(cells, matrix[0][0]);
+        if (!saved) {
+          markSaveState('error', 'Paste failed');
+          return false;
+        }
         markSaveState('saved', 'Paste applied', 1200);
         return true;
       } catch {
@@ -1256,7 +1302,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
     markSaveState('saving', 'Pasting...');
     try {
       for (const [value, cells] of updatesByValue.entries()) {
-        await updateMultipleCells(cells, value);
+        const saved = await updateMultipleCells(cells, value);
+        if (!saved) {
+          markSaveState('error', 'Paste failed');
+          return false;
+        }
       }
       markSaveState('saved', 'Paste applied', 1200);
       return true;
@@ -1346,9 +1396,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
           setEditingCell(null);
           return;
         }
-        await updateMultipleCells(selectedKeys, numValue);
+        const saved = await updateMultipleCells(selectedKeys, numValue);
+        if (!saved) {
+          setEditingCell(null);
+          return;
+        }
       } else {
-        await updateAssignmentHours(editingCell.personId, editingCell.assignmentId, editingCell.week, numValue);
+        const saved = await updateAssignmentHours(editingCell.personId, editingCell.assignmentId, editingCell.week, numValue);
+        if (!saved) {
+          setEditingCell(null);
+          return;
+        }
       }
 
       const currentIdx = weeks.findIndex(w => w.date === editingCell.week);
@@ -1896,6 +1954,9 @@ const ProjectAssignmentsGrid: React.FC = () => {
     const rowKey = `${projectId}:${assignment.id}`;
     const isSelected = (week: string) => csIsSelected(rowKey, week);
     const isEditing = (week: string) => editingCell?.personId === projectId && editingCell?.assignmentId === assignment.id && editingCell?.week === week;
+    const firstEligibleWeek = assignment.id ? firstEligibleWeekForAssignment(assignment.id) : null;
+    const isWeekLocked = (week: string) => Boolean(firstEligibleWeek && week < firstEligibleWeek);
+    const lockedTooltip = firstEligibleWeek ? `Available starting ${firstEligibleWeek}` : undefined;
     return (
       <div className="grid gap-px p-0.5 bg-[var(--surface)] hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
         <PersonCell assignment={assignment} />
@@ -1917,11 +1978,31 @@ const ProjectAssignmentsGrid: React.FC = () => {
             weekKey={week.date}
             isSelected={isSelected(week.date)}
             isEditing={isEditing(week.date)}
+            isLocked={isWeekLocked(week.date)}
+            lockedTooltip={lockedTooltip}
             currentHours={assignment.weeklyHours?.[week.date] || 0}
-            onSelect={(isShift) => csSelect(rowKey, week.date, isShift)}
-            onMouseDown={() => csMouseDown(rowKey, week.date)}
-            onMouseEnter={() => csMouseEnter(rowKey, week.date)}
-            onEditStart={() => startEditing(projectId, assignment.id!, week.date, String(assignment.weeklyHours?.[week.date] || 0))}
+            onSelect={(isShift) => {
+              if (assignment.id && isWeekLocked(week.date)) {
+                showPreHireWeekMessageForAssignment(assignment.id);
+                return;
+              }
+              csSelect(rowKey, week.date, isShift);
+            }}
+            onMouseDown={() => {
+              if (assignment.id && isWeekLocked(week.date)) return;
+              csMouseDown(rowKey, week.date);
+            }}
+            onMouseEnter={() => {
+              if (assignment.id && isWeekLocked(week.date)) return;
+              csMouseEnter(rowKey, week.date);
+            }}
+            onEditStart={() => {
+              if (assignment.id && isWeekLocked(week.date)) {
+                showPreHireWeekMessageForAssignment(assignment.id);
+                return;
+              }
+              startEditing(projectId, assignment.id!, week.date, String(assignment.weeklyHours?.[week.date] || 0));
+            }}
             onEditSave={saveEdit}
             onEditCancel={() => cancelEdit()}
             editingValue={editingValue}
@@ -2275,6 +2356,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         weeks={weeks}
         onClose={() => setMobileAssignmentTarget(null)}
         onSaveHours={handleMobileAssignmentSaveHours}
+        firstEligibleWeek={mobileAssignmentTarget?.id ? firstEligibleWeekForAssignment(mobileAssignmentTarget.id) : null}
         canEditAssignments={canEditAssignments}
       />
     </Layout>

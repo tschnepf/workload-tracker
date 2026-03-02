@@ -153,6 +153,7 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           personDepartmentId={person.department as any}
           onAutoHoursReplace={onAutoHoursReplaceAssignment}
           onAutoHoursSupplement={onAutoHoursSupplementAssignment}
+          firstEligibleWeek={(person as any).firstEligibleWeek ?? null}
         />
       ))}
 

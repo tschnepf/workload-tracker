@@ -46,12 +46,14 @@ from core.serializers import UtilizationSchemeSerializer
 from deliverables.models import Deliverable
 from .services import WorkloadRebalancingService
 from accounts.permissions import is_admin_or_manager
+from accounts.models import UserProfile
+from core.webpush import build_push_payload, queue_push_to_users
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified
 from django.utils import timezone
 from django.utils.http import http_date
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import hashlib
 import json
 import os
@@ -59,6 +61,7 @@ import time
 from typing import List, Dict, Tuple, Set, Optional
 import logging
 from roles.models import Role
+from people.eligibility import first_eligible_week_start, is_hired_in_week
 from core.search_tokens import parse_search_tokens, apply_token_filter
 from core.workload_search import (
     UtilizationBands,
@@ -108,6 +111,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         max_page_size = getattr(api_settings, 'MAX_PAGE_SIZE', 200) or 200
     pagination_class = AssignmentsPagination
     # Use global default permissions (IsAuthenticated)
+    PRE_HIRE_WEEK_LOCKED_CODE = 'PRE_HIRE_WEEK_LOCKED'
+    PRE_HIRE_WEEK_LOCKED_MESSAGE = 'Cannot assign hours before employee hire week'
 
     def get_queryset(self):
         qs = (
@@ -150,6 +155,46 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'departmentId': assignment.department_id,
             'isPlaceholder': assignment.person_id is None,
         }
+
+    def _push_assignment_events_enabled(self) -> bool:
+        return bool(
+            getattr(settings, 'WEB_PUSH_ENABLED', False)
+            and getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True)
+        )
+
+    def _recipient_user_ids_for_persons(self, person_ids: list[int], actor_user_id: int | None = None) -> list[int]:
+        normalized = sorted({int(pid) for pid in person_ids if pid is not None})
+        if not normalized:
+            return []
+        qs = UserProfile.objects.filter(person_id__in=normalized, user__is_active=True)
+        if actor_user_id:
+            qs = qs.exclude(user_id=actor_user_id)
+        return list(qs.values_list('user_id', flat=True).distinct())
+
+    def _queue_assignment_push_event(
+        self,
+        *,
+        event_type: str,
+        title: str,
+        body: str,
+        url: str,
+        tag: str,
+        person_ids: list[int],
+        actor_user_id: int | None = None,
+    ) -> None:
+        if not self._push_assignment_events_enabled():
+            return
+        recipient_ids = self._recipient_user_ids_for_persons(person_ids, actor_user_id=actor_user_id)
+        if not recipient_ids:
+            return
+        payload = build_push_payload(
+            event_type=event_type,
+            title=title,
+            body=body,
+            url=url,
+            tag=tag,
+        )
+        queue_push_to_users(recipient_ids, payload, preference_field='push_assignment_changes')
 
     def _apply_department_filter(self, queryset, dept_param, include_children, include_placeholders):
         """Apply department scoping for assignment/person filters."""
@@ -270,6 +315,37 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if exclude_only:
             queryset = queryset.exclude(department_id__in=list(exclude_only))
         return queryset
+
+    def _first_pre_hire_week_key(self, person: Person | None, weekly_hours: dict | None) -> str | None:
+        if person is None or not isinstance(weekly_hours, dict):
+            return None
+        hire_date = getattr(person, 'hire_date', None)
+        if hire_date is None:
+            return None
+        for raw_week_key, raw_value in weekly_hours.items():
+            week_key = str(raw_week_key)
+            try:
+                hours = float(raw_value or 0.0)
+            except Exception:
+                continue
+            if hours <= 0:
+                continue
+            try:
+                week_start = datetime.strptime(week_key, '%Y-%m-%d').date()
+            except Exception:
+                continue
+            if not is_hired_in_week(hire_date, week_start):
+                return week_key
+        return None
+
+    def _pre_hire_locked_response(self, week_key: str | None = None) -> Response:
+        payload = {
+            'detail': self.PRE_HIRE_WEEK_LOCKED_MESSAGE,
+            'code': self.PRE_HIRE_WEEK_LOCKED_CODE,
+        }
+        if week_key:
+            payload['weekKey'] = week_key
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
     def _apply_common_filters(self, request, queryset, data=None, apply_status_filter: bool = True):
         """Apply shared filters for list/search endpoints."""
@@ -2447,7 +2523,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Cache key
         try:
             cache_key = (
-                f"assignments:analytics_by_client:"
+                f"assignments:v2:analytics_by_client:"
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
                 f"c={request.query_params.get('include_children','')}:"
@@ -2495,6 +2571,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         today = date.today()
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
+        week_starts: dict[str, date] = {}
+        for week_key in week_keys:
+            try:
+                week_starts[week_key] = datetime.strptime(week_key, '%Y-%m-%d').date()
+            except Exception:
+                continue
 
         # Base assignments
         qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
@@ -2519,8 +2601,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pid = a.project_id
             if pid is None:
                 continue
+            hire_date = getattr(getattr(a, 'person', None), 'hire_date', None)
             wh = a.weekly_hours or {}
             for wk in week_keys:
+                week_start = week_starts.get(wk)
+                if week_start is None:
+                    continue
+                if not is_hired_in_week(hire_date, week_start):
+                    continue
                 h = hours_for_week_from_json(wh, wk)
                 if h:
                     project_hours.setdefault(pid, 0.0)
@@ -2580,7 +2668,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Cache key
         try:
             cache_key = (
-                f"assignments:analytics_client_projects:"
+                f"assignments:v2:analytics_client_projects:"
                 f"client={client}:"
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
@@ -2629,6 +2717,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         today = date.today()
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
+        week_starts: dict[str, date] = {}
+        for week_key in week_keys:
+            try:
+                week_starts[week_key] = datetime.strptime(week_key, '%Y-%m-%d').date()
+            except Exception:
+                continue
 
         # Resolve project ids for target client
         proj_rows = list(Proj.objects.filter(client=client).values('id', 'name'))
@@ -2653,9 +2747,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pid = a.project_id
             if pid is None:
                 continue
+            hire_date = getattr(getattr(a, 'person', None), 'hire_date', None)
             wh = a.weekly_hours or {}
             s = 0.0
             for wk in week_keys:
+                week_start = week_starts.get(wk)
+                if week_start is None:
+                    continue
+                if not is_hired_in_week(hire_date, week_start):
+                    continue
                 h = hours_for_week_from_json(wh, wk)
                 if h:
                     s += float(h)
@@ -2711,7 +2811,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Cache key
         try:
             cache_key = (
-                f"assignments:analytics_status_timeline:"
+                f"assignments:v2:analytics_status_timeline:"
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
                 f"c={request.query_params.get('include_children','')}:"
@@ -2759,6 +2859,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         today = date.today()
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
+        week_starts: dict[str, date] = {}
+        for week_key in week_keys:
+            try:
+                week_starts[week_key] = datetime.strptime(week_key, '%Y-%m-%d').date()
+            except Exception:
+                continue
 
         # Base assignments
         qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
@@ -2783,9 +2889,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pid = a.project_id
             if pid is None:
                 continue
+            hire_date = getattr(getattr(a, 'person', None), 'hire_date', None)
             wh = a.weekly_hours or {}
             m = by_project.setdefault(pid, {})
             for wk in week_keys:
+                week_start = week_starts.get(wk)
+                if week_start is None:
+                    continue
+                if not is_hired_in_week(hire_date, week_start):
+                    continue
                 h = hours_for_week_from_json(wh, wk)
                 if h:
                     m[wk] = round(m.get(wk, 0.0) + h, 2)
@@ -2916,7 +3028,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             cache_key = None
             if not debug_requested:
                 cache_key = (
-                    f"assignments:analytics_deliverable_timeline:"
+                    f"assignments:v2:analytics_deliverable_timeline:"
                     f"w={request.query_params.get('weeks','12')}:"
                     f"d={request.query_params.get('department','')}:"
                     f"c={request.query_params.get('include_children','')}:"
@@ -2964,6 +3076,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         today = date.today()
         start_sunday = sunday_of_week(today)
         week_keys = [(start_sunday + timedelta(weeks=i)).isoformat() for i in range(weeks)]
+        week_starts: dict[str, date] = {}
+        for week_key in week_keys:
+            try:
+                week_starts[week_key] = datetime.strptime(week_key, '%Y-%m-%d').date()
+            except Exception:
+                continue
 
         # Base assignments
         qs = Assignment.objects.filter(is_active=True, person__is_active=True).select_related('project', 'person')
@@ -2988,9 +3106,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             pid = a.project_id
             if pid is None:
                 continue
+            hire_date = getattr(getattr(a, 'person', None), 'hire_date', None)
             m = by_project_week.setdefault(pid, {})
             wh = a.weekly_hours or {}
             for wk in week_keys:
+                week_start = week_starts.get(wk)
+                if week_start is None:
+                    continue
+                if not is_hired_in_week(hire_date, week_start):
+                    continue
                 h = hours_for_week_from_json(wh, wk)
                 if h:
                     m[wk] = round(m.get(wk, 0.0) + h, 2)
@@ -3198,6 +3322,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'name': serializers.CharField(),
                     'weeklyCapacity': serializers.IntegerField(),
                     'department': serializers.IntegerField(allow_null=True),
+                    'firstEligibleWeek': serializers.CharField(allow_null=True, required=False),
                 })),
                 'hoursByPerson': serializers.DictField(child=serializers.DictField(child=serializers.FloatField())),
             }
@@ -3401,6 +3526,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                                         'name': person.name,
                                         'weeklyCapacity': person.weekly_capacity or 0,
                                         'department': person.department_id,
+                                        'firstEligibleWeek': (
+                                            first_eligible.isoformat()
+                                            if (first_eligible := first_eligible_week_start(getattr(person, 'hire_date', None))) is not None
+                                            else None
+                                        ),
                                     }
                                 )
                                 totals: dict[str, float] = {}
@@ -3562,6 +3692,23 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         assignment_map: dict[int, Assignment] = {}
 
+        # Preflight validation for pre-hire week writes. Reject the request before any writes.
+        preflight_map = {
+            assignment.id: assignment
+            for assignment in Assignment.objects.select_related('person').filter(id__in=dedup_order)
+        }
+        for aid in dedup_order:
+            assignment = preflight_map.get(aid)
+            if assignment is None:
+                continue
+            serializer = AssignmentSerializer(instance=assignment, data={'weeklyHours': dedup_updates[aid]}, partial=True)
+            if not serializer.is_valid():
+                continue
+            incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
+            pre_hire_week = self._first_pre_hire_week_key(getattr(assignment, 'person', None), incoming_weekly_hours)
+            if pre_hire_week is not None:
+                return self._pre_hire_locked_response(pre_hire_week)
+
         def _etag_for_assignment(assignment: Assignment) -> str:
             lm = getattr(assignment, 'updated_at', None)
             try:
@@ -3582,6 +3729,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return normalized_map
 
         results: list[dict] = []
+        changed_person_ids: list[int] = []
         with transaction.atomic():
             assignments = Assignment.objects.select_for_update().filter(id__in=dedup_order)
             assignment_map = {assignment.id: assignment for assignment in assignments}
@@ -3607,15 +3755,46 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     sync_assignment_week_hours(assignment, incoming_weekly_hours, clear_missing=True)
                 except Exception:  # nosec B110
                     pass
+                if assignment.person_id:
+                    changed_person_ids.append(assignment.person_id)
                 results.append({'assignmentId': assignment.id, 'status': 'ok', 'etag': _etag_for_assignment(assignment)})
 
         success = all(item['status'] in ('ok', 'noop') for item in results)
+        if changed_person_ids and self._push_assignment_events_enabled():
+            actor_user_id = getattr(getattr(request, 'user', None), 'id', None)
+            recipient_counts: dict[int, int] = {}
+            profile_qs = UserProfile.objects.filter(
+                person_id__in=sorted({pid for pid in changed_person_ids if pid}),
+                user__is_active=True,
+            )
+            if actor_user_id:
+                profile_qs = profile_qs.exclude(user_id=actor_user_id)
+            person_to_users: dict[int, list[int]] = {}
+            for row in profile_qs.values('person_id', 'user_id'):
+                person_to_users.setdefault(int(row['person_id']), []).append(int(row['user_id']))
+            for person_id in changed_person_ids:
+                for user_id in person_to_users.get(int(person_id), []):
+                    recipient_counts[user_id] = recipient_counts.get(user_id, 0) + 1
+            for user_id, count in recipient_counts.items():
+                payload = build_push_payload(
+                    event_type='assignment.bulk_updated',
+                    title='Assignments Updated',
+                    body=f"{count} assignment update(s) were applied.",
+                    url='/assignments',
+                    tag=f'assignment.bulk_updated.{user_id}',
+                )
+                queue_push_to_users([user_id], payload, preference_field='push_assignment_changes')
         return Response({'success': success, 'results': results})
 
     def create(self, request, *args, **kwargs):
         """Create assignment with validation"""
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
+            target_person = serializer.validated_data.get('person')
+            incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
+            pre_hire_week = self._first_pre_hire_week_key(target_person, incoming_weekly_hours)
+            if pre_hire_week is not None:
+                return self._pre_hire_locked_response(pre_hire_week)
             assignment = serializer.save()
             if assignment.project_id:
                 record_project_change(
@@ -3624,15 +3803,78 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     action='assignment.added',
                     detail={'assignment': self._assignment_log_payload(assignment)},
                 )
+            if assignment.person_id:
+                project_name = assignment.project_display
+                person_name = getattr(getattr(assignment, 'person', None), 'name', 'Person')
+                self._queue_assignment_push_event(
+                    event_type='assignment.created',
+                    title='Assignment Added',
+                    body=f"{person_name} was assigned to {project_name}.",
+                    url='/assignments',
+                    tag=f'assignment.created.{assignment.id}',
+                    person_ids=[assignment.person_id],
+                    actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+                )
             return Response(
                 self.get_serializer(assignment).data,
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        before_person_id = instance.person_id
+        before_person_name = getattr(getattr(instance, 'person', None), 'name', 'Person')
+        before_project_name = instance.project_display
+
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        if ('weekly_hours' in serializer.validated_data) or ('person' in serializer.validated_data):
+            target_person = serializer.validated_data.get('person', instance.person)
+            incoming_weekly_hours = serializer.validated_data.get('weekly_hours', instance.weekly_hours or {})
+            pre_hire_week = self._first_pre_hire_week_key(target_person, incoming_weekly_hours)
+            if pre_hire_week is not None:
+                return self._pre_hire_locked_response(pre_hire_week)
+        assignment = serializer.save()
+
+        if assignment.project_id:
+            record_project_change(
+                project=assignment.project,
+                actor=getattr(request, 'user', None),
+                action='assignment.updated',
+                detail={'assignment': self._assignment_log_payload(assignment)},
+            )
+
+        recipient_person_ids = [pid for pid in {before_person_id, assignment.person_id} if pid]
+        if recipient_person_ids:
+            if before_person_id and assignment.person_id and before_person_id != assignment.person_id:
+                current_person_name = getattr(getattr(assignment, 'person', None), 'name', 'Person')
+                body = (
+                    f"{before_person_name} was replaced by {current_person_name} on {assignment.project_display}."
+                )
+            else:
+                current_person_name = getattr(getattr(assignment, 'person', None), 'name', 'Person')
+                project_name = assignment.project_display or before_project_name
+                body = f"{current_person_name}'s assignment on {project_name} was updated."
+            self._queue_assignment_push_event(
+                event_type='assignment.updated',
+                title='Assignment Updated',
+                body=body,
+                url='/assignments',
+                tag=f'assignment.updated.{assignment.id}',
+                person_ids=recipient_person_ids,
+                actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+            )
+
+        return Response(self.get_serializer(assignment).data)
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         project = instance.project
+        person_id = instance.person_id
+        person_name = getattr(getattr(instance, 'person', None), 'name', 'Person')
+        project_name = instance.project_display
         detail = {'assignment': self._assignment_log_payload(instance)}
         response = super().destroy(request, *args, **kwargs)
         if project and instance.project_id:
@@ -3641,6 +3883,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 actor=getattr(request, 'user', None),
                 action='assignment.removed',
                 detail=detail,
+            )
+        if person_id:
+            self._queue_assignment_push_event(
+                event_type='assignment.removed',
+                title='Assignment Removed',
+                body=f"{person_name} was removed from {project_name}.",
+                url='/assignments',
+                tag=f'assignment.removed.{instance.id}',
+                person_ids=[person_id],
+                actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
             )
         return response
     

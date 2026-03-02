@@ -8,6 +8,7 @@ from typing import Any
 from assignments.models import Assignment
 from core.models import AutoHoursRoleSetting, AutoHoursTemplate, AutoHoursTemplateRoleSetting, UtilizationScheme
 from departments.models import Department
+from people.eligibility import is_hired_in_week
 from people.models import Person
 from projects.status_definitions import (
     get_status_definition_index,
@@ -222,12 +223,14 @@ def _capacity_by_role_and_team(scope: PlannerScope) -> tuple[dict[int, list[floa
         role_id = int(person.role_id) if person.role_id else None
         if role_id is None:
             continue
-        hire_key = person.hire_date.isoformat() if person.hire_date else None
         weekly_capacity = float(person.weekly_capacity or 0.0)
         if weekly_capacity <= 0:
             continue
         for idx, week_key in enumerate(scope.week_keys):
-            if hire_key and week_key < hire_key:
+            week_start = parse_iso_date(week_key)
+            if week_start is None:
+                continue
+            if not is_hired_in_week(getattr(person, "hire_date", None), week_start):
                 continue
             capacity_by_role[role_id][idx] += weekly_capacity
             team_capacity[idx] += weekly_capacity
@@ -286,6 +289,7 @@ def _evaluate_baseline(
             "project__auto_hours_template_id",
             "person__role_id",
             "person__department_id",
+            "person__hire_date",
             "role_on_project_ref__department_id",
         )
     )
@@ -367,6 +371,13 @@ def _evaluate_baseline(
         for idx, week_key in enumerate(scope.week_keys):
             value = hours_for_week(weekly_hours, week_key)
             if value <= 0:
+                continue
+            week_start = parse_iso_date(week_key)
+            if (
+                assignment.person_id
+                and week_start is not None
+                and not is_hired_in_week(getattr(getattr(assignment, "person", None), "hire_date", None), week_start)
+            ):
                 continue
 
             status_stats[status_key]["hours"] += value

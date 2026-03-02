@@ -17,6 +17,7 @@ from deliverables.models import PreDeliverableItem
 from departments.models import Department
 from departments.serializers import DepartmentSerializer
 from people.models import Person
+from people.eligibility import active_people_on_or_before
 from people.services import CapacityAnalysisService
 from skills.models import PersonSkill
 from assignments.models import Assignment
@@ -224,6 +225,7 @@ class DepartmentsOverviewView(APIView):
                         'include_inactive': 1 if include_inactive else 0,
                         'status_in': sorted(status_in) if status_in else [],
                         'search': search or '',
+                        'hire_eligibility_version': 2,
                     },
                 )
                 cache_keys = self._cache_keys(cache_key)
@@ -287,11 +289,15 @@ class DepartmentsOverviewView(APIView):
                     message='Request deadline exceeded before aggregate queries completed.',
                 )
             else:
-                people_qs = Person.objects.filter(department_id__in=department_ids).only(
-                    'id',
-                    'department_id',
-                    'weekly_capacity',
-                    'is_active',
+                people_qs = active_people_on_or_before(
+                    Person.objects.filter(department_id__in=department_ids).only(
+                        'id',
+                        'department_id',
+                        'weekly_capacity',
+                        'is_active',
+                        'hire_date',
+                    ),
+                    _date.today(),
                 )
                 if status_in == {'active'}:
                     people_qs = people_qs.filter(is_active=True)

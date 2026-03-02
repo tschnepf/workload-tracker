@@ -163,6 +163,27 @@ class DepartmentsOverviewReportsTests(TestCase):
         self.assertIn(self.parent_dept.id, dept_ids_with_children)
         self.assertIn(self.child_dept.id, dept_ids_with_children)
 
+    def test_departments_overview_excludes_future_hires_from_people_count(self):
+        future_person = Person.objects.create(
+            name='Future Reporter',
+            department=self.parent_dept,
+            weekly_capacity=40,
+            hire_date=date.today() + timedelta(days=14),
+        )
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        Assignment.objects.create(
+            person=future_person,
+            project=self.project,
+            weekly_hours={monday.isoformat(): 25},
+            is_active=True,
+        )
+
+        resp = self.client.get('/api/reports/departments/overview/?weeks=4')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        parent_entry = resp.json()['overviewByDepartment'][str(self.parent_dept.id)]
+        self.assertEqual(parent_entry['peopleCount'], 1)
+
     def test_departments_overview_cache_headers_and_stale_fallback(self):
         features = dict(getattr(settings, 'FEATURES', {}) or {})
         features['SHORT_TTL_AGGREGATES'] = True

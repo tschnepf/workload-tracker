@@ -15,6 +15,7 @@ export interface Person {
   phone?: string;
   location?: string;
   hireDate?: string;
+  firstEligibleWeek?: string | null;
   notes?: string;
   isActive?: boolean;
   createdAt?: string;

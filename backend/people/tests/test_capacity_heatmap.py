@@ -104,3 +104,20 @@ class CapacityHeatmapApiTests(TestCase):
         names1 = {item['name'] for item in resp1.json()}
         self.assertIn('Alice', names1)
         self.assertIn('Eve', names1)
+
+    def test_capacity_heatmap_excludes_future_hires(self):
+        today = datetime.now().date()
+        future_hire = Person.objects.create(
+            name='Future Hire',
+            weekly_capacity=20,
+            department=self.dept_eng,
+            hire_date=today + timedelta(days=14),
+        )
+        this_sunday = sunday_of_week(today)
+        wk = this_sunday.strftime('%Y-%m-%d')
+        Assignment.objects.create(person=future_hire, weekly_hours={wk: 8})
+
+        resp = self.client.get('/api/people/capacity_heatmap/?weeks=1')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = {item['name'] for item in resp.json()}
+        self.assertNotIn('Future Hire', names)

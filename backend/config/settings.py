@@ -286,6 +286,19 @@ FEATURES.update({
     'WEEK_KEYS_TRANSITION_READ_BOTH': os.getenv('WEEK_KEYS_TRANSITION_READ_BOTH', 'true').lower() == 'true',
 })
 
+# PWA / Web Push rollout flags
+PWA_ENABLED = os.getenv('PWA_ENABLED', 'true').lower() == 'true'
+WEB_PUSH_ENABLED = os.getenv('WEB_PUSH_ENABLED', 'false').lower() == 'true'
+WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED = os.getenv('WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', 'true').lower() == 'true'
+WEB_PUSH_REMINDER_EVENTS_ENABLED = os.getenv('WEB_PUSH_REMINDER_EVENTS_ENABLED', 'true').lower() == 'true'
+WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv('WEB_PUSH_VAPID_PUBLIC_KEY', '')
+WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv('WEB_PUSH_VAPID_PRIVATE_KEY', '')
+WEB_PUSH_SUBJECT = os.getenv('WEB_PUSH_SUBJECT', '')
+WEB_PUSH_TEST_STAFF_ONLY = os.getenv(
+    'WEB_PUSH_TEST_STAFF_ONLY',
+    'false' if DEBUG else 'true',
+).lower() == 'true'
+
 ADMIN_PASSWORD_RESET_SUPERUSER_ONLY = os.getenv('ADMIN_PASSWORD_RESET_SUPERUSER_ONLY', 'false').lower() == 'true'
 RESTORE_JOB_TOKEN_SECRET = os.getenv('RESTORE_JOB_TOKEN_SECRET', SECRET_KEY if DEBUG else '')
 RESTORE_JOB_TOKEN_TTL_SECONDS = int(os.getenv('RESTORE_JOB_TOKEN_TTL_SECONDS', '300'))
@@ -681,7 +694,7 @@ CSP_REPORT_ONLY = os.getenv('CSP_REPORT_ONLY', 'true' if DEBUG else 'false').low
 CSP_POLICY = os.getenv(
     'CSP_POLICY',
     "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data:; "
-    "font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; frame-ancestors 'none'",
+    "font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'",
 )
 # Optional absolute/relative endpoint to receive violation reports
 CSP_REPORT_URI = os.getenv('CSP_REPORT_URI', '/csp-report/')

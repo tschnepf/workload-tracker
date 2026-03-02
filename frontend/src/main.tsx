@@ -10,6 +10,7 @@ import { RequireAdmin } from '@/components/auth/RequireAdmin'
 import { RequireAdminOrManager } from '@/components/auth/RequireAdminOrManager'
 import { getFlag } from '@/lib/flags'
 import { bootFromDevQuery, boot as bootTheme } from './theme/themeManager'
+import { registerSW } from 'virtual:pwa-register'
  
 import Loader from '@/components/ui/Loader'
 import { useAuth } from '@/hooks/useAuth'
@@ -19,6 +20,17 @@ import '@/services/etagEnhancer'
 // Apply theme early based on dev query and persisted settings
 bootFromDevQuery(window.location.search)
 bootTheme()
+
+const pwaEnabled = ((import.meta as any)?.env?.VITE_PWA_ENABLED ?? 'true') !== 'false'
+if (import.meta.env.PROD && pwaEnabled && 'serviceWorker' in navigator) {
+  registerSW({ immediate: true })
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const data = event?.data || {}
+    if (data.type === 'navigate' && typeof data.url === 'string') {
+      window.location.assign(data.url)
+    }
+  })
+}
 
 // Lazy route components (kept near router for clarity)
 const Dashboard = React.lazy(() => import('./pages/Dashboard'))
@@ -46,6 +58,7 @@ const PersonExperiencePage = React.lazy(() => import('./pages/Reports/PersonExpe
 const Login = React.lazy(() => import('./pages/Auth/Login'))
 const ResetPassword = React.lazy(() => import('./pages/Auth/ResetPassword'))
 const SetPassword = React.lazy(() => import('./pages/Auth/SetPassword'))
+const OfflinePage = React.lazy(() => import('./pages/Offline/Offline'))
 const Profile = React.lazy(() => import('./pages/Profile/Profile'))
 const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'))
 const PersonalDashboard = React.lazy(() => import('./pages/Personal/PersonalDashboard'))
@@ -62,6 +75,7 @@ const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
       { path: 'reset-password', element: <ResetPassword /> },
       { path: 'set-password', element: <SetPassword /> },
+      { path: 'offline', element: <OfflinePage /> },
       // Redirect root to dashboard (protected)
       { index: true, element: <RequireAuth><Navigate to="/my-work" replace /></RequireAuth> },
 

@@ -26,6 +26,7 @@ from .serializers import (
 )
 from .utils.excel_handler import export_people_to_excel, import_people_from_excel
 from .services import CapacityAnalysisService
+from .eligibility import active_people_on_or_before
 import hashlib
 import json
 import io
@@ -999,7 +1000,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
 
+        as_of_date = week_monday + _td(days=6)
         people_qs = Person.objects.filter(is_active=True).select_related('department', 'role')
+        people_qs = active_people_on_or_before(people_qs, as_of_date)
         cache_scope = 'all'
         if dept_param not in (None, ""):
             try:
@@ -1239,6 +1242,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             Person.objects.filter(is_active=True)
             .select_related('department', 'role')
         )
+        as_of_date = (week_monday + _td(days=6)) if week_monday is not None else date.today()
+        people_qs = active_people_on_or_before(people_qs, as_of_date)
         cache_scope = 'all'
         if dept_param not in (None, ""):
             try:
@@ -1668,6 +1673,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         people = self.get_queryset()
         # Heatmap must exclude inactive people regardless of detail/list behavior
         people = people.filter(is_active=True)
+        people = active_people_on_or_before(people, date.today())
         # Optional department filter with include_children
         department_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'

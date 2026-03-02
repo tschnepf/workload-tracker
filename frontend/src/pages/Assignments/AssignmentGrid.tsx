@@ -825,6 +825,23 @@ const AssignmentGrid: React.FC = () => {
     });
   }, [serverFilterActive, people, peopleById, searchMeta?.people]);
 
+  const firstEligibleWeekForPerson = useCallback((personId: number): string | null => {
+    const person = peopleById.get(personId) || visiblePeople.find((p) => p.id === personId);
+    const raw = (person as any)?.firstEligibleWeek;
+    return typeof raw === 'string' && raw ? raw : null;
+  }, [peopleById, visiblePeople]);
+
+  const isWeekLockedForPerson = useCallback((personId: number, weekKey: string): boolean => {
+    const firstEligibleWeek = firstEligibleWeekForPerson(personId);
+    return Boolean(firstEligibleWeek && weekKey < firstEligibleWeek);
+  }, [firstEligibleWeekForPerson]);
+
+  const showPreHireWeekMessage = useCallback((personId: number) => {
+    const firstEligibleWeek = firstEligibleWeekForPerson(personId);
+    const suffix = firstEligibleWeek ? ` Available starting ${firstEligibleWeek}.` : '';
+    showToast(`Cannot assign hours before employee hire week.${suffix}`, 'warning');
+  }, [firstEligibleWeekForPerson, showToast]);
+
   const resolvePersonAssignments = useCallback((person: PersonWithAssignments): Assignment[] => {
     if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {
       const rows = filteredAssignmentsByPerson[person.id!] || [];
@@ -1397,7 +1414,17 @@ const AssignmentGrid: React.FC = () => {
           setEditingCell(null);
           return;
         }
-        await updateMultipleCells(selectedCells, numValue);
+        const lockedCell = selectedCells.find((cell) => isWeekLockedForPerson(cell.personId, cell.week));
+        if (lockedCell) {
+          showPreHireWeekMessage(lockedCell.personId);
+          setEditingCell(null);
+          return;
+        }
+        const saved = await updateMultipleCells(selectedCells, numValue);
+        if (!saved) {
+          setEditingCell(null);
+          return;
+        }
 
         // Mirror to assignmentsData for derived filters
         setAssignmentsData(prev => {
@@ -1412,12 +1439,21 @@ const AssignmentGrid: React.FC = () => {
         });
       } else {
         // Single cell path
-        await updateAssignmentHours(
+        if (isWeekLockedForPerson(editingCell.personId, editingCell.week)) {
+          showPreHireWeekMessage(editingCell.personId);
+          setEditingCell(null);
+          return;
+        }
+        const saved = await updateAssignmentHours(
           editingCell.personId,
           editingCell.assignmentId,
           editingCell.week,
           numValue
         );
+        if (!saved) {
+          setEditingCell(null);
+          return;
+        }
         setAssignmentsData(prev => prev.map(a =>
           a.id === editingCell.assignmentId
             ? { ...a, weeklyHours: { ...a.weeklyHours, [editingCell.week]: numValue } }
@@ -1458,16 +1494,30 @@ const AssignmentGrid: React.FC = () => {
   // (cancelEdit provided by useEditingCellHook)
 
   const handleCellSelection = (personId: number, assignmentId: number, week: string, isShiftClick?: boolean) => {
+    if (isWeekLockedForPerson(personId, week)) {
+      showPreHireWeekMessage(personId);
+      return;
+    }
     csSelect(rowKeyFor(personId, assignmentId), week, isShiftClick);
   };
 
   // Click + drag selection support across rows
   const handleCellMouseDown = (personId: number, assignmentId: number, week: string) => {
+    if (isWeekLockedForPerson(personId, week)) return;
     csMouseDown(rowKeyFor(personId, assignmentId), week);
   };
 
   const handleCellMouseEnter = (personId: number, assignmentId: number, week: string) => {
+    if (isWeekLockedForPerson(personId, week)) return;
     csMouseEnter(rowKeyFor(personId, assignmentId), week);
+  };
+
+  const handleEditStart = (personId: number, assignmentId: number, week: string, currentValue: string) => {
+    if (isWeekLockedForPerson(personId, week)) {
+      showPreHireWeekMessage(personId);
+      return;
+    }
+    startEditing(personId, assignmentId, week, currentValue);
   };
 
 
@@ -2102,18 +2152,23 @@ const AssignmentGrid: React.FC = () => {
   };
 
   // Update assignment hours
-  const updateAssignmentHours = async (personId: number, assignmentId: number, week: string, hours: number) => {
+  const updateAssignmentHours = async (personId: number, assignmentId: number, week: string, hours: number): Promise<boolean> => {
+    if (isWeekLockedForPerson(personId, week)) {
+      showPreHireWeekMessage(personId);
+      markSaveState('error', 'Pre-hire week locked');
+      return false;
+    }
     markSaveState('saving', 'Saving...');
     if (!serverFilterActive) {
       await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
       markSaveState('saved', 'Saved', 1200);
-      return;
+      return true;
     }
     const person = peopleById.get(personId) || (visiblePeople || []).find(p => p.id === personId);
     const visibleRows = person ? resolvePersonAssignments(person as PersonWithAssignments) : [];
     const assignment = visibleRows.find((a) => a.id === assignmentId)
       || (person?.assignments || []).find((a: any) => a.id === assignmentId);
-    if (!assignment) return;
+    if (!assignment) return false;
 
     const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
     const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
@@ -2166,6 +2221,7 @@ const AssignmentGrid: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
       queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
       markSaveState('saved', 'Saved', 1200);
+      return true;
     } catch (err: any) {
       const revertedRows = visibleRows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
       if (isFilteredLoaded) {
@@ -2216,6 +2272,7 @@ const AssignmentGrid: React.FC = () => {
           },
         },
       });
+      return false;
     }
   };
 
@@ -2229,12 +2286,18 @@ const AssignmentGrid: React.FC = () => {
   };
 
   // Update multiple cells at once (for bulk editing)
-  const updateMultipleCells = async (cells: { personId: number, assignmentId: number, week: string }[], hours: number) => {
+  const updateMultipleCells = async (cells: { personId: number, assignmentId: number, week: string }[], hours: number): Promise<boolean> => {
+    const lockedCell = cells.find((cell) => isWeekLockedForPerson(cell.personId, cell.week));
+    if (lockedCell) {
+      showPreHireWeekMessage(lockedCell.personId);
+      markSaveState('error', 'Pre-hire week locked');
+      return false;
+    }
     markSaveState('saving', 'Saving...');
     if (!serverFilterActive) {
       await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
       markSaveState('saved', 'Saved', 1200);
-      return;
+      return true;
     }
 
     const updatesByAssignmentId = new Map<number, { personId: number; assignmentId: number; weeklyHours: Record<string, number>; prevWeeklyHours: Record<string, number>; }>();
@@ -2255,7 +2318,7 @@ const AssignmentGrid: React.FC = () => {
     });
 
     const updatesArray = Array.from(updatesByAssignmentId.values());
-    if (updatesArray.length === 0) return;
+    if (updatesArray.length === 0) return false;
 
     const touchedPeople = new Set(updatesArray.map((u) => u.personId));
     setFilteredAssignmentsByPerson((prev) => {
@@ -2368,7 +2431,9 @@ const AssignmentGrid: React.FC = () => {
           },
         },
       });
+      return false;
     }
+    return true;
   };
 
   const copyForwardSelectedRange = useCallback(async () => {
@@ -2380,7 +2445,11 @@ const AssignmentGrid: React.FC = () => {
     if (!targets.length) return;
     markSaveState('saving', 'Copying hours...');
     try {
-      await updateMultipleCells(targets, sourceHours);
+      const saved = await updateMultipleCells(targets, sourceHours);
+      if (!saved) {
+        markSaveState('error', 'Copy forward failed');
+        return;
+      }
       markSaveState('saved', `Copied ${sourceHours}h forward`, 1600);
       showToast(`Copied ${sourceHours}h to ${targets.length} cells`, 'success');
     } catch (error: any) {
@@ -2402,7 +2471,11 @@ const AssignmentGrid: React.FC = () => {
     if (matrix.length === 1 && matrix[0].length === 1 && selectedCells.length > 1) {
       markSaveState('saving', 'Pasting...');
       try {
-        await updateMultipleCells(selectedCells, matrix[0][0]);
+        const saved = await updateMultipleCells(selectedCells, matrix[0][0]);
+        if (!saved) {
+          markSaveState('error', 'Paste failed');
+          return false;
+        }
         markSaveState('saved', 'Paste applied', 1400);
         return true;
       } catch {
@@ -2441,7 +2514,11 @@ const AssignmentGrid: React.FC = () => {
     try {
       // Group by value to reuse batched update path.
       for (const [value, cells] of byValue.entries()) {
-        await updateMultipleCells(cells, value);
+        const saved = await updateMultipleCells(cells, value);
+        if (!saved) {
+          markSaveState('error', 'Paste failed');
+          return false;
+        }
       }
       markSaveState('saved', 'Paste applied', 1400);
       return true;
@@ -3264,7 +3341,7 @@ const AssignmentGrid: React.FC = () => {
                   onCellMouseDown={handleCellMouseDown}
                   onCellMouseEnter={handleCellMouseEnter}
                   editingCell={editingCell}
-                  onEditStart={startEditing}
+                  onEditStart={handleEditStart}
                   onEditSave={saveEdit}
                   onEditCancel={cancelEdit}
                   editingValue={editingValue}
@@ -3361,7 +3438,9 @@ const AssignmentGrid: React.FC = () => {
         assignmentsByPerson={serverFilterActive ? filteredAssignmentsByPerson : undefined}
         weeks={weeks}
         onClose={() => setMobileEditTarget(null)}
-        onSaveHours={updateAssignmentHours}
+        onSaveHours={async (personId, assignmentId, week, hours) => {
+          await updateAssignmentHours(personId, assignmentId, week, hours);
+        }}
         onRoleChange={handleAssignmentRoleChange}
         loadingAssignments={loadingAssignments}
         canEditAssignments={canEditAssignments}

@@ -18,4 +18,7 @@ urlpatterns = [
     path('invite/', views.InviteUserView.as_view(), name='auth_invite_user'),
     path('admin_audit/', views.AdminAuditLogsView.as_view(), name='auth_admin_audit'),
     path('notification-preferences/', views.NotificationPreferencesView.as_view(), name='notification_preferences'),
+    path('push-subscriptions/', views.PushSubscriptionsView.as_view(), name='push_subscriptions'),
+    path('push-subscriptions/<int:subscription_id>/', views.PushSubscriptionDeleteView.as_view(), name='push_subscription_delete'),
+    path('push/test/', views.PushTestView.as_view(), name='push_test'),
 ]

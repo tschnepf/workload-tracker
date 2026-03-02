@@ -97,6 +97,12 @@ def _build_capabilities_payload():
             'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
         },
         'personalDashboard': True,
+        'pwa': {
+            'enabled': bool(getattr(settings, 'PWA_ENABLED', True)),
+            'pushEnabled': bool(getattr(settings, 'WEB_PUSH_ENABLED', False)),
+            'vapidPublicKey': getattr(settings, 'WEB_PUSH_VAPID_PUBLIC_KEY', '') or None,
+            'offlineMode': 'shell',
+        },
     }
     try:
         caps['projectRolesByDepartment'] = bool(settings.FEATURES.get('PROJECT_ROLES_BY_DEPARTMENT', False))

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
-from datetime import date
+from datetime import date, datetime
 from django.db import connection
 from django.db.models import Q, QuerySet
 from django.conf import settings
 
 from people.models import Person
+from people.eligibility import is_hired_in_week
 from .models import Assignment as Asn
 from roles.models import Role
 from core.models import AutoHoursRoleSetting, AutoHoursTemplateRoleSetting
@@ -24,6 +25,12 @@ def _eligible_role_capacity_people_ids(
     if eval_weeks == 0:
         return set()
     eval_week_keys = week_keys[:eval_weeks]
+    eval_week_dates: list[date | None] = []
+    for week_key in eval_week_keys:
+        try:
+            eval_week_dates.append(datetime.strptime(week_key, '%Y-%m-%d').date())
+        except Exception:
+            eval_week_dates.append(None)
 
     asn_qs = Asn.objects.filter(is_active=True, person__is_active=True)
     if dept_id is not None:
@@ -49,11 +56,13 @@ def _eligible_role_capacity_people_ids(
         if pid <= 0:
             continue
         hire = getattr(asn.person, 'hire_date', None)
-        hire_str = hire.isoformat() if hire else None
         wh = getattr(asn, 'weekly_hours', None) or {}
         weekly_totals = totals_by_person.setdefault(pid, [0.0 for _ in range(eval_weeks)])
         for idx, wk in enumerate(eval_week_keys):
-            if hire_str and wk < hire_str:
+            week_start = eval_week_dates[idx]
+            if week_start is None:
+                continue
+            if not is_hired_in_week(hire, week_start):
                 continue
             try:
                 hours = float(wh.get(wk) or 0.0)
@@ -138,7 +147,7 @@ def _python_role_capacity(
             for cap, hire, pid in lst:
                 if eligible_person_ids is not None and pid not in eligible_person_ids:
                     continue
-                if hire and hire > wk:
+                if not is_hired_in_week(hire, wk):
                     continue
                 total += float(cap or 0)
                 count += 1
@@ -154,6 +163,12 @@ def _python_role_capacity(
         asn_qs = asn_qs.filter(project__vertical_id=vertical_id)
     asn_qs = asn_qs.select_related('person').only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
     assigned: Dict[Tuple[str, int], float] = {}
+    wk_dates_by_key: Dict[str, date] = {}
+    for key in wk_strs:
+        try:
+            wk_dates_by_key[key] = datetime.strptime(key, '%Y-%m-%d').date()
+        except Exception:
+            continue
     for a in asn_qs.iterator():
         rid = getattr(a.person, 'role_id', None)
         if not rid:
@@ -165,9 +180,11 @@ def _python_role_capacity(
             continue
         wh = getattr(a, 'weekly_hours', None) or {}
         hire = getattr(a.person, 'hire_date', None)
-        hire_str = hire.isoformat() if hire else None
         for k in wk_strs:
-            if hire_str and k < hire_str:
+            week_start = wk_dates_by_key.get(k)
+            if week_start is None:
+                continue
+            if not is_hired_in_week(hire, week_start):
                 continue
             try:
                 v = wh.get(k)
@@ -336,7 +353,7 @@ def _postgres_role_capacity(
             total = 0.0
             count = 0
             for cap, hire in lst:
-                if hire and hire > wk:
+                if not is_hired_in_week(hire, wk):
                     continue
                 total += float(cap or 0)
                 count += 1
@@ -359,7 +376,10 @@ def _postgres_role_capacity(
             CROSS JOIN LATERAL jsonb_each_text(a.weekly_hours) AS j(key, value)
             WHERE j.key = ANY(%s)
               AND (%s IS NULL OR p.role_id = ANY(%s))
-              AND (p.hire_date IS NULL OR j.key >= p.hire_date::text)
+              AND (
+                p.hire_date IS NULL
+                OR p.hire_date <= (TO_DATE(j.key, 'YYYY-MM-DD') + INTERVAL '6 day')::date
+              )
             GROUP BY j.key, p.role_id
             """
         )

@@ -6,7 +6,7 @@ import type { UtilizationScheme, AutoHoursRoleSetting } from '@/services/api';
 
 export type AssignmentGridSnapshot = {
   weekKeys: string[];
-  people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>;
+  people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null; firstEligibleWeek?: string | null }>;
   hoursByPerson: Record<string, Record<string, number>>;
 };
 

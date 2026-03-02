@@ -77,6 +77,31 @@ class WorkloadForecastApiTests(TestCase):
             round(20/70*100, 1),
         )
 
+    def test_forecast_week_gate_excludes_until_hire_week(self):
+        today = datetime.now().date()
+        sun0 = sunday_of_week(today)
+        sun1 = sun0 + timedelta(days=7)
+        w0 = sun0.strftime('%Y-%m-%d')
+        w1 = sun1.strftime('%Y-%m-%d')
+
+        future = Person.objects.create(
+            name='Future Forecaster',
+            weekly_capacity=20,
+            hire_date=sun1 + timedelta(days=3),  # Mid-week next week
+        )
+        Assignment.objects.create(person=future, weekly_hours={w0: 9, w1: 10})
+
+        resp = self.client.get('/api/people/workload_forecast/?weeks=2')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.json()
+
+        # Week 0 excludes future hire.
+        self.assertEqual(data[0]['totalCapacity'], 70)
+        self.assertEqual(data[0]['totalAllocated'], 15)
+        # Week 1 includes future hire week.
+        self.assertEqual(data[1]['totalCapacity'], 90)
+        self.assertEqual(data[1]['totalAllocated'], 30)
+
 
 class WorkloadForecastDepartmentFilterTests(TestCase):
     def setUp(self):

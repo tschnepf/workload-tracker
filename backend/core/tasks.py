@@ -9,6 +9,8 @@ from datetime import date, timedelta
 from celery import shared_task
 import os
 from django.db.models import Prefetch
+from django.conf import settings
+from core.webpush import build_push_payload, send_push_to_users
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=2, retry_kwargs={"max_retries": 3}, soft_time_limit=120)
@@ -24,6 +26,7 @@ def generate_grid_snapshot_async(
     Returns a dict with keys: { weekKeys, people, hoursByPerson }.
     """
     from people.models import Person  # local import for task autodiscovery safety
+    from people.eligibility import first_eligible_week_start
     from departments.models import Department
     from assignments.models import Assignment
 
@@ -89,11 +92,13 @@ def generate_grid_snapshot_async(
 
     try:
         for p in people_qs.iterator():
+            first_eligible = first_eligible_week_start(getattr(p, 'hire_date', None))
             people_list.append({
                 'id': p.id,
                 'name': p.name,
                 'weeklyCapacity': p.weekly_capacity or 0,
                 'department': p.department_id,
+                'firstEligibleWeek': first_eligible.isoformat() if first_eligible is not None else None,
             })
             wk_map: Dict[str, float] = {}
             for wk in week_keys:
@@ -128,6 +133,7 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
     filters may include: department (int), include_children (0|1), limit (int up to 200), week (YYYY-MM-DD).
     """
     from people.models import Person
+    from people.eligibility import is_hired_in_week, is_hired_on_date
     from skills.models import PersonSkill, SkillTag
     from assignments.models import Assignment
     from departments.models import Department
@@ -195,6 +201,12 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
     processed = 0
     try:
         for p in people_qs.iterator():
+            if week_monday is not None:
+                if not is_hired_in_week(getattr(p, 'hire_date', None), week_monday):
+                    continue
+            else:
+                if not is_hired_on_date(getattr(p, 'hire_date', None), date.today()):
+                    continue
             # skills names lower
             skill_names: List[str] = []
             for ps in getattr(p, 'skills').all():
@@ -288,6 +300,30 @@ def send_pre_deliverable_reminders(self):
                     sent += 1
             except Exception:
                 ok = False
+            if (
+                getattr(pref, 'web_push_enabled', False)
+                and getattr(pref, 'push_pre_deliverable_reminders', True)
+                and bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
+            ):
+                payload = build_push_payload(
+                    event_type='pred.reminder',
+                    title='Pre-Deliverable Reminder',
+                    body=f"{getattr(it.deliverable.project, 'name', 'Project')} • {it.generated_date}",
+                    url='/deliverables/calendar',
+                    tag=f"pred.reminder.{it.id}",
+                )
+                try:
+                    send_push_to_users_task.delay(
+                        [pref.user_id],
+                        payload,
+                        'push_pre_deliverable_reminders',
+                    )
+                except Exception:
+                    send_push_to_users(
+                        [pref.user_id],
+                        payload,
+                        preference_field='push_pre_deliverable_reminders',
+                    )
             NotificationLog.objects.create(user=pref.user, pre_deliverable_item=it, notification_type='reminder', sent_at=_date.today(), email_subject=subject, success=ok)
     return {'sent': sent}
 
@@ -315,8 +351,38 @@ def send_daily_digest(self):
                 sent += 1
         except Exception:
             ok = False
+        if (
+            getattr(pref, 'web_push_enabled', False)
+            and getattr(pref, 'push_daily_digest', False)
+            and bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
+        ):
+            payload = build_push_payload(
+                event_type='pred.digest',
+                title='Daily Pre-Deliverables Digest',
+                body=f"{len(items)} upcoming item(s).",
+                url='/deliverables/calendar',
+                tag='pred.digest',
+            )
+            try:
+                send_push_to_users_task.delay(
+                    [pref.user_id],
+                    payload,
+                    'push_daily_digest',
+                )
+            except Exception:
+                send_push_to_users(
+                    [pref.user_id],
+                    payload,
+                    preference_field='push_daily_digest',
+                )
         NotificationLog.objects.create(user=pref.user, pre_deliverable_item=None, notification_type='digest', sent_at=_date.today(), email_subject=subject, success=ok)
     return {'sent': sent}
+
+
+@shared_task(bind=True, soft_time_limit=60)
+def send_push_to_users_task(self, user_ids: List[int], payload: Dict[str, Any], preference_field: str | None = None) -> Dict[str, Any]:
+    sent = send_push_to_users(user_ids, payload, preference_field=preference_field)
+    return {'sent': sent, 'userCount': len(set(user_ids or []))}
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=2, retry_kwargs={"max_retries": 1}, soft_time_limit=600)

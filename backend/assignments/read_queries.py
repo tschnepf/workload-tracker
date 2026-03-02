@@ -6,6 +6,7 @@ from django.db.models import Sum
 
 from assignments.models import AssignmentWeekHour
 from core.week_utils import sunday_of_week
+from people.eligibility import first_eligible_week_start
 
 
 def build_grid_snapshot_payload_normalized(
@@ -20,7 +21,7 @@ def build_grid_snapshot_payload_normalized(
     week_keys = [wk.isoformat() for wk in week_dates]
 
     people_rows = list(
-        people_qs.values('id', 'name', 'weekly_capacity', 'department_id').order_by('name', 'id')
+        people_qs.values('id', 'name', 'weekly_capacity', 'department_id', 'hire_date').order_by('name', 'id')
     )
     person_ids = [row['id'] for row in people_rows]
 
@@ -52,8 +53,12 @@ def build_grid_snapshot_payload_normalized(
                 'name': row['name'],
                 'weeklyCapacity': row.get('weekly_capacity') or 0,
                 'department': row.get('department_id'),
+                'firstEligibleWeek': (
+                    first_week.isoformat() if first_week is not None else None
+                ),
             }
             for row in people_rows
+            for first_week in [first_eligible_week_start(row.get('hire_date'))]
         ],
         'hoursByPerson': hours_by_person,
     }

@@ -260,6 +260,7 @@ services:
         # When not using HTTPS, disable cookie-based refresh and use localStorage tokens instead.
         # Override via .env on Unraid: FRONTEND_COOKIE_REFRESH_AUTH=false
         VITE_COOKIE_REFRESH_AUTH: ${FRONTEND_COOKIE_REFRESH_AUTH:-"true"}
+        VITE_PWA_ENABLED: ${VITE_PWA_ENABLED:-"true"}
     read_only: true
     tmpfs:
       - /tmp

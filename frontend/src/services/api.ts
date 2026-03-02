@@ -79,11 +79,38 @@ export type SystemCapabilities = {
   cache: { shortTtlAggregates: boolean; aggregateTtlSeconds: number };
   projectRolesByDepartment?: boolean;
   personalDashboard?: boolean;
+  pwa?: {
+    enabled: boolean;
+    pushEnabled: boolean;
+    vapidPublicKey: string | null;
+    offlineMode: 'shell';
+  };
   integrations?: {
     enabled: boolean;
     providers?: Array<{ key: string; displayName: string }>;
     details?: Record<string, unknown>;
   };
+};
+
+export type NotificationPreferences = {
+  emailPreDeliverableReminders: boolean;
+  reminderDaysBefore: number;
+  dailyDigest: boolean;
+  webPushEnabled: boolean;
+  pushPreDeliverableReminders: boolean;
+  pushDailyDigest: boolean;
+  pushAssignmentChanges: boolean;
+};
+
+export type PushSubscriptionItem = {
+  id: number;
+  endpoint: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string;
+  lastSuccessAt: string | null;
+  lastError: string;
 };
 
 // Delegate to shared error mapper to avoid duplication
@@ -1236,7 +1263,7 @@ export const assignmentsApi = {
       sp.set('department_filters', JSON.stringify(opts.department_filters));
     }
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return fetchApi<{ weekKeys: string[]; people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>; hoursByPerson: Record<string, Record<string, number>> }>(`/assignments/grid_snapshot/${qs}`, options);
+    return fetchApi<{ weekKeys: string[]; people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null; firstEligibleWeek?: string | null }>; hoursByPerson: Record<string, Record<string, number>> }>(`/assignments/grid_snapshot/${qs}`, options);
   },
 
   // Bulk weekly hours update
@@ -2367,5 +2394,33 @@ export const authApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as Array<{ id: number; action: string; created_at: string; detail: any; actor?: { username?: string }; targetUser?: { username?: string } }>;
+  },
+  getNotificationPreferences: async (): Promise<NotificationPreferences> => {
+    return fetchApi<NotificationPreferences>('/auth/notification-preferences/');
+  },
+  updateNotificationPreferences: async (data: NotificationPreferences): Promise<NotificationPreferences> => {
+    return fetchApi<NotificationPreferences>('/auth/notification-preferences/', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  listPushSubscriptions: async (): Promise<PushSubscriptionItem[]> => {
+    return fetchApi<PushSubscriptionItem[]>('/auth/push-subscriptions/');
+  },
+  upsertPushSubscription: async (data: {
+    endpoint: string;
+    expirationTime?: number | null;
+    keys: { p256dh: string; auth: string };
+  }): Promise<PushSubscriptionItem> => {
+    return fetchApi<PushSubscriptionItem>('/auth/push-subscriptions/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  deletePushSubscription: async (id: number): Promise<void> => {
+    await fetchApi<void>(`/auth/push-subscriptions/${id}/`, { method: 'DELETE' });
+  },
+  testPush: async (): Promise<{ queued: boolean; detail: string }> => {
+    return fetchApi<{ queued: boolean; detail: string }>('/auth/push/test/', { method: 'POST' });
   },
 };

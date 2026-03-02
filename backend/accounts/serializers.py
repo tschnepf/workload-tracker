@@ -6,7 +6,7 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 
 from .models import UserProfile, AdminAuditLog
-from core.models import NotificationPreference
+from core.models import NotificationPreference, WebPushSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +243,10 @@ class NotificationPreferencesSerializer(serializers.Serializer):
     emailPreDeliverableReminders = serializers.BooleanField()
     reminderDaysBefore = serializers.IntegerField(min_value=0)
     dailyDigest = serializers.BooleanField()
+    webPushEnabled = serializers.BooleanField(required=False, default=False)
+    pushPreDeliverableReminders = serializers.BooleanField(required=False, default=True)
+    pushDailyDigest = serializers.BooleanField(required=False, default=False)
+    pushAssignmentChanges = serializers.BooleanField(required=False, default=True)
 
     @staticmethod
     def from_model(p: NotificationPreference):
@@ -250,4 +254,44 @@ class NotificationPreferencesSerializer(serializers.Serializer):
             'emailPreDeliverableReminders': p.email_pre_deliverable_reminders,
             'reminderDaysBefore': p.reminder_days_before,
             'dailyDigest': p.daily_digest,
+            'webPushEnabled': p.web_push_enabled,
+            'pushPreDeliverableReminders': p.push_pre_deliverable_reminders,
+            'pushDailyDigest': p.push_daily_digest,
+            'pushAssignmentChanges': p.push_assignment_changes,
+        }
+
+
+class PushSubscriptionUpsertSerializer(serializers.Serializer):
+    endpoint = serializers.CharField()
+    expirationTime = serializers.IntegerField(required=False, allow_null=True)
+    keys = serializers.DictField(child=serializers.CharField(), required=True)
+
+    def validate(self, attrs):
+        keys = attrs.get('keys') or {}
+        if not keys.get('p256dh') or not keys.get('auth'):
+            raise serializers.ValidationError({'keys': 'keys.p256dh and keys.auth are required'})
+        return attrs
+
+
+class PushSubscriptionItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    endpoint = serializers.CharField()
+    isActive = serializers.BooleanField()
+    createdAt = serializers.DateTimeField()
+    updatedAt = serializers.DateTimeField()
+    lastSeenAt = serializers.DateTimeField()
+    lastSuccessAt = serializers.DateTimeField(allow_null=True)
+    lastError = serializers.CharField()
+
+    @staticmethod
+    def from_model(subscription: WebPushSubscription) -> dict:
+        return {
+            'id': subscription.id,
+            'endpoint': subscription.endpoint,
+            'isActive': subscription.is_active,
+            'createdAt': subscription.created_at,
+            'updatedAt': subscription.updated_at,
+            'lastSeenAt': subscription.last_seen_at,
+            'lastSuccessAt': subscription.last_success_at,
+            'lastError': subscription.last_error,
         }
