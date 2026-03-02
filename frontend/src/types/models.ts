@@ -494,6 +494,93 @@ export interface WorkloadForecastItem {
   peopleOverallocated: Array<{ id: number; name: string }>;
 }
 
+export interface ForecastPlannerThresholds {
+  teamUtilizationPct: number;
+  roleUtilizationPct: number;
+  unmappedHoursPerWeek: number;
+}
+
+export interface ForecastPlannerProjectInput {
+  templateId: number;
+  name: string;
+  startDate: string;
+  probabilityPct?: number;
+  quantity?: number;
+}
+
+export interface ForecastPlannerRoleSeries {
+  roleId: number;
+  roleName: string;
+  capacity: number[];
+  baselineDemand: number[];
+  proposedDemand: number[];
+  totalDemand: number[];
+  utilization: number[];
+}
+
+export interface ForecastPlannerResult {
+  weekKeys: string[];
+  thresholds: ForecastPlannerThresholds;
+  totals: {
+    teamCapacity: number[];
+    baselineDemand: number[];
+    proposedDemand: number[];
+    totalDemand: number[];
+    teamUtilization: number[];
+    baselineUnmapped: number[];
+    proposedUnmapped: number[];
+    totalUnmapped: number[];
+  };
+  roles: ForecastPlannerRoleSeries[];
+  recommendation: {
+    decision: 'Go' | 'Caution' | 'No-Go' | string;
+    peakTeamUtilizationPct: number;
+    peakUnmappedHoursPerWeek: number;
+    firstOverloadedWeek: string | null;
+    bottleneckRoles: Array<{ roleId: number; roleName: string; peakUtilizationPct: number }>;
+    reasons: string[];
+  };
+  statusStats?: Record<string, { projectCount: number; hours: number }>;
+  startOptions?: Array<{
+    name: string;
+    templateId: number;
+    requestedStartDate: string;
+    earliestFeasibleStartDate: string | null;
+  }>;
+}
+
+export interface ForecastPlannerScenario {
+  id: number;
+  name: string;
+  description: string;
+  ownerId: number;
+  isShared: boolean;
+  sharedToken?: string | null;
+  scenarioConfig: {
+    weeks?: number;
+    department?: number | null;
+    includeChildren?: boolean;
+    vertical?: number | null;
+    statusKeys?: string[];
+    projects?: ForecastPlannerProjectInput[];
+    thresholds?: ForecastPlannerThresholds;
+    useProbabilityWeighting?: boolean;
+  };
+  lastResult?: ForecastPlannerResult;
+  lastEvaluatedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ForecastPlannerBootstrapResponse {
+  departments: Department[];
+  roles: Array<{ id: number; name: string }>;
+  statusDefinitions: ProjectStatusDefinition[];
+  defaultIncludedStatusKeys: string[];
+  templates: AutoHoursTemplate[];
+  baselineEvaluation: ForecastPlannerResult;
+}
+
 // Optimized Projects page filter metadata response
 export interface ProjectFilterMetadataResponse {
   projectFilters: {

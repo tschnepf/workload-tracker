@@ -25,6 +25,11 @@ import {
   PaginatedResponse,
   DashboardData,
   DepartmentsOverviewResponse,
+  ForecastPlannerBootstrapResponse,
+  ForecastPlannerProjectInput,
+  ForecastPlannerResult,
+  ForecastPlannerScenario,
+  ForecastPlannerThresholds,
   SkillTag,
   PersonSkill,
   AssignmentConflictResponse,
@@ -1623,6 +1628,17 @@ export type ForecastBootstrapResponse = {
   workloadForecast: WorkloadForecastItem[];
 };
 
+export type ForecastPlannerEvaluateRequest = {
+  weeks?: number;
+  department?: number | null;
+  include_children?: boolean;
+  vertical?: number | null;
+  statusKeys: string[];
+  projects: ForecastPlannerProjectInput[];
+  thresholds?: ForecastPlannerThresholds;
+  useProbabilityWeighting?: boolean;
+};
+
 export const reportsApi = {
   getRoleCapacityBootstrap: async (params?: {
     weeks?: number;
@@ -1656,6 +1672,72 @@ export const reportsApi = {
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<ForecastBootstrapResponse>(`/reports/forecast/bootstrap/${queryString}`);
+  },
+
+  getForecastPlannerBootstrap: async (params?: {
+    weeks?: number;
+    department?: number | null;
+    include_children?: 0 | 1;
+    vertical?: number | null;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<ForecastPlannerBootstrapResponse>(`/reports/forecast/planner-bootstrap/${queryString}`);
+  },
+
+  evaluateForecastScenario: async (payload: ForecastPlannerEvaluateRequest) => {
+    return fetchApi<{ result: ForecastPlannerResult }>(`/reports/forecast/evaluate/`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  listForecastScenarios: async () => {
+    return fetchApi<{ results: ForecastPlannerScenario[] }>(`/reports/forecast/scenarios/`);
+  },
+
+  createForecastScenario: async (payload: {
+    name: string;
+    description?: string;
+    isShared?: boolean;
+    scenarioConfig?: ForecastPlannerScenario['scenarioConfig'];
+    lastResult?: ForecastPlannerResult;
+  }) => {
+    return fetchApi<{ scenario: ForecastPlannerScenario }>(`/reports/forecast/scenarios/`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getForecastScenario: async (scenarioId: number) => {
+    return fetchApi<{ scenario: ForecastPlannerScenario }>(`/reports/forecast/scenarios/${scenarioId}/`);
+  },
+
+  updateForecastScenario: async (scenarioId: number, payload: {
+    name?: string;
+    description?: string;
+    isShared?: boolean;
+    scenarioConfig?: ForecastPlannerScenario['scenarioConfig'];
+    lastResult?: ForecastPlannerResult;
+  }) => {
+    return fetchApi<{ scenario: ForecastPlannerScenario }>(`/reports/forecast/scenarios/${scenarioId}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteForecastScenario: async (scenarioId: number) => {
+    return fetchApi<{ detail: string }>(`/reports/forecast/scenarios/${scenarioId}/`, {
+      method: 'DELETE',
+    });
+  },
+
+  getSharedForecastScenario: async (token: string) => {
+    return fetchApi<{ scenario: ForecastPlannerScenario }>(`/reports/forecast/scenarios/shared/${encodeURIComponent(token)}/`);
   },
 
   getDepartmentsOverview: async (params?: {

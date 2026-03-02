@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.contrib.auth.models import Group
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework import status
 
@@ -219,6 +220,9 @@ class ReportsBootstrapEndpointsTests(TestCase):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         self.admin = User.objects.create_user(username='reports_admin', password='pw', is_staff=True)
+        self.manager = User.objects.create_user(username='reports_manager', password='pw', is_staff=False)
+        manager_group, _ = Group.objects.get_or_create(name='Manager')
+        self.manager.groups.add(manager_group)
         self.user = User.objects.create_user(username='reports_user', password='pw', is_staff=False)
 
         self.vertical = Vertical.objects.create(name='Interiors')
@@ -261,10 +265,14 @@ class ReportsBootstrapEndpointsTests(TestCase):
         self.assertGreaterEqual(len(data['roles']), 1)
         self.assertGreaterEqual(len(data['timeline']['weekKeys']), 1)
 
-    def test_forecast_bootstrap_is_admin_only(self):
+    def test_forecast_bootstrap_allows_admin_and_manager(self):
         self.client.force_authenticate(self.user)
         forbidden = self.client.get('/api/reports/forecast/bootstrap/?weeks=8')
         self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN, forbidden.content)
+
+        self.client.force_authenticate(self.manager)
+        manager_allowed = self.client.get('/api/reports/forecast/bootstrap/?weeks=8')
+        self.assertEqual(manager_allowed.status_code, status.HTTP_200_OK, manager_allowed.content)
 
         self.client.force_authenticate(self.admin)
         allowed = self.client.get('/api/reports/forecast/bootstrap/?weeks=8')

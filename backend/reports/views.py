@@ -23,6 +23,7 @@ from assignments.models import Assignment
 from assignments.analytics import compute_role_capacity
 from projects.models import Project
 from core.cache_keys import build_aggregate_cache_key
+from accounts.permissions import IsAdminOrManager
 
 
 class DepartmentsOverviewThrottle(ScopedRateThrottle):
@@ -691,7 +692,7 @@ class RoleCapacityBootstrapView(APIView):
 
 
 class ForecastBootstrapView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     _BOOLEAN_TRUE = {'1', 'true', 'yes', 'on'}
 
@@ -704,10 +705,6 @@ class ForecastBootstrapView(APIView):
         ],
     )
     def get(self, request):
-        user = getattr(request, 'user', None)
-        if not user or not user.is_staff:
-            return Response({'detail': 'forbidden'}, status=403)
-
         try:
             weeks = int(request.query_params.get('weeks', 8))
         except Exception:

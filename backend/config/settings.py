@@ -277,6 +277,7 @@ FEATURES.update({
     'FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING': os.getenv('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', 'true').lower() == 'true',
     'FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS': os.getenv('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', 'true').lower() == 'true',
     'FF_MODERATE_PAGES_SNAPSHOTS': os.getenv('FF_MODERATE_PAGES_SNAPSHOTS', 'true').lower() == 'true',
+    'FORECAST_PLANNER_V2': os.getenv('FORECAST_PLANNER_V2', 'true').lower() == 'true',
     # Always-on flag for safe server-side weekly-hours operations
     'AUTO_REALLOCATION': True,
     # Week key policy controls (Section 3/4)
