@@ -108,6 +108,7 @@ type TimePlotProps = {
     innerH: number;
   }) => React.ReactNode;
   rightSlot?: React.ReactNode;
+  legend?: React.ReactNode;
 };
 
 const TimePlot: React.FC<TimePlotProps> = ({
@@ -118,6 +119,7 @@ const TimePlot: React.FC<TimePlotProps> = ({
   onHoverIndexChange,
   children,
   rightSlot,
+  legend,
 }) => {
   const padLeft = 46;
   const padRight = 16;
@@ -193,8 +195,37 @@ const TimePlot: React.FC<TimePlotProps> = ({
             })}
           </svg>
         </div>
+        {legend ? <div className="mt-2 flex flex-wrap gap-3 text-xs text-[var(--muted)]">{legend}</div> : null}
       </div>
     </Card>
+  );
+};
+
+const LegendToken: React.FC<{
+  label: string;
+  color: string;
+  kind?: 'line' | 'dashed' | 'area' | 'bar' | 'band';
+}> = ({ label, color, kind = 'line' }) => {
+  const swatch = (() => {
+    if (kind === 'area') {
+      return <span className="inline-block h-3 w-4 rounded-sm border" style={{ backgroundColor: color, borderColor: color, opacity: 0.35 }} />;
+    }
+    if (kind === 'bar') {
+      return <span className="inline-block h-3 w-2 rounded-sm" style={{ backgroundColor: color }} />;
+    }
+    if (kind === 'band') {
+      return <span className="inline-block h-3 w-4 rounded-sm" style={{ backgroundColor: color, opacity: 0.25 }} />;
+    }
+    if (kind === 'dashed') {
+      return <span className="inline-block h-0 w-4 border-t-2 border-dashed" style={{ borderColor: color }} />;
+    }
+    return <span className="inline-block h-0 w-4 border-t-2" style={{ borderColor: color }} />;
+  })();
+  return (
+    <span className="inline-flex items-center gap-2">
+      {swatch}
+      <span>{label}</span>
+    </span>
   );
 };
 
@@ -380,6 +411,15 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
         rightSlot={<span className="text-xs text-[var(--muted)]">{normalizeMode === 'hours' ? 'Hours' : '% of capacity'}</span>}
+        legend={(
+          <>
+            <LegendToken label="Capacity" color={CHART_COLORS.capacity} kind="line" />
+            <LegendToken label="Scheduled Included" color={CHART_COLORS.included} kind="area" />
+            <LegendToken label="Scheduled Excluded" color={CHART_COLORS.excluded} kind="area" />
+            <LegendToken label="Proposed" color={CHART_COLORS.proposed} kind="area" />
+            <LegendToken label="Total Demand" color={CHART_COLORS.total} kind="line" />
+          </>
+        )}
       >
         {({ x, y, height, padBottom }) => {
           const pointsIncluded = teamIncluded.map((v, i) => ({ x: x(i), y: y(v) }));
@@ -405,6 +445,15 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         maxY={utilizationMax}
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
+        legend={(
+          <>
+            <LegendToken label="Safe Band" color="#14532d" kind="band" />
+            <LegendToken label="Caution Band" color="#854d0e" kind="band" />
+            <LegendToken label="No-Go Band" color="#7f1d1d" kind="band" />
+            <LegendToken label="Threshold" color={CHART_COLORS.threshold} kind="dashed" />
+            <LegendToken label="Team Utilization" color="#f43f5e" kind="line" />
+          </>
+        )}
       >
         {({ x, y, width, padLeft, padRight, padTop, padBottom, height }) => {
           const thresholdY = y(team.teamUtilizationThresholdPct);
@@ -435,6 +484,23 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
           >
             {statusDetailMode ? 'Group View' : 'Drill by Status'}
           </button>
+        )}
+        legend={(
+          !statusDetailMode ? (
+            <>
+              <LegendToken label="Included Group" color={CHART_COLORS.included} kind="area" />
+              <LegendToken label="Excluded Group" color={CHART_COLORS.excluded} kind="area" />
+            </>
+          ) : (
+            <>
+              {statusDetailSeries.included.slice(0, 8).map(([key]) => (
+                <LegendToken key={`legend-included-${key}`} label={`Included: ${key}`} color={statusColors[key] || '#64748b'} kind="area" />
+              ))}
+              {statusDetailSeries.excluded.slice(0, 8).map(([key]) => (
+                <LegendToken key={`legend-excluded-${key}`} label={`Excluded: ${key}`} color={statusColors[key] || '#64748b'} kind="dashed" />
+              ))}
+            </>
+          )
         )}
       >
         {({ x, y, height, padBottom }) => {
@@ -481,6 +547,13 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         maxY={impactMaxAbs * 2}
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
+        legend={(
+          <>
+            <LegendToken label="Positive Delta (added demand)" color="#f59e0b" kind="bar" />
+            <LegendToken label="Negative Delta (reduced demand)" color="#38bdf8" kind="bar" />
+            <LegendToken label="Zero Baseline" color="#94a3b8" kind="line" />
+          </>
+        )}
       >
         {({ x, y, padLeft, padRight, width, height, padBottom }) => {
           const zeroY = y(impactMaxAbs);
@@ -539,6 +612,14 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               hoverIndex={hoverIndex}
               onHoverIndexChange={setHoverIndex}
               rightSlot={<span className="text-xs text-[var(--muted)]">Peak {fmtPct(Math.max(...(roleUtil || [0])))}</span>}
+              legend={(
+                <>
+                  <LegendToken label="Capacity" color={CHART_COLORS.capacity} kind="line" />
+                  <LegendToken label="Baseline" color={CHART_COLORS.baseline} kind="line" />
+                  <LegendToken label="Proposed" color={CHART_COLORS.proposed} kind="line" />
+                  <LegendToken label="Total Demand" color={CHART_COLORS.total} kind="line" />
+                </>
+              )}
             >
               {({ x, y }) => {
                 const roleCapacityPlot = normalizeMode === 'hours' ? roleCapacity : roleCapacity.map((v) => (v > 0 ? 100 : 0));
@@ -567,6 +648,18 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         maxY={deptChartMax}
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
+        legend={(
+          <>
+            {topDepartments.map((dept, deptIdx) => (
+              <LegendToken
+                key={`dept-legend-${dept.departmentId}`}
+                label={dept.departmentName}
+                color={DEPT_COLORS[deptIdx % DEPT_COLORS.length]}
+                kind="bar"
+              />
+            ))}
+          </>
+        )}
       >
         {({ x, y, padLeft, padRight, width, height, padBottom }) => {
           const step = labels.length <= 1 ? 28 : (width - padLeft - padRight) / (labels.length - 1);
@@ -611,6 +704,14 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         maxY={unmappedMax}
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
+        legend={(
+          <>
+            <LegendToken label="Baseline Unmapped" color={CHART_COLORS.baseline} kind="line" />
+            <LegendToken label="Proposed Unmapped" color={CHART_COLORS.proposed} kind="line" />
+            <LegendToken label="Total Unmapped" color={CHART_COLORS.total} kind="line" />
+            <LegendToken label="Unmapped Threshold" color={CHART_COLORS.threshold} kind="dashed" />
+          </>
+        )}
       >
         {({ x, y, padLeft, padRight, width }) => {
           const threshold = timeGrain === 'weekly' ? unmappedThreshold : unmappedThreshold;
@@ -628,6 +729,11 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
       <Card className="ux-panel">
         <div className="p-4">
           <h3 className="mb-3 text-sm font-semibold text-[var(--text)]">Earliest Feasible Start Windows</h3>
+          <div className="mb-3 flex flex-wrap gap-3 text-xs text-[var(--muted)]">
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: '#94a3b8' }} />Requested Start</span>
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: '#22c55e' }} />Earliest Feasible Start</span>
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: '#f59e0b' }} />Delay (weeks)</span>
+          </div>
           {chartData.feasibleStarts.rows.length === 0 ? (
             <div className="text-sm text-[var(--muted)]">No proposed projects in this scenario.</div>
           ) : (
@@ -662,6 +768,12 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
         rightSlot={<span className="text-xs text-[var(--muted)]">{chartData.confidenceSeries.enabled ? 'Probability-weighted' : 'Weighting disabled'}</span>}
+        legend={(
+          <>
+            <LegendToken label="Expected Demand" color={CHART_COLORS.confidenceLine} kind="line" />
+            <LegendToken label="Uncertainty Band (Low-High)" color={CHART_COLORS.confidenceBand} kind="band" />
+          </>
+        )}
       >
         {({ x }) => {
           const lowPts = confidence.lowDemandByWeek.map((v, i) => ({ x: x(i), y: v }));
