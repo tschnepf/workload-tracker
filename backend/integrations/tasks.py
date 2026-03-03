@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from celery import shared_task
 from django.utils import timezone
 
@@ -20,7 +21,14 @@ from .state import save_state
 from .providers.bqe.projects_sync import sync_projects as bqe_sync_projects
 from .providers.bqe.clients_sync import sync_clients as bqe_sync_clients
 from .logging_utils import integration_log_extra
-from .azure_identity import get_azure_connection, graph_reconcile, refresh_reconciliation
+from .audit import record_audit_event
+from .azure_identity import (
+    ensure_graph_permission_ready,
+    get_azure_connection,
+    get_graph_permission_status,
+    graph_reconcile,
+    refresh_reconciliation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,12 +219,26 @@ def azure_daily_reconcile(self):
     if not connection:
         logger.info('azure_daily_reconcile_skipped_no_connection')
         return {'skipped': True, 'reason': 'no_connection'}
-    summary: dict[str, object] = {}
+    correlation_id = uuid.uuid4().hex
+    summary: dict[str, object] = {'correlationId': correlation_id}
     try:
-        summary['graph'] = graph_reconcile(connection, dry_run=False)
+        ensure_graph_permission_ready(connection, refresh=True)
+        summary['graph'] = graph_reconcile(
+            connection,
+            dry_run=False,
+            enforce_permission_check=False,
+            correlation_id=correlation_id,
+        )
     except Exception as exc:  # nosec B110
         logger.warning('azure_daily_reconcile_graph_failed', exc_info=True)
         summary['graph_error'] = str(exc)
+        summary['graph_permission'] = get_graph_permission_status(connection, refresh=False)
+        record_audit_event(
+            user=None,
+            action='azure.graph.permission.denied',
+            connection=connection,
+            metadata={'reason': str(exc), 'source': 'daily_task', 'correlationId': correlation_id},
+        )
     try:
         summary['reconciliation'] = refresh_reconciliation(connection)
     except Exception as exc:  # nosec B110

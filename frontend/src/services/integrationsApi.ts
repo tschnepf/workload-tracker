@@ -503,6 +503,11 @@ export type AzureProviderStatus = {
   connectionId: number | null;
   environment: string | null;
   hasScimToken: boolean;
+  graphPermissionReady: boolean;
+  graphPermissionReason?: string | null;
+  graphPermissionCheckedAt?: string | null;
+  tenantEnforced: boolean;
+  tenantId?: string | null;
   policy: {
     azureSsoEnabled: boolean;
     azureSsoEnforced: boolean;
@@ -540,8 +545,36 @@ export type AzureReconciliationItem = {
   updatedAt: string;
 };
 
-export async function getAzureStatus(): Promise<AzureProviderStatus> {
-  const res = await apiClient.GET('/integrations/providers/azure/status/' as any, { headers: authHeaders() });
+export type AzureDirectoryValue = {
+  value: string;
+  count: number;
+  mappedDepartmentId?: number | null;
+  mappedDepartmentName?: string | null;
+};
+
+export type AzureValidationStatus = {
+  ok: boolean;
+  tenantEnforced: boolean;
+  tenantId?: string | null;
+  graphPermission: {
+    ready: boolean;
+    reason?: string | null;
+    requiredPermission?: string;
+    checkedAt?: string | null;
+    statusCode?: number | null;
+    errorCode?: string | null;
+  };
+  scim: {
+    basePath: string;
+    requiredTokenConfigured: boolean;
+  };
+};
+
+export async function getAzureStatus(opts?: { probeGraph?: boolean }): Promise<AzureProviderStatus> {
+  const res = await apiClient.GET('/integrations/providers/azure/status/' as any, {
+    params: opts?.probeGraph ? { query: { probeGraph: true } } : undefined,
+    headers: authHeaders(),
+  });
   return ensureData<AzureProviderStatus>(res, 'Azure status');
 }
 
@@ -571,12 +604,36 @@ export async function getAzureProvisioningStatus(): Promise<Record<string, any>>
   return ensureData<Record<string, any>>(res, 'Azure provisioning status');
 }
 
+export async function validateAzureProvisioning(): Promise<AzureValidationStatus> {
+  const res = await apiClient.POST('/integrations/providers/azure/provisioning/validate/' as any, {
+    body: {},
+    headers: authHeaders(),
+  });
+  return ensureData<AzureValidationStatus>(res, 'Azure provisioning validation');
+}
+
 export async function triggerAzureReconcile(payload?: { dryRun?: boolean; includeGraph?: boolean }): Promise<Record<string, any>> {
   const res = await apiClient.POST('/integrations/providers/azure/provisioning/reconcile-now/' as any, {
     body: payload || {},
     headers: authHeaders(),
   });
   return ensureData<Record<string, any>>(res, 'Azure reconcile now');
+}
+
+export async function listAzureDirectoryDepartments(): Promise<AzureDirectoryValue[]> {
+  const res = await apiClient.GET('/integrations/providers/azure/directory/departments/' as any, {
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: AzureDirectoryValue[] }>(res, 'Azure directory departments');
+  return data.items;
+}
+
+export async function listAzureDirectoryGroups(): Promise<Array<{ value: string; count: number }>> {
+  const res = await apiClient.GET('/integrations/providers/azure/directory/groups/' as any, {
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: Array<{ value: string; count: number }> }>(res, 'Azure directory groups');
+  return data.items;
 }
 
 export async function listAzureDepartmentMappings(): Promise<AzureMappingItem[]> {

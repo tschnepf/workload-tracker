@@ -523,6 +523,13 @@ class ProviderConnectCallbackView(APIView):
         try:
             exchange_code_for_connection(connection, code, state)
         except OAuthError as exc:
+            if key == 'azure' and 'tenant' in str(exc).lower():
+                record_audit_event(
+                    user=None,
+                    action='azure.oauth.tenant_mismatch',
+                    connection=connection,
+                    metadata={'reason': str(exc)},
+                )
             return _oauth_callback_response({'ok': False, 'message': str(exc), 'provider': key}, target_origin)
         return _oauth_callback_response({'ok': True, 'provider': key}, target_origin)
 

@@ -4,15 +4,17 @@
   "displayName": "Microsoft Entra ID",
   "oauth": {
     "flows": ["authorization_code_pkce"],
+    "tokenAuthMethod": "body",
     "scopes": [
       "openid",
       "profile",
       "email",
       "offline_access",
-      "User.Read"
+      "User.Read",
+      "User.Read.All"
     ],
-    "authBaseUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    "tokenUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+    "authBaseUrl": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
+    "tokenUrl": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
   },
   "baseUrlVariants": {
     "default": "https://graph.microsoft.com/v1.0",

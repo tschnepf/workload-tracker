@@ -811,6 +811,107 @@ See `docs/integrations/key-rotation.md` for the MultiFernet rotation runbook and
 6. **Monitor jobs & health** – The Sync Controls card lists recent jobs, metrics (running count, 24h success rate, items processed), and job history filters. Failed jobs expose a **Retry job** action that queues a new run and logs an audit entry. If Celery or Redis are unavailable, a banner will warn that sync controls are temporarily paused.
 7. **Sync additional objects** – The catalog now includes the BQE **Clients** object. Create a Clients rule to keep the `IntegrationClient` table up to date and use that data elsewhere in the platform (e.g., to drive mapping suggestions or future client matching flows).
 
+## Azure Entra ID SSO + SCIM Provisioning Setup (IT Runbook)
+
+This runbook is for IT administrators configuring Microsoft Entra ID as the identity source for Workload Tracker (SSO + lifecycle provisioning).  
+Validated against Microsoft documentation on **2026-03-03**.
+
+### What this setup enables
+- Users sign in with Microsoft (Entra ID) instead of local passwords.
+- New in-scope users are provisioned into Workload Tracker.
+- Disabled or unassigned users are marked inactive (not deleted), preserving history.
+- Department and position/job title values flow in from Entra for mapping.
+
+### 1) Workload Tracker prerequisites (server side)
+
+1. Ensure Workload Tracker is available over HTTPS with a public DNS name.
+2. Set these environment variables in your deployment:
+   - `INTEGRATIONS_ENABLED=true`
+   - `INTEGRATIONS_SECRET_KEY=<fernet-key>`
+   - `APP_BASE_URL=https://<your-workload-tracker-host>`
+   - `AZURE_SSO_TENANT_ID=<your-entra-tenant-guid>`
+   - `AZURE_SSO_REDIRECT_URI=https://<your-workload-tracker-host>/api/auth/sso/azure/callback/`
+   - Optional: `AZURE_GRAPH_RECONCILE_HOURS=24`
+3. Deploy/restart services and apply migrations.
+4. Sign in as a Workload Tracker admin and open **Settings -> Integrations**.
+5. Unlock Integrations Hub (save Fernet key if prompted).
+
+### 2) Azure app registration (Entra side)
+
+1. In Microsoft Entra admin center, register a new app:
+   - Supported account type: **Single tenant**.
+2. In the app registration, add **Web** redirect URIs:
+   - `https://<your-workload-tracker-host>/api/auth/sso/azure/callback/`
+   - `https://<your-workload-tracker-host>/api/integrations/providers/azure/connect/callback/`
+3. Create a **client secret** and securely capture:
+   - Application (client) ID
+   - Client secret value
+   - Directory (tenant) ID
+4. Configure Microsoft Graph delegated permissions and grant admin consent:
+   - `openid`, `profile`, `email`, `offline_access`
+   - `User.Read`
+   - For tenant-wide Graph reconciliation, add `User.Read.All` and grant admin consent.
+
+### 3) Integrations Hub configuration (Workload Tracker side)
+
+1. In **Settings -> Integrations**, select provider **Microsoft Entra ID (Azure)**.
+2. Enter provider credentials:
+   - Client ID = Entra app Application (client) ID
+   - Client secret = Entra app secret value
+   - Redirect URI = `https://<your-workload-tracker-host>/api/integrations/providers/azure/connect/callback/`
+3. Create/connect the **Production** Azure connection and complete OAuth consent.
+4. In Azure Provisioning card, set a strong SCIM bearer token in Workload Tracker.
+5. Set authentication policy in Integrations Hub:
+   - Enable Azure SSO
+   - Keep dual-mode during migration (password still available) if desired
+   - After cutover, enforce Azure-only and configure break-glass account ID
+
+### 4) Enterprise app assignment and SCIM provisioning (Entra side)
+
+1. Open the Enterprise application (service principal) for the app registration.
+2. Recommended: set **Assignment required = Yes** so only assigned users/groups are in scope.
+3. Assign target users/groups for Workload Tracker access.
+4. Open **Provisioning** and configure:
+   - Provisioning mode: **Automatic**
+   - Tenant URL: `https://<your-workload-tracker-host>/api/integrations/providers/azure/scim/v2`
+   - Secret token: use the SCIM token saved in Integrations Hub
+   - Test connection, then Save
+5. In attribute mappings, ensure these are present:
+   - `userPrincipalName -> userName`
+   - `mail` (or `userPrincipalName`) -> `emails[type eq "work"].value`
+   - Name fields (`givenName`, `surname`, `displayName`)
+   - Active status -> `active`
+   - Department -> `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department`
+   - Job title/position -> `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:title`
+6. Start provisioning.
+
+### 5) Post-setup migration and validation (Workload Tracker side)
+
+1. In **Settings -> Integrations -> Azure**:
+   - Run **Reconcile Now**.
+   - Review migration reconciliation queue.
+   - Confirm/override ambiguous matches.
+   - Apply confirmed matches.
+2. Configure department and role mappings:
+   - Azure department string -> local Department
+   - Azure job title string -> local Role
+3. Validate end-to-end behavior:
+   - Assigned active user can sign in with Microsoft.
+   - New assigned user auto-creates local User + Person.
+   - Unassigned/disabled user becomes inactive (not deleted) and history remains intact.
+
+### Microsoft documentation references
+
+- App registration quickstart: [https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
+- OAuth 2.0 authorization code flow (Microsoft identity platform): [https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow)
+- OIDC scopes/consent (`openid`, `profile`, `email`, `offline_access`): [https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc](https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc)
+- Configure OIDC SSO for enterprise applications: [https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/add-application-portal-setup-oidc-sso](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/add-application-portal-setup-oidc-sso)
+- Assign users/groups to enterprise apps: [https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal)
+- SCIM provisioning for users/groups: [https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)
+- How provisioning works in Entra ID: [https://learn.microsoft.com/en-us/entra/identity/app-provisioning/how-provisioning-works](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/how-provisioning-works)
+- Microsoft Graph list users API permissions: [https://learn.microsoft.com/en-us/graph/api/user-list](https://learn.microsoft.com/en-us/graph/api/user-list)
+- Microsoft Graph permissions reference (`User.Read.All`): [https://learn.microsoft.com/en-us/graph/permissions-reference](https://learn.microsoft.com/en-us/graph/permissions-reference)
+
 **Authentication Pages**
 - Login: Enter your username (or email) and password.
 - Reset Password: Request a reset link if you forget your password.

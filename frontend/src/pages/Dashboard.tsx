@@ -34,6 +34,12 @@ import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { getFlag } from '@/lib/flags';
 import PageState from '@/components/ui/PageState';
 
+const PRESET_WEEK_OPTIONS = [1, 2, 4, 8, 12] as const;
+type WeekSelectionMode = 'preset' | 'custom';
+const MIN_WEEKS = 1;
+const PRESET_MAX_WEEKS = 12;
+const CUSTOM_MAX_WEEKS = 52;
+
 const Dashboard: React.FC = () => {
   const auth = useAuth();
   const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
@@ -42,6 +48,8 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weeksPeriod, setWeeksPeriod] = useState<number>(1);
+  const [weekSelectionMode, setWeekSelectionMode] = useState<WeekSelectionMode>('preset');
+  const [customWeeksInput, setCustomWeeksInput] = useState<string>('');
   
   // Department filtering state (global)
   const { state: deptState, setDepartment } = useDepartmentFilter();
@@ -331,11 +339,42 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleWeeksPeriodChange = (newWeeks: number) => {
-    if (newWeeks >= 1 && newWeeks <= 12) {
-      setWeeksPeriod(newWeeks);
+  const clampWeeksPeriod = (newWeeks: number, maxWeeks: number) =>
+    Math.max(MIN_WEEKS, Math.min(maxWeeks, newWeeks));
+
+  const handleWeeksPeriodChange = (newWeeks: number, mode: WeekSelectionMode = 'preset') => {
+    if (!Number.isFinite(newWeeks)) return;
+    const maxWeeks = mode === 'custom' ? CUSTOM_MAX_WEEKS : PRESET_MAX_WEEKS;
+    const clampedWeeks = clampWeeksPeriod(Math.trunc(newWeeks), maxWeeks);
+    setWeeksPeriod(clampedWeeks);
+    setWeekSelectionMode(mode);
+    if (mode === 'custom') {
+      setCustomWeeksInput(String(clampedWeeks));
     }
   };
+
+  const handleCustomWeeksChange = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    setWeekSelectionMode('custom');
+    setCustomWeeksInput(numericValue);
+  };
+
+  const commitCustomWeeksInput = () => {
+    const parsed = parseInt(customWeeksInput, 10);
+    if (Number.isNaN(parsed)) {
+      setCustomWeeksInput(String(weeksPeriod));
+      return;
+    }
+    const clamped = clampWeeksPeriod(parsed, CUSTOM_MAX_WEEKS);
+    setWeeksPeriod(clamped);
+    setCustomWeeksInput(String(clamped));
+  };
+
+  const handleCustomWeeksBlur = () => {
+    commitCustomWeeksInput();
+  };
+
+  const customWeeksDisplayValue = weekSelectionMode === 'custom' ? customWeeksInput : '<custom>';
 
   if (loading || Boolean(error) || !data) {
     return (
@@ -389,34 +428,45 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-xs uppercase tracking-wide text-[var(--muted)]">Time Period</span>
-              <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)]/60 p-1">
-                {[1, 2, 4, 8, 12].map((weeks) => (
+              <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)]/60 p-1">
+                {PRESET_WEEK_OPTIONS.map((weeks) => (
                   <button
                     key={weeks}
-                    onClick={() => handleWeeksPeriodChange(weeks)}
+                    onClick={() => handleWeeksPeriodChange(weeks, 'preset')}
                     className={`px-3 py-1 text-[11px] rounded-full transition-colors ${
-                      weeksPeriod === weeks
+                      weekSelectionMode === 'preset' && weeksPeriod === weeks
                         ? 'bg-[var(--primary)] text-white'
                         : 'text-[var(--muted)] hover:text-[var(--text)]'
                     }`}
                     type="button"
-                    aria-pressed={weeksPeriod === weeks}
+                    aria-pressed={weekSelectionMode === 'preset' && weeksPeriod === weeks}
                   >
                     {weeks}w
                   </button>
                 ))}
-              </div>
-              <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)]/60 px-2 py-1">
-                <input
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={weeksPeriod}
-                  onChange={(e) => handleWeeksPeriodChange(parseInt(e.target.value, 10) || 1)}
-                  className="w-12 bg-transparent text-[11px] text-[var(--text)] focus:outline-none"
-                  aria-label="Custom weeks"
-                />
-                <span className="text-[11px] text-[var(--muted)]">w</span>
+                <div
+                  className={`ml-1 flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${
+                    weekSelectionMode === 'custom'
+                      ? 'bg-[var(--primary)] text-white'
+                      : 'text-[var(--muted)]'
+                  }`}
+                >
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={customWeeksDisplayValue}
+                    onChange={(e) => handleCustomWeeksChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      commitCustomWeeksInput();
+                      e.currentTarget.blur();
+                    }}
+                    onBlur={handleCustomWeeksBlur}
+                    className="w-14 bg-transparent text-center text-[11px] [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:outline-none placeholder:opacity-70"
+                    aria-label="Custom weeks"
+                  />
+                  <span className="text-[11px]">w</span>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">

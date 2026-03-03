@@ -10,6 +10,7 @@ const Login: React.FC = () => {
   const [ssoEnabled, setSsoEnabled] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
   const [hidePasswordLogin, setHidePasswordLogin] = useState(false);
+  const [showBreakGlassPasswordLogin, setShowBreakGlassPasswordLogin] = useState(false);
   const navigate = useNavigate();
   const location = useLocation() as any;
   const from = location?.state?.from?.pathname || '/';
@@ -76,9 +77,18 @@ const Login: React.FC = () => {
           </button>
         )}
         {hidePasswordLogin && (
-          <p className="text-sm text-gray-300 mb-3">Password login is disabled for this account type.</p>
+          <div className="text-sm text-gray-300 mb-3 space-y-2">
+            <p>Password login is disabled by Azure enforcement.</p>
+            <button
+              type="button"
+              className="text-emerald-300 hover:text-emerald-200 underline"
+              onClick={() => setShowBreakGlassPasswordLogin((prev) => !prev)}
+            >
+              {showBreakGlassPasswordLogin ? 'Hide break-glass password login' : 'Use break-glass password login'}
+            </button>
+          </div>
         )}
-        {!hidePasswordLogin && (
+        {(!hidePasswordLogin || showBreakGlassPasswordLogin) && (
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">Username or Email</label>

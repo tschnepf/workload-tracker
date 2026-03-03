@@ -48,6 +48,8 @@ import {
   type SecretKeyStatus,
   getAzureProvisioningStatus,
   getAzureStatus,
+  listAzureDirectoryDepartments,
+  listAzureDirectoryGroups,
   listAzureDepartmentMappings,
   listAzureReconciliation,
   listAzureRoleMappings,
@@ -58,6 +60,8 @@ import {
   saveAzureRoleMappings,
   setAzureScimToken,
   triggerAzureReconcile,
+  updateAzurePolicy,
+  validateAzureProvisioning,
 } from '@/services/integrationsApi';
 import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
@@ -361,6 +365,10 @@ const IntegrationsSection: React.FC = () => {
   const [azureDeptId, setAzureDeptId] = useState('');
   const [azureRoleSource, setAzureRoleSource] = useState('');
   const [azureRoleId, setAzureRoleId] = useState('');
+  const [azureSsoEnabledDraft, setAzureSsoEnabledDraft] = useState(false);
+  const [azureSsoEnforcedDraft, setAzureSsoEnforcedDraft] = useState(false);
+  const [azurePasswordEnabledDraft, setAzurePasswordEnabledDraft] = useState(true);
+  const [azureBreakGlassUserIdDraft, setAzureBreakGlassUserIdDraft] = useState('');
 
   const azureStatusQuery = useQuery({
     queryKey: ['integrations', 'azure', 'status'],
@@ -377,6 +385,16 @@ const IntegrationsSection: React.FC = () => {
   const azureDepartmentMappingsQuery = useQuery({
     queryKey: ['integrations', 'azure', 'department-mappings'],
     queryFn: () => listAzureDepartmentMappings(),
+    enabled: azureSelected,
+  });
+  const azureDirectoryDepartmentsQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'directory-departments'],
+    queryFn: () => listAzureDirectoryDepartments(),
+    enabled: azureSelected,
+  });
+  const azureDirectoryGroupsQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'directory-groups'],
+    queryFn: () => listAzureDirectoryGroups(),
     enabled: azureSelected,
   });
   const azureRoleMappingsQuery = useQuery({
@@ -400,6 +418,19 @@ const IntegrationsSection: React.FC = () => {
     },
     onError: (err: any) => showToast(err?.message || 'Unable to save SCIM token', 'error'),
   });
+  const azurePolicyMutation = useMutation({
+    mutationFn: (payload: {
+      azureSsoEnabled: boolean;
+      azureSsoEnforced: boolean;
+      passwordLoginEnabledNonBreakGlass: boolean;
+      breakGlassUserId: number | null;
+    }) => updateAzurePolicy(payload),
+    onSuccess: () => {
+      showToast('Azure authentication policy updated', 'success');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'status'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to update Azure policy', 'error'),
+  });
   const azureReconcileMutation = useMutation({
     mutationFn: () => triggerAzureReconcile({ includeGraph: true }),
     onSuccess: () => {
@@ -408,6 +439,19 @@ const IntegrationsSection: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] });
     },
     onError: (err: any) => showToast(err?.message || 'Azure reconcile failed', 'error'),
+  });
+  const azureValidateMutation = useMutation({
+    mutationFn: () => validateAzureProvisioning(),
+    onSuccess: (data) => {
+      if (data?.ok) {
+        showToast('Azure setup validation passed', 'success');
+      } else {
+        showToast(data?.graphPermission?.reason || 'Azure setup validation failed', 'warning');
+      }
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'status'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'provisioning'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Azure setup validation failed', 'error'),
   });
   const azureRefreshReconciliationMutation = useMutation({
     mutationFn: () => refreshAzureReconciliation(),
@@ -449,6 +493,7 @@ const IntegrationsSection: React.FC = () => {
       setAzureDeptSource('');
       setAzureDeptId('');
       queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'department-mappings'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'directory-departments'] });
     },
     onError: (err: any) => showToast(err?.message || 'Unable to save department mapping', 'error'),
   });
@@ -464,6 +509,15 @@ const IntegrationsSection: React.FC = () => {
 
   const metadataMismatch = providerCatalogQuery.data && selectedProvider
     && providerCatalogQuery.data.schemaVersion !== selectedProvider.schemaVersion;
+
+  useEffect(() => {
+    const policy = azureStatusQuery.data?.policy;
+    if (!policy) return;
+    setAzureSsoEnabledDraft(!!policy.azureSsoEnabled);
+    setAzureSsoEnforcedDraft(!!policy.azureSsoEnforced);
+    setAzurePasswordEnabledDraft(!!policy.passwordLoginEnabledNonBreakGlass);
+    setAzureBreakGlassUserIdDraft(policy.breakGlassUserId ? String(policy.breakGlassUserId) : '');
+  }, [azureStatusQuery.data?.policy]);
 
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [resyncModalOpen, setResyncModalOpen] = useState(false);
@@ -1246,6 +1300,14 @@ const IntegrationsSection: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
+                  disabled={azureValidateMutation.isPending}
+                  onClick={() => azureValidateMutation.mutate()}
+                >
+                  {azureValidateMutation.isPending ? 'Validating…' : 'Re-validate Setup'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
                   disabled={azureReconcileMutation.isPending}
                   onClick={() => azureReconcileMutation.mutate()}
                 >
@@ -1266,6 +1328,14 @@ const IntegrationsSection: React.FC = () => {
                 <div className="text-[var(--muted)]">Connected</div>
                 <div className="font-semibold">{azureStatusQuery.data?.connected ? 'Yes' : 'No'}</div>
                 <div className="text-[var(--muted)] mt-1">SCIM Token: {azureStatusQuery.data?.hasScimToken ? 'Configured' : 'Missing'}</div>
+                <div className="text-[var(--muted)] mt-1">
+                  Tenant Lock: {azureStatusQuery.data?.tenantEnforced ? `Enabled (${azureStatusQuery.data?.tenantId || 'configured'})` : 'Not configured'}
+                </div>
+                {!azureStatusQuery.data?.tenantEnforced && (
+                  <div className="text-amber-300 mt-1">
+                    Set `AZURE_SSO_TENANT_ID` to enforce single-tenant Azure sign-in.
+                  </div>
+                )}
               </div>
               <div className="border border-[var(--border)] rounded p-3">
                 <div className="text-[var(--muted)]">Reconciliation Queue</div>
@@ -1275,6 +1345,17 @@ const IntegrationsSection: React.FC = () => {
                   Confirmed {azureProvisioningQuery.data?.reconciliation?.confirmed ?? 0}
                 </div>
                 <div className="text-[var(--muted)] mt-1">Last Graph Reconcile: {formatDate(azureStatusQuery.data?.lastReconcileAt)}</div>
+                <div className="text-[var(--muted)] mt-1">
+                  Graph Consent: {azureStatusQuery.data?.graphPermissionReady ? 'Ready' : 'Admin consent required'}
+                </div>
+                {!azureStatusQuery.data?.graphPermissionReady && azureStatusQuery.data?.graphPermissionReason && (
+                  <div className="text-amber-300 mt-1">{azureStatusQuery.data.graphPermissionReason}</div>
+                )}
+                {!azureStatusQuery.data?.graphPermissionReady && (
+                  <div className="text-amber-300 mt-1">
+                    Grant Microsoft Graph application permission `User.Read.All` and click Re-validate Setup.
+                  </div>
+                )}
               </div>
             </div>
             <form
@@ -1300,6 +1381,75 @@ const IntegrationsSection: React.FC = () => {
                 Save SCIM Token
               </Button>
             </form>
+            <form
+              className="border border-[var(--border)] rounded p-3 space-y-3 text-sm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const rawBreakGlass = azureBreakGlassUserIdDraft.trim();
+                if (rawBreakGlass && Number.isNaN(Number(rawBreakGlass))) {
+                  showToast('Break-glass user ID must be numeric.', 'warning');
+                  return;
+                }
+                azurePolicyMutation.mutate({
+                  azureSsoEnabled: azureSsoEnabledDraft,
+                  azureSsoEnforced: azureSsoEnforcedDraft,
+                  passwordLoginEnabledNonBreakGlass: azurePasswordEnabledDraft,
+                  breakGlassUserId: rawBreakGlass ? Number(rawBreakGlass) : null,
+                });
+              }}
+            >
+              <div className="font-semibold">Authentication Policy</div>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={azureSsoEnabledDraft}
+                  onChange={(e) => setAzureSsoEnabledDraft(e.target.checked)}
+                />
+                <span>Enable Azure SSO on login page</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={azureSsoEnforcedDraft}
+                  onChange={(e) => setAzureSsoEnforcedDraft(e.target.checked)}
+                />
+                <span>Enforce Azure-only login (except break-glass)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={azurePasswordEnabledDraft}
+                  onChange={(e) => setAzurePasswordEnabledDraft(e.target.checked)}
+                />
+                <span>Allow password login for non-break-glass users</span>
+              </label>
+              <label className="block text-[var(--muted)]">
+                Break-glass user ID
+                <input
+                  className={INPUT_STYLES}
+                  value={azureBreakGlassUserIdDraft}
+                  onChange={(e) => setAzureBreakGlassUserIdDraft((e.target as HTMLInputElement).value)}
+                  placeholder="User ID or blank"
+                />
+              </label>
+              <div className="flex justify-end">
+                <Button size="sm" type="submit" disabled={azurePolicyMutation.isPending}>
+                  {azurePolicyMutation.isPending ? 'Saving…' : 'Save Policy'}
+                </Button>
+              </div>
+            </form>
+            {azureValidateMutation.data && (
+              <div className="border border-[var(--border)] rounded p-3 text-sm space-y-1">
+                <div className="font-semibold">SCIM Endpoint Readiness</div>
+                <div className="text-[var(--muted)]">Base Path: {azureValidateMutation.data.scim.basePath}</div>
+                <div className="text-[var(--muted)]">
+                  Bearer Token: {azureValidateMutation.data.scim.requiredTokenConfigured ? 'Configured' : 'Missing'}
+                </div>
+                {!azureValidateMutation.data.scim.requiredTokenConfigured && (
+                  <div className="text-amber-300">Create a provisioning secret in Entra, then save it as the SCIM bearer token here.</div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
@@ -1340,6 +1490,17 @@ const IntegrationsSection: React.FC = () => {
                   <div className="text-[var(--muted)]">No mappings yet.</div>
                 )}
               </div>
+              <div className="max-h-40 overflow-auto border border-[var(--border)] rounded p-2 text-sm">
+                {(azureDirectoryDepartmentsQuery.data ?? []).map((row) => (
+                  <div key={row.value} className="py-1 border-b border-[var(--border)] last:border-0">
+                    <strong>{row.value}</strong> ({row.count})
+                    {row.mappedDepartmentName ? ` → ${row.mappedDepartmentName}` : ''}
+                  </div>
+                ))}
+                {!azureDirectoryDepartmentsQuery.data?.length && (
+                  <div className="text-[var(--muted)]">No discovered Azure departments yet.</div>
+                )}
+              </div>
             </div>
 
             <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
@@ -1377,6 +1538,16 @@ const IntegrationsSection: React.FC = () => {
                 ))}
                 {!azureRoleMappingsQuery.data?.length && (
                   <div className="text-[var(--muted)]">No mappings yet.</div>
+                )}
+              </div>
+              <div className="max-h-40 overflow-auto border border-[var(--border)] rounded p-2 text-sm">
+                {(azureDirectoryGroupsQuery.data ?? []).map((row) => (
+                  <div key={row.value} className="py-1 border-b border-[var(--border)] last:border-0">
+                    <strong>{row.value}</strong> ({row.count})
+                  </div>
+                ))}
+                {!azureDirectoryGroupsQuery.data?.length && (
+                  <div className="text-[var(--muted)]">No discovered Azure groups in snapshot.</div>
                 )}
               </div>
             </div>

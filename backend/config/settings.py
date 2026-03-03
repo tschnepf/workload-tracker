@@ -321,9 +321,11 @@ INTEGRATIONS_RESTORE_MAX_AGE_DAYS = int(os.getenv('INTEGRATIONS_RESTORE_MAX_AGE_
 AZURE_SSO_TENANT_ID = os.getenv('AZURE_SSO_TENANT_ID', '')
 AZURE_SSO_REDIRECT_URI = os.getenv('AZURE_SSO_REDIRECT_URI', '')
 AZURE_SCIM_BEARER_TOKEN = os.getenv('AZURE_SCIM_BEARER_TOKEN', '')
+AZURE_SCIM_STRICT_MODE = os.getenv('AZURE_SCIM_STRICT_MODE', 'true').lower() == 'true'
+AZURE_GRAPH_PERMISSION_GATE = os.getenv('AZURE_GRAPH_PERMISSION_GATE', 'true').lower() == 'true'
 AZURE_SSO_SCOPES = [
     item.strip()
-    for item in os.getenv('AZURE_SSO_SCOPES', 'openid,profile,email,offline_access,User.Read').split(',')
+    for item in os.getenv('AZURE_SSO_SCOPES', 'openid,profile,email,offline_access,User.Read,User.Read.All').split(',')
     if item.strip()
 ]
 

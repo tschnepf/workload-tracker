@@ -6,6 +6,7 @@ from datetime import date
 from typing import Any
 
 import requests
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
@@ -34,6 +35,15 @@ logger = logging.getLogger(__name__)
 
 SNAPSHOT_SETTING_KEY = 'azure.directory_snapshot'
 GRAPH_STATE_SETTING_KEY = 'azure.graph_state'
+GRAPH_PERMISSION_SETTING_KEY = 'azure.graph_permission'
+
+
+def _configured_tenant_id() -> str:
+    return (getattr(settings, 'AZURE_SSO_TENANT_ID', '') or '').strip()
+
+
+def _graph_permission_gate_enabled() -> bool:
+    return bool(getattr(settings, 'AZURE_GRAPH_PERMISSION_GATE', True))
 
 
 def get_auth_method_policy() -> AuthMethodPolicy:
@@ -136,6 +146,14 @@ def update_directory_snapshot(connection: IntegrationConnection, principal: dict
     principal_id = _norm(principal.get('azure_oid'))
     if not principal_id:
         return
+    configured_tenant = _configured_tenant_id()
+    tenant_id = _norm(principal.get('tenant_id'))
+    if configured_tenant:
+        if tenant_id and tenant_id != configured_tenant:
+            return
+        if not tenant_id:
+            principal = dict(principal)
+            principal['tenant_id'] = configured_tenant
     snap = _load_snapshot(connection)
     items = snap.get('items') or []
     updated = False
@@ -356,6 +374,16 @@ def upsert_azure_principal(
     azure_oid = _norm(principal.get('azure_oid'))
     if not azure_oid:
         raise ValueError('azure_oid is required')
+    configured_tenant = _configured_tenant_id()
+    principal_tenant = _norm(principal.get('tenant_id'))
+    if configured_tenant and principal_tenant and principal_tenant != configured_tenant:
+        return {
+            'status': 'skipped_wrong_tenant',
+            'azure_oid': azure_oid,
+            'tenant_id': principal_tenant,
+        }
+    if configured_tenant and not principal_tenant:
+        principal['tenant_id'] = configured_tenant
     if not is_in_scope(principal):
         return {'status': 'skipped_out_of_scope', 'azure_oid': azure_oid}
 
@@ -462,12 +490,20 @@ def refresh_reconciliation(connection: IntegrationConnection) -> dict[str, Any]:
     conflicts = 0
     unmatched = 0
     applied = 0
+    skipped_wrong_tenant = 0
+    configured_tenant = _configured_tenant_id()
 
     for principal in principals:
         azure_oid = _norm(principal.get('azure_oid'))
         if not azure_oid:
             continue
-        tenant_id = _norm(principal.get('tenant_id')) or 'unknown'
+        tenant_id = _norm(principal.get('tenant_id'))
+        if configured_tenant:
+            if tenant_id and tenant_id != configured_tenant:
+                skipped_wrong_tenant += 1
+                continue
+            tenant_id = configured_tenant
+        tenant_id = tenant_id or 'unknown'
         upn = _norm_lower(principal.get('upn'))
         email = _norm_lower(principal.get('email'))
         link = AzureIdentityLink.objects.filter(
@@ -533,6 +569,7 @@ def refresh_reconciliation(connection: IntegrationConnection) -> dict[str, Any]:
         'conflicts': conflicts,
         'unmatched': unmatched,
         'applied': applied,
+        'skippedWrongTenant': skipped_wrong_tenant,
     }
 
 
@@ -595,17 +632,157 @@ def _save_graph_state(connection: IntegrationConnection, state: dict[str, Any]) 
     )
 
 
-def graph_reconcile(connection: IntegrationConnection, *, dry_run: bool = False) -> dict[str, Any]:
+def _save_graph_permission_state(connection: IntegrationConnection, state: dict[str, Any]) -> None:
+    IntegrationSetting.objects.update_or_create(
+        connection=connection,
+        key=GRAPH_PERMISSION_SETTING_KEY,
+        defaults={'data': state},
+    )
+
+
+def get_graph_permission_status(connection: IntegrationConnection, *, refresh: bool = False) -> dict[str, Any]:
+    if refresh:
+        return probe_graph_user_read_all(connection)
+    if not _graph_permission_gate_enabled():
+        return {
+            'ready': True,
+            'reason': 'Graph permission gate disabled',
+            'requiredPermission': 'User.Read.All',
+            'checkedAt': None,
+        }
+    setting = IntegrationSetting.objects.filter(connection=connection, key=GRAPH_PERMISSION_SETTING_KEY).first()
+    if setting and isinstance(setting.data, dict):
+        return dict(setting.data)
+    return {
+        'ready': False,
+        'reason': 'Graph permission status has not been validated.',
+        'requiredPermission': 'User.Read.All',
+        'checkedAt': None,
+    }
+
+
+def probe_graph_user_read_all(connection: IntegrationConnection) -> dict[str, Any]:
+    checked_at = timezone.now().isoformat()
+    if not _graph_permission_gate_enabled():
+        state = {
+            'ready': True,
+            'reason': 'Graph permission gate disabled',
+            'requiredPermission': 'User.Read.All',
+            'statusCode': None,
+            'errorCode': None,
+            'checkedAt': checked_at,
+        }
+        _save_graph_permission_state(connection, state)
+        return state
+
+    provider = get_registry().get_provider('azure')
+    if not provider:
+        state = {
+            'ready': False,
+            'reason': 'Azure provider metadata is missing',
+            'requiredPermission': 'User.Read.All',
+            'statusCode': None,
+            'errorCode': 'provider_missing',
+            'checkedAt': checked_at,
+        }
+        _save_graph_permission_state(connection, state)
+        return state
+
+    try:
+        access_token = get_connection_access_token(connection, provider_meta=provider)
+    except Exception as exc:  # nosec B110
+        state = {
+            'ready': False,
+            'reason': f'Azure OAuth token unavailable: {exc}',
+            'requiredPermission': 'User.Read.All',
+            'statusCode': None,
+            'errorCode': 'oauth_unavailable',
+            'checkedAt': checked_at,
+        }
+        _save_graph_permission_state(connection, state)
+        return state
+
+    url = 'https://graph.microsoft.com/v1.0/users?$top=1&$select=id'
+    status_code: int | None = None
+    error_code = None
+    reason = None
+    ready = False
+    try:
+        resp = requests.get(
+            url,
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=(5, 20),
+        )
+        status_code = int(resp.status_code)
+        if resp.status_code < 400:
+            ready = True
+            reason = None
+        else:
+            payload = resp.json() if 'application/json' in (resp.headers.get('Content-Type') or '').lower() else {}
+            err = payload.get('error') if isinstance(payload, dict) else {}
+            if isinstance(err, dict):
+                error_code = _norm(err.get('code'))
+                reason = _norm(err.get('message'))
+            if not reason:
+                reason = f'Graph permission probe failed ({resp.status_code}). Admin consent for User.Read.All is required.'
+    except Exception as exc:  # nosec B110
+        reason = f'Graph permission probe failed: {exc}'
+        error_code = 'probe_failed'
+
+    state = {
+        'ready': bool(ready),
+        'reason': reason,
+        'requiredPermission': 'User.Read.All',
+        'statusCode': status_code,
+        'errorCode': error_code,
+        'checkedAt': checked_at,
+    }
+    _save_graph_permission_state(connection, state)
+    return state
+
+
+def ensure_graph_permission_ready(connection: IntegrationConnection, *, refresh: bool = False) -> dict[str, Any]:
+    if not _graph_permission_gate_enabled():
+        return {
+            'ready': True,
+            'reason': 'Graph permission gate disabled',
+            'requiredPermission': 'User.Read.All',
+            'checkedAt': timezone.now().isoformat(),
+        }
+    state = get_graph_permission_status(connection, refresh=refresh)
+    if state.get('ready'):
+        return state
+    reason = _norm(state.get('reason')) or 'Missing admin consent for User.Read.All.'
+    raise OAuthError(reason)
+
+
+def graph_reconcile(
+    connection: IntegrationConnection,
+    *,
+    dry_run: bool = False,
+    enforce_permission_check: bool = True,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
     provider = get_registry().get_provider('azure')
     if not provider:
         raise ValueError('Azure provider metadata is missing')
+    if enforce_permission_check:
+        ensure_graph_permission_ready(connection, refresh=True)
     access_token = get_connection_access_token(connection, provider_meta=provider)
     state = _load_graph_state(connection)
+    configured_tenant = _configured_tenant_id()
+    if configured_tenant and not _norm(state.get('tenant_id')):
+        state['tenant_id'] = configured_tenant
     next_url = _norm(state.get('next_url')) or 'https://graph.microsoft.com/v1.0/users/delta?$select=id,userPrincipalName,mail,displayName,givenName,surname,department,jobTitle,accountEnabled,userType'
     processed = 0
     upserted = 0
     deprovisioned = 0
     skipped = 0
+    if correlation_id:
+        logger.info(
+            'azure_graph_reconcile_started',
+            extra={'correlation_id': correlation_id, 'connection_id': connection.id, 'dry_run': dry_run},
+        )
 
     while next_url:
         resp = requests.get(
@@ -619,7 +796,7 @@ def graph_reconcile(connection: IntegrationConnection, *, dry_run: bool = False)
         values = list(body.get('value') or [])
         for item in values:
             principal = {
-                'tenant_id': state.get('tenant_id') or '',
+                'tenant_id': _norm(state.get('tenant_id')) or configured_tenant or '',
                 'azure_oid': _norm(item.get('id')),
                 'upn': _norm(item.get('userPrincipalName')),
                 'email': _norm(item.get('mail')) or _norm(item.get('userPrincipalName')),
@@ -654,7 +831,7 @@ def graph_reconcile(connection: IntegrationConnection, *, dry_run: bool = False)
             state['last_success_at'] = timezone.now().isoformat()
             _save_graph_state(connection, state)
             break
-    return {
+    summary = {
         'processed': processed,
         'upserted': upserted,
         'deprovisioned': deprovisioned,
@@ -662,6 +839,20 @@ def graph_reconcile(connection: IntegrationConnection, *, dry_run: bool = False)
         'dryRun': dry_run,
         'lastSuccessAt': state.get('last_success_at'),
     }
+    if correlation_id:
+        logger.info(
+            'azure_graph_reconcile_completed',
+            extra={
+                'correlation_id': correlation_id,
+                'connection_id': connection.id,
+                'processed': processed,
+                'upserted': upserted,
+                'deprovisioned': deprovisioned,
+                'skipped': skipped,
+                'dry_run': dry_run,
+            },
+        )
+    return summary
 
 
 def get_latest_scim_bearer(connection: IntegrationConnection) -> str | None:
@@ -695,3 +886,52 @@ def set_scim_bearer(connection: IntegrationConnection, token: str) -> None:
             'updated_at': timezone.now().isoformat(),
         },
     )
+
+
+def list_snapshot_departments(connection: IntegrationConnection) -> list[dict[str, Any]]:
+    snapshot = _load_snapshot(connection)
+    counts: dict[str, int] = {}
+    configured_tenant = _configured_tenant_id()
+    for item in list(snapshot.get('items') or []):
+        tenant_id = _norm(item.get('tenant_id'))
+        if configured_tenant and tenant_id and tenant_id != configured_tenant:
+            continue
+        value = _norm(item.get('department'))
+        if not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return [
+        {'value': key, 'count': counts[key]}
+        for key in sorted(counts.keys(), key=lambda v: v.lower())
+    ]
+
+
+def list_snapshot_groups(connection: IntegrationConnection) -> list[dict[str, Any]]:
+    snapshot = _load_snapshot(connection)
+    counts: dict[str, int] = {}
+    configured_tenant = _configured_tenant_id()
+
+    for item in list(snapshot.get('items') or []):
+        tenant_id = _norm(item.get('tenant_id'))
+        if configured_tenant and tenant_id and tenant_id != configured_tenant:
+            continue
+        groups: list[Any] = []
+        raw = item.get('groups')
+        if isinstance(raw, list):
+            groups.extend(raw)
+        raw_ids = item.get('group_ids')
+        if isinstance(raw_ids, list):
+            groups.extend(raw_ids)
+        for group in groups:
+            if isinstance(group, dict):
+                name = _norm(group.get('displayName')) or _norm(group.get('name')) or _norm(group.get('id'))
+            else:
+                name = _norm(str(group))
+            if not name:
+                continue
+            counts[name] = counts.get(name, 0) + 1
+
+    return [
+        {'value': key, 'count': counts[key]}
+        for key in sorted(counts.keys(), key=lambda v: v.lower())
+    ]
