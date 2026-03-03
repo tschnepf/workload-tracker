@@ -1,0 +1,3155 @@
+/**
+ * Assignment Grid - Real implementation of the spreadsheet-like assignment interface
+ * Replaces the form-based AssignmentForm with a modern grid view
+ */
+
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
+import { trackPerformanceEvent } from '@/utils/monitoring';
+import { useQueryClient } from '@tanstack/react-query';
+import { Assignment, Person, Deliverable, Project } from '@/types/models';
+import { assignmentsApi, autoHoursSettingsApi, autoHoursTemplatesApi, deliverablePhaseMappingApi, type AutoHoursRoleSetting } from '@/services/api';
+import { useCapabilities } from '@/hooks/useCapabilities';
+// status controls composed via useStatusControls
+import { useProjectStatusSubscription } from '@/components/projects/useProjectStatusSubscription';
+
+// Enhanced project interface with loading states for status operations
+interface ProjectWithState extends Project {
+  isUpdating?: boolean;
+  lastUpdated?: number;
+}
+import Layout from '@/components/layout/Layout';
+import AssignmentsSkeleton from '@/components/skeletons/AssignmentsSkeleton';
+import { useGridUrlState } from '@/pages/Assignments/grid/useGridUrlState';
+import { toWeekHeader } from '@/pages/Assignments/grid/utils';
+import Toast from '@/components/ui/Toast';
+import PageState from '@/components/ui/PageState';
+import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
+import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+// header filter included by HeaderBarComp
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
+import { subscribeAssignmentsRefresh, type AssignmentEvent } from '@/lib/assignmentsRefreshBus';
+import { bulkUpdateAssignmentHours, createAssignment, updateAssignment } from '@/lib/mutations/assignments';
+import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
+import { getUtilizationPill, defaultUtilizationScheme } from '@/util/utilization';
+
+// In-file grid column widths hook moved to grid/useGridColumnWidths
+
+import PersonGroupHeaderComp from '@/pages/Assignments/grid/components/PersonGroupHeader';
+import AssignmentRowComp from '@/pages/Assignments/grid/components/AssignmentRow';
+import PeopleSection from '@/pages/Assignments/grid/components/PeopleSection';
+import { updateAssignmentRoleAction } from '@/pages/Assignments/grid/useAssignmentRoleUpdate';
+import WeekHeaderComp from '@/pages/Assignments/grid/components/WeekHeader';
+import AddAssignmentRow from '@/pages/Assignments/grid/components/AddAssignmentRow';
+import { useProjectAssignmentAdd } from '@/pages/Assignments/grid/useProjectAssignmentAdd';
+import HeaderBarComp from '@/pages/Assignments/grid/components/HeaderBar';
+import { useGridColumnWidthsAssign } from '@/pages/Assignments/grid/useGridColumnWidths';
+import StatusBar from '@/pages/Assignments/grid/components/StatusBar';
+import { useStatusControls } from '@/pages/Assignments/grid/useStatusControls';
+import { useEditingCell as useEditingCellHook } from '@/pages/Assignments/grid/useEditingCell';
+// useWeekHeaders is managed inside useAssignmentsSnapshot
+import { useAssignmentsSnapshot } from '@/pages/Assignments/grid/useAssignmentsSnapshot';
+import { useGridKeyboardNavigation } from '@/pages/Assignments/grid/useGridKeyboardNavigation';
+import { useDeliverablesIndex } from '@/pages/Assignments/grid/useDeliverablesIndex';
+import { useProjectStatusFilters } from '@/pages/Assignments/grid/useProjectStatusFilters';
+import { getFlag } from '@/lib/flags';
+import { useAssignmentsInteractionStore } from '@/pages/Assignments/grid/useAssignmentsInteractionStore';
+import HeaderActions from '@/components/compact/HeaderActions';
+import AssignmentsFilterMenu from '@/components/compact/AssignmentsFilterMenu';
+import WeeksHorizonField from '@/components/compact/WeeksHorizonField';
+import { buildProjectAssignmentsLink } from '@/pages/Assignments/grid/linkUtils';
+import TopBarPortal from '@/components/layout/TopBarPortal';
+import DeliverableLegendFloating from '@/components/deliverables/DeliverableLegendFloating';
+import MobilePersonAccordions from '@/pages/Assignments/grid/components/MobilePersonAccordions';
+import AutoHoursActionButtons from '@/pages/Assignments/grid/components/AutoHoursActionButtons';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import MobileAssignmentSheet from '@/pages/Assignments/grid/components/MobileAssignmentSheet';
+import MobileAddAssignmentSheet from '@/pages/Assignments/grid/components/MobileAddAssignmentSheet';
+import { useWeekVirtualization } from '@/pages/Assignments/grid/useWeekVirtualization';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
+import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
+import { confirmAction } from '@/lib/confirmAction';
+import SaveStateBadge from '@/components/ux/SaveStateBadge';
+import { usePageShortcuts } from '@/hooks/usePageShortcuts';
+import { classifyWorkloadTokenTerm, normalizeWorkloadAliasTerm } from '@/utils/workloadSearch';
+import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
+import WorkPlanningSearchBar from '@/features/work-planning/search/WorkPlanningSearchBar';
+import { useAutoHoursSettings } from '@/features/work-planning/auto-hours/useAutoHoursSettings';
+import { DEFAULT_AUTO_HOURS_PHASES, DEFAULT_PHASE_MAPPING, clampPercent, getCurrentSundayIso, isDateInWeek, roundHours } from '@/features/work-planning/grid/assignmentGridShared';
+import { useAssignmentGridController } from '@/pages/Assignments/grid/hooks/useAssignmentGridController';
+
+// Deliverable utilities moved to '@/util/deliverables' and used by WeekCell.
+
+// (WeekCell moved to grid/components/WeekCell)
+
+const MOBILE_FILTERED_PAGE_SIZE = 50;
+
+interface PersonWithAssignments extends Person {
+  assignments: Assignment[];
+  isExpanded: boolean;
+  matchReason?: 'person_name' | 'assignment' | 'both' | 'workload';
+}
+// Removed local Monday computation - weeks come from server snapshot only.
+
+const AUTO_HOURS_MAX_WEEKS = 8;
+
+const AssignmentGrid: React.FC = () => {
+  const queryClient = useQueryClient();
+  const pageStateEnabled = true;
+  const queueToastsEnabled = true;
+  const { state: deptState } = useDepartmentFilter();
+  const { state: verticalState } = useVerticalFilter();
+  
+  // Pub-sub system for cross-component status updates
+  const { emitStatusChange } = useProjectStatusSubscription({
+    debug: process.env.NODE_ENV === 'development'
+  });
+  const [people, setPeople] = useState<PersonWithAssignments[]>([]);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [assignmentsData, setAssignmentsData] = useState<Assignment[]>([]);
+  const [projectsData, setProjectsData] = useState<Project[]>([]);
+  const snapshotAutoHoursPhases = useMemo(() => Array.from(DEFAULT_AUTO_HOURS_PHASES), []);
+  // Snapshot/rendering mode and aggregated hours
+  const [hoursByPerson, setHoursByPerson] = useState<Record<number, Record<string, number>>>({});
+  // isSnapshotMode provided by useAssignmentsSnapshot
+  // Weeks header: from grid snapshot when available; fallback to 12 Mondays
+  // (state moved up near other snapshot states)
+  // On-demand detail loading flags
+  const [loadedAssignmentIds, setLoadedAssignmentIds] = useState<Set<number>>(new Set());
+  const [loadingAssignments, setLoadingAssignments] = useState<Set<number>>(new Set());
+  const [mobileEditTarget, setMobileEditTarget] = useState<{ personId: number; assignmentId: number } | null>(null);
+  // Grid snapshot aggregation state (declared above)
+  
+  // Enhanced memoized projectsById map with loading states and type safety
+  const projectsById = useMemo(() => {
+    const m = new Map<number, ProjectWithState>();
+    for (const p of projectsData || []) {
+      if (p?.id) {
+        m.set(p.id, { ...p, isUpdating: false });
+      }
+    }
+    return m;
+  }, [projectsData]);
+
+  const peopleById = useMemo(() => {
+    const map = new Map<number, PersonWithAssignments>();
+    for (const person of people || []) {
+      if (person?.id != null) map.set(person.id, person);
+    }
+    return map;
+  }, [people]);
+  
+  // Toast state (used by status controls)
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
+  const showToast = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    if (queueToastsEnabled) {
+      showToastBus(message, type);
+      return;
+    }
+    setToast({ message, type });
+  }, [queueToastsEnabled]);
+  const {
+    saveState,
+    saveStateMessage,
+    markSaveState,
+    retryRef: lastRetryRef,
+    searchInput,
+    setSearchInput,
+    searchTokens,
+    searchOp,
+    activeTokenId,
+    setActiveTokenId,
+    normalizedSearchTokens,
+    addSearchToken: addSearchTokenBase,
+    removeSearchToken,
+    handleSearchOpChange,
+    handleSearchKeyDown: handleSearchKeyDownBase,
+    workloadHintVisible,
+  } = useAssignmentGridController();
+
+  // Status controls (dropdown + project status updates)
+  const { statusDropdown, projectStatus, getProjectStatus, handleStatusChange } = useStatusControls({
+    projectsById,
+    setProjectsData: setProjectsData as any,
+    emitStatusChange,
+    showToast,
+  });
+  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchMeta, setSearchMeta] = useState<{
+    people: Person[];
+    assignmentCountsByPerson: Record<string, number>;
+    peopleMatchReason: Record<string, 'person_name' | 'assignment' | 'both' | 'workload'>;
+    filteredTotals: Record<string, Record<string, number>>;
+  } | null>(null);
+  const [searchMetaLoading, setSearchMetaLoading] = useState(false);
+  const searchMetaRequestIdRef = useRef(0);
+  const [filteredAssignmentsByPerson, setFilteredAssignmentsByPerson] = useState<Record<number, Assignment[]>>({});
+  const [filteredAssignmentsLoaded, setFilteredAssignmentsLoaded] = useState<Set<number>>(new Set());
+  const [mobileAssignmentPageByPerson, setMobileAssignmentPageByPerson] = useState<Record<number, number>>({});
+  const [mobileHasMoreAssignmentsByPerson, setMobileHasMoreAssignmentsByPerson] = useState<Record<number, boolean>>({});
+  const [mobileLoadingMoreByPerson, setMobileLoadingMoreByPerson] = useState<Set<number>>(new Set());
+  const [weeksHorizon, setWeeksHorizon] = useState<number>(20);
+  const addUI = useProjectAssignmentAdd({
+    search: (query) => searchProjects(query),
+    onAdd: (personId, project) => addAssignment(personId, project),
+  });
+  const { editingCell, setEditingCell, editingValue, setEditingValue, startEditing, cancelEdit, sanitizeHours } = useEditingCellHook();
+  const caps = useCapabilities({ enabled: false });
+  const auth = useAuth();
+  const canUseAutoHours = isAdminOrManager(auth.user);
+  const isMobileLayout = useMediaQuery('(max-width: 1023px)');
+  const isNarrowHeaderLayout = useMediaQuery('(max-width: 1700px)');
+  const useAbbrevHeaderLabels = !isMobileLayout && isNarrowHeaderLayout;
+  // Async job state for snapshot generation
+  // async job state provided by useAssignmentsSnapshot
+  // New multi-select project status filters (aggregate selection)
+  const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter, matchesStatusFilters } = useProjectStatusFilters(deliverables);
+  const { definitions: statusDefinitions } = useProjectStatusDefinitions();
+  const activeLikeStatusKeys = useMemo(() => {
+    return new Set(
+      statusDefinitions
+        .filter((item) => item.includeInAnalytics)
+        .map((item) => (item.key || '').toLowerCase())
+        .filter(Boolean)
+    );
+  }, [statusDefinitions]);
+  const statusFilterList = useMemo(
+    () => Array.from(selectedStatusFilters).filter((s) => s !== 'Show All'),
+    [selectedStatusFilters]
+  );
+  const statusIn = useMemo(
+    () => (statusFilterList.length ? statusFilterList.join(',') : undefined),
+    [statusFilterList]
+  );
+  const searchTokensActive = useMemo(
+    () => normalizedSearchTokens.length > 0,
+    [normalizedSearchTokens.length]
+  );
+  const serverFilterActive = searchTokensActive;
+  const searchTokensPayload = useMemo(
+    () => normalizedSearchTokens.map(({ term, op }) => ({ term, op })),
+    [normalizedSearchTokens]
+  );
+  const workloadWeekStart = useMemo(() => getCurrentSundayIso(), []);
+  const departmentFilters = useMemo(() => (deptState.filters ?? [])
+    .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
+    .filter((f) => Number.isFinite(f.departmentId) && f.departmentId > 0), [deptState.filters]);
+  const departmentFiltersPayload = useMemo(
+    () => (deptState.selectedDepartmentId == null ? departmentFilters : []),
+    [deptState.selectedDepartmentId, departmentFilters]
+  );
+
+  const buildSearchPayload = useCallback((overrides?: Partial<{
+    page: number;
+    page_size: number;
+    project: number;
+    person: number;
+    meta_only: boolean;
+  }>) => {
+    const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+    const includeChildren: 0 | 1 | undefined = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+    return {
+      page: overrides?.page,
+      page_size: overrides?.page_size,
+      department: dept,
+      include_children: includeChildren,
+      department_filters: dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined,
+      include_placeholders: 0 as 0,
+      status_in: statusIn,
+      search_tokens: searchTokensPayload,
+      workload_week_start: workloadWeekStart,
+      workload_weeks: weeksHorizon,
+      vertical: verticalState.selectedVerticalId ?? undefined,
+      project: overrides?.project,
+      person: overrides?.person,
+      meta_only: overrides?.meta_only,
+    };
+  }, [
+    deptState.selectedDepartmentId,
+    deptState.includeChildren,
+    departmentFiltersPayload,
+    searchTokensPayload,
+    workloadWeekStart,
+    weeksHorizon,
+    statusIn,
+    verticalState.selectedVerticalId,
+  ]);
+  const hoursByPersonView = useMemo(() => {
+    if (!serverFilterActive) return hoursByPerson;
+    if (!searchMeta?.filteredTotals) return {};
+    const next: Record<number, Record<string, number>> = {};
+    Object.entries(searchMeta.filteredTotals).forEach(([pid, map]) => {
+      const personId = Number(pid);
+      if (!Number.isFinite(personId)) return;
+      next[personId] = map as Record<string, number>;
+    });
+    return next;
+  }, [serverFilterActive, hoursByPerson, searchMeta?.filteredTotals]);
+
+  const matchesTokensText = useCallback((text: string) => {
+    if (!normalizedSearchTokens.length) return true;
+    const haystack = (text || '').toLowerCase();
+    let hasOr = false;
+    let orMatched = false;
+
+    for (const token of normalizedSearchTokens) {
+      const match = haystack.includes(token.term);
+      if (token.op === 'not') {
+        if (match) return false;
+        continue;
+      }
+      if (token.op === 'and') {
+        if (!match) return false;
+        continue;
+      }
+      hasOr = true;
+      if (match) orMatched = true;
+    }
+
+    if (hasOr && !orMatched) return false;
+    return true;
+  }, [normalizedSearchTokens]);
+
+  const matchesSearchTokensAssignment = useCallback((assignment: Assignment) => {
+    if (!normalizedSearchTokens.length) return true;
+    const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
+    const personName = assignment.personName
+      || (assignment.person ? peopleById.get(assignment.person)?.name : '')
+      || '';
+    const haystack = [
+      personName,
+      assignment.roleName,
+      assignment.projectDisplayName,
+      project?.name,
+      project?.client,
+      project?.projectNumber,
+      project?.description,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return matchesTokensText(haystack);
+  }, [normalizedSearchTokens.length, projectsById, peopleById, matchesTokensText]);
+
+  const addSearchToken = useCallback(() => {
+    const term = searchInput.trim();
+    if (!term) return;
+    const aliased = normalizeWorkloadAliasTerm(term);
+    const classified = classifyWorkloadTokenTerm(aliased);
+    const storedTerm = classified.isWorkload ? classified.canonicalTerm : aliased;
+    addSearchTokenBase(storedTerm);
+  }, [addSearchTokenBase, searchInput]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSearchToken();
+      return;
+    }
+    handleSearchKeyDownBase(e);
+  }, [addSearchToken, handleSearchKeyDownBase]);
+
+  const fetchSearchMeta = useCallback(async () => {
+    const requestId = (searchMetaRequestIdRef.current += 1);
+    setSearchMetaLoading(true);
+    try {
+      const res = await assignmentsApi.search(buildSearchPayload({ page: 1, page_size: 1, meta_only: true }));
+      if (searchMetaRequestIdRef.current !== requestId) return;
+      setSearchMeta({
+        people: res.people || [],
+        assignmentCountsByPerson: res.assignmentCountsByPerson || {},
+        peopleMatchReason: res.peopleMatchReason || {},
+        filteredTotals: res.filteredTotals || {},
+      });
+    } catch (e: any) {
+      if (searchMetaRequestIdRef.current !== requestId) return;
+      showToast(e?.message || 'Failed to apply search filters', 'error');
+    } finally {
+      if (searchMetaRequestIdRef.current === requestId) {
+        setSearchMetaLoading(false);
+      }
+    }
+  }, [buildSearchPayload, showToast]);
+
+  useEffect(() => {
+    if (serverFilterActive) return;
+    setSearchMeta((prev) => (prev ? null : prev));
+    setSearchMetaLoading((prev) => (prev ? false : prev));
+    setFilteredAssignmentsByPerson((prev) => (Object.keys(prev).length ? {} : prev));
+    setFilteredAssignmentsLoaded((prev) => (prev.size ? new Set() : prev));
+    setMobileAssignmentPageByPerson((prev) => (Object.keys(prev).length ? {} : prev));
+    setMobileHasMoreAssignmentsByPerson((prev) => (Object.keys(prev).length ? {} : prev));
+    setMobileLoadingMoreByPerson((prev) => (prev.size ? new Set() : prev));
+  }, [serverFilterActive]);
+
+  useEffect(() => {
+    if (!serverFilterActive) return;
+    setFilteredAssignmentsByPerson({});
+    setFilteredAssignmentsLoaded(new Set());
+    void fetchSearchMeta();
+  }, [serverFilterActive, fetchSearchMeta]);
+
+  useEffect(() => {
+    if (!isMobileLayout || !serverFilterActive) return;
+    setFilteredAssignmentsByPerson({});
+    setFilteredAssignmentsLoaded(new Set());
+    setMobileAssignmentPageByPerson({});
+    setMobileHasMoreAssignmentsByPerson({});
+    setMobileLoadingMoreByPerson(new Set());
+    void fetchSearchMeta();
+  }, [
+    isMobileLayout,
+    serverFilterActive,
+    fetchSearchMeta,
+    deptState.selectedDepartmentId,
+    deptState.includeChildren,
+    statusIn,
+    searchTokensPayload,
+    weeksHorizon,
+  ]);
+
+  const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
+    await updateAssignmentRoleAction({
+      assignmentsApi,
+      setPeople: setPeople as any,
+      setAssignmentsData: setAssignmentsData as any,
+      assignmentsData: assignmentsData as any,
+      people: people as any,
+      personId,
+      assignmentId,
+      roleId,
+      roleName,
+      showToast,
+    });
+  };
+  const snapshotAutoHoursTemplateIds = useMemo(() => {
+    const ids = new Set<number>();
+    (projectsData || []).forEach((project) => {
+      const value = Number((project as any)?.autoHoursTemplateId);
+      if (!Number.isFinite(value) || value <= 0) return;
+      ids.add(Math.trunc(value));
+    });
+    return Array.from(ids).sort((a, b) => a - b).slice(0, 200);
+  }, [projectsData]);
+  // Weeks header: from grid snapshot when available (server weekKeys only)
+  const snapshot = useAssignmentsSnapshot({
+    weeksHorizon,
+    departmentId: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
+    includeChildren: deptState.includeChildren,
+    departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
+    vertical: verticalState.selectedVerticalId ?? undefined,
+    include: 'assignment',
+    requestAutoHoursBundle: canUseAutoHours && getFlag('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', true),
+    autoHoursPhases: snapshotAutoHoursPhases,
+    autoHoursTemplateIds: snapshotAutoHoursTemplateIds,
+    setPeople,
+    setAssignmentsData,
+    setProjectsData: setProjectsData as any,
+    setDeliverables,
+    setHoursByPerson,
+    getHasData: () => people.length > 0 || assignmentsData.length > 0,
+    setIsFetching,
+    subscribeGridRefresh,
+    trackPerformanceEvent,
+    showToast,
+    setError,
+    setLoading,
+  });
+  const { weeks, isSnapshotMode, loadData, asyncJob, departments, snapshotSettled } = snapshot;
+  const canEditAssignments = caps.data?.aggregates?.gridSnapshot !== false;
+  const weekKeys = useMemo(() => weeks.map(w => w.date), [weeks]);
+  const weekVirtualization = useWeekVirtualization(weeks, 70, 2);
+  const mobileWeeks = isMobileLayout ? weekVirtualization.visibleWeeks : weeks;
+  const weekPaddingLeft = isMobileLayout ? weekVirtualization.paddingLeft : 0;
+  const weekPaddingRight = isMobileLayout ? weekVirtualization.paddingRight : 0;
+  const compact = getFlag('COMPACT_ASSIGNMENT_HEADERS', true);
+  const rowKeyFor = (personId: number, assignmentId: number) => `${personId}:${assignmentId}`;
+  // Per-person assignment sort mode (default client->project; alt by next deliverable date)
+  const [personSortMode, setPersonSortMode] = useState<'client_project' | 'deliverable'>('client_project');
+
+  const autoHoursDepartmentId = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+  const autoHoursBundle = snapshot.autoHoursBundle;
+  const hasAutoHoursBundle = canUseAutoHours && !!autoHoursBundle;
+  const shouldUseLegacyAutoHoursFallback = canUseAutoHours && snapshotSettled && !hasAutoHoursBundle;
+  const {
+    autoHoursPhases,
+    phaseMappingEffective,
+    phaseMappingError,
+    autoHoursSettingsByPhase,
+    autoHoursSettingsLoading,
+    autoHoursSettingsError,
+    autoHoursTemplateSettings,
+    autoHoursTemplatePhaseKeysById,
+    ensureTemplateSettings,
+  } = useAutoHoursSettings({
+    enabled: canUseAutoHours,
+    shouldUseLegacyFallback: shouldUseLegacyAutoHoursFallback,
+    defaultPhaseKeys: Array.from(DEFAULT_AUTO_HOURS_PHASES),
+    defaultPhaseMapping: DEFAULT_PHASE_MAPPING,
+    autoHoursBundle: autoHoursBundle as any,
+    listDefaultSettings: (phase) => autoHoursSettingsApi.list(autoHoursDepartmentId, phase),
+    listTemplates: () => autoHoursTemplatesApi.list(),
+    listTemplateSettings: (templateId, phase) => autoHoursTemplatesApi.listSettings(templateId, phase),
+    fetchPhaseMapping: () => deliverablePhaseMappingApi.get(),
+    showToast,
+  });
+
+  // Precompute next upcoming deliverable date per project for sorting
+  const nextDeliverableByProject = useMemo(() => {
+    const map = new Map<number, string>();
+    try {
+      const now = new Date(); now.setHours(0,0,0,0);
+      for (const d of (deliverables || [])) {
+        const pid = (d as any).project as number | undefined; const ds = (d as any).date as string | undefined;
+        if (!pid || !ds) continue; const dt = new Date(ds.replace(/-/g,'/')); dt.setHours(0,0,0,0);
+        if (dt < now) continue;
+        const prev = map.get(pid);
+        if (!prev || new Date(ds.replace(/-/g,'/')).getTime() < new Date(prev.replace(/-/g,'/')).getTime()) {
+          map.set(pid, ds);
+        }
+      }
+    } catch {}
+    return map;
+  }, [deliverables]);
+
+  const filterAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
+    if (!assignments?.length) return [];
+    return assignments.filter((assignment) => {
+      const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
+      if (!matchesStatusFilters(project as Project)) return false;
+      if (!matchesSearchTokensAssignment(assignment)) return false;
+      return true;
+    });
+  }, [matchesStatusFilters, matchesSearchTokensAssignment, projectsById]);
+
+  const sortAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
+    const list = [...assignments];
+    if (list.length <= 1) return list;
+    if (personSortMode === 'deliverable') {
+      list.sort((a, b) => {
+        const ad = a?.project ? nextDeliverableByProject.get(a.project) : undefined;
+        const bd = b?.project ? nextDeliverableByProject.get(b.project) : undefined;
+        if (ad && bd) return ad.localeCompare(bd);
+        if (ad && !bd) return -1;
+        if (!ad && bd) return 1;
+        const ap = a?.project ? projectsById.get(a.project) : undefined;
+        const bp = b?.project ? projectsById.get(b.project) : undefined;
+        const ac = (ap?.client || '').toString().trim().toLowerCase();
+        const bc = (bp?.client || '').toString().trim().toLowerCase();
+        if (ac !== bc) return ac.localeCompare(bc);
+        const an = (ap?.name || '').toString().trim().toLowerCase();
+        const bn = (bp?.name || '').toString().trim().toLowerCase();
+        return an.localeCompare(bn);
+      });
+    } else {
+      list.sort((a, b) => {
+        const ap = a?.project ? projectsById.get(a.project) : undefined;
+        const bp = b?.project ? projectsById.get(b.project) : undefined;
+        const ac = (ap?.client || '').toString().trim().toLowerCase();
+        const bc = (bp?.client || '').toString().trim().toLowerCase();
+        if (ac !== bc) return ac.localeCompare(bc);
+        const an = (ap?.name || '').toString().trim().toLowerCase();
+        const bn = (bp?.name || '').toString().trim().toLowerCase();
+        return an.localeCompare(bn);
+      });
+    }
+    return list;
+  }, [personSortMode, nextDeliverableByProject, projectsById]);
+
+  // Filter + sort assignments based on status filters and current sort mode
+  const getVisibleAssignments = useCallback((assignments: Assignment[]): Assignment[] => {
+    try {
+      if (!assignments?.length) return [];
+      return sortAssignments(filterAssignments(assignments));
+    } catch (error) {
+      console.error('Error filtering/sorting assignments:', error);
+      return assignments || []; // Safe fallback - show all on error
+    }
+  }, [filterAssignments, sortAssignments]);
+
+  const peopleMatchReasonById = useMemo(
+    () => searchMeta?.peopleMatchReason || {},
+    [searchMeta?.peopleMatchReason]
+  );
+
+  const visiblePeople = useMemo(() => {
+    if (!serverFilterActive) return people;
+    const matches = searchMeta?.people || [];
+    if (!matches.length) return [];
+    return matches.map((p) => {
+      const existing = peopleById.get(p.id);
+      if (existing) {
+        return {
+          ...existing,
+          name: p.name ?? existing.name,
+          weeklyCapacity: p.weeklyCapacity ?? existing.weeklyCapacity,
+          department: p.department ?? existing.department,
+        };
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        weeklyCapacity: p.weeklyCapacity ?? null,
+        department: p.department ?? null,
+        assignments: [],
+        isExpanded: false,
+      };
+    });
+  }, [serverFilterActive, people, peopleById, searchMeta?.people]);
+
+  const firstEligibleWeekForPerson = useCallback((personId: number): string | null => {
+    const person = peopleById.get(personId) || visiblePeople.find((p) => p.id === personId);
+    const raw = (person as any)?.firstEligibleWeek;
+    return typeof raw === 'string' && raw ? raw : null;
+  }, [peopleById, visiblePeople]);
+
+  const isWeekLockedForPerson = useCallback((personId: number, weekKey: string): boolean => {
+    const firstEligibleWeek = firstEligibleWeekForPerson(personId);
+    return Boolean(firstEligibleWeek && weekKey < firstEligibleWeek);
+  }, [firstEligibleWeekForPerson]);
+
+  const showPreHireWeekMessage = useCallback((personId: number) => {
+    const firstEligibleWeek = firstEligibleWeekForPerson(personId);
+    const suffix = firstEligibleWeek ? ` Available starting ${firstEligibleWeek}.` : '';
+    showToast(`Cannot assign hours before employee hire week.${suffix}`, 'warning');
+  }, [firstEligibleWeekForPerson, showToast]);
+
+  const resolvePersonAssignments = useCallback((person: PersonWithAssignments): Assignment[] => {
+    if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {
+      const rows = filteredAssignmentsByPerson[person.id!] || [];
+      return sortAssignments(rows);
+    }
+    return getVisibleAssignments(person.assignments || []);
+  }, [serverFilterActive, filteredAssignmentsByPerson, sortAssignments, getVisibleAssignments]);
+
+  const visiblePeopleWithAssignments = useMemo(() => {
+    return (visiblePeople || []).map((person) => ({
+      ...person,
+      assignments: resolvePersonAssignments(person as PersonWithAssignments),
+      matchReason: peopleMatchReasonById?.[String(person.id)],
+    }));
+  }, [visiblePeople, resolvePersonAssignments, peopleMatchReasonById]);
+
+  const visibleAssignmentsCount = useMemo(() => {
+    if (serverFilterActive && searchMeta) {
+      const counts = searchMeta.assignmentCountsByPerson || {};
+      return (visiblePeople || []).reduce((total, person) => total + (counts[String(person.id)] || 0), 0);
+    }
+    return (visiblePeople || []).reduce((total, person) => total + getVisibleAssignments(person.assignments || []).length, 0);
+  }, [serverFilterActive, searchMeta, visiblePeople, getVisibleAssignments]);
+
+  const rowOrder = useMemo(() => {
+    const out: string[] = [];
+    try {
+      for (const person of visiblePeople || []) {
+        if (!person?.isExpanded) continue;
+        if (loadingAssignments.has(person.id!)) continue;
+        const assignments = resolvePersonAssignments(person as PersonWithAssignments);
+        for (const a of assignments) {
+          if (a?.id != null) out.push(`${person.id!}:${a.id!}`);
+        }
+      }
+    } catch {}
+    return out;
+  }, [visiblePeople, loadingAssignments, resolvePersonAssignments]);
+
+  const peopleRef = useRef<PersonWithAssignments[]>([]);
+  const assignmentsRef = useRef<Assignment[]>([]);
+  const lastAssignmentUpdateRef = useRef<Map<number, number>>(new Map());
+  const lastAssignmentUpdateSourceRef = useRef<Map<number, 'event' | 'local'>>(new Map());
+  const eventQueueRef = useRef<AssignmentEvent[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    peopleRef.current = people;
+  }, [people]);
+
+  useEffect(() => {
+    assignmentsRef.current = assignmentsData;
+  }, [assignmentsData]);
+
+  const applyAssignmentEvent = useCallback(async (event: AssignmentEvent) => {
+    if (!event?.assignmentId) return;
+    if (editingCell?.assignmentId && event.fields?.includes('weeklyHours')) {
+      if (editingCell.assignmentId === event.assignmentId) return;
+    }
+    const eventTimestamp = event.updatedAt ? Date.parse(event.updatedAt) : 0;
+    const last = lastAssignmentUpdateRef.current.get(event.assignmentId) || 0;
+    const lastSource = lastAssignmentUpdateSourceRef.current.get(event.assignmentId);
+    if (eventTimestamp && last && lastSource === 'event' && eventTimestamp < last) return;
+
+    if (event.type === 'deleted') {
+      if (eventTimestamp) {
+        lastAssignmentUpdateRef.current.set(event.assignmentId, eventTimestamp);
+        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'event');
+      } else {
+        lastAssignmentUpdateRef.current.set(event.assignmentId, Date.now());
+        lastAssignmentUpdateSourceRef.current.set(event.assignmentId, 'local');
+      }
+      setAssignmentsData((prev) => prev.filter((a) => a.id !== event.assignmentId));
+      setPeople((prev) => prev.map((person) => ({
+        ...person,
+        assignments: (person.assignments || []).filter((a: any) => a.id !== event.assignmentId),
+      })));
+      return;
+    }
+
+    let assignment = event.assignment || null;
+    if (!assignment) {
+      try {
+        assignment = await assignmentsApi.get(event.assignmentId);
+      } catch {
+        return;
+      }
+    }
+    if (!assignment?.id) return;
+    const assignmentTs = assignment.updatedAt ? Date.parse(assignment.updatedAt) : 0;
+    if (eventTimestamp || assignmentTs) {
+      const nextTs = eventTimestamp || assignmentTs;
+      lastAssignmentUpdateRef.current.set(assignment.id, nextTs);
+      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'event');
+    } else {
+      lastAssignmentUpdateRef.current.set(assignment.id, Date.now());
+      lastAssignmentUpdateSourceRef.current.set(assignment.id, 'local');
+    }
+
+    setAssignmentsData((prev) => {
+      let found = false;
+      const next = prev.map((a) => {
+        if (a.id === assignment!.id) {
+          found = true;
+          return { ...a, ...assignment };
+        }
+        return a;
+      });
+      if (!found) next.push(assignment as Assignment);
+      return next;
+    });
+
+    const previousPeople = peopleRef.current;
+    const previousAssignment = assignmentsRef.current.find((a) => a.id === assignment!.id);
+    const oldPersonId = previousAssignment?.person ?? null;
+    const newPersonId = assignment.person ?? null;
+    setPeople((prev) => prev.map((person) => {
+      if (person.id !== oldPersonId && person.id !== newPersonId) return person;
+      let nextAssignments = person.assignments || [];
+      if (person.id === oldPersonId && oldPersonId !== newPersonId) {
+        nextAssignments = nextAssignments.filter((a: any) => a.id !== assignment!.id);
+      }
+      if (person.id === newPersonId) {
+        const exists = nextAssignments.some((a: any) => a.id === assignment!.id);
+        nextAssignments = exists
+          ? nextAssignments.map((a: any) => (a.id === assignment!.id ? { ...a, ...assignment } : a))
+          : [...nextAssignments, assignment as Assignment];
+      }
+      return { ...person, assignments: nextAssignments };
+    }));
+
+    if (assignment.weeklyHours && newPersonId != null) {
+      const weeksToUpdate = Object.keys(assignment.weeklyHours || {});
+      if (weeksToUpdate.length > 0) {
+        const person = previousPeople.find((p) => p.id === newPersonId);
+        const assignmentsForPerson = (person?.assignments || []).map((a) =>
+          a.id === assignment!.id ? { ...a, ...assignment } : a
+        );
+        setHoursByPerson((prev) => {
+          const next = { ...prev };
+          const personHours = { ...(next[newPersonId] || {}) };
+          for (const wk of weeksToUpdate) {
+            const total = assignmentsForPerson.reduce((sum, a: any) => {
+              const wh = a.weeklyHours || {};
+              const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+              return sum + v;
+            }, 0);
+            personHours[wk] = total;
+          }
+          next[newPersonId] = personHours;
+          return next;
+        });
+      }
+    }
+  }, [setAssignmentsData, setPeople, setHoursByPerson, editingCell]);
+
+  const enqueueAssignmentEvent = useCallback((event: AssignmentEvent) => {
+    eventQueueRef.current.push(event);
+    if (flushTimerRef.current) return;
+    flushTimerRef.current = window.setTimeout(async () => {
+      const queued = eventQueueRef.current.splice(0, eventQueueRef.current.length);
+      flushTimerRef.current = null;
+      const coalesced = new Map<number, AssignmentEvent>();
+      queued.forEach((evt) => {
+        if (!evt?.assignmentId) return;
+        const existing = coalesced.get(evt.assignmentId);
+        if (!existing) {
+          coalesced.set(evt.assignmentId, evt);
+          return;
+        }
+        const existingTs = existing.updatedAt ? Date.parse(existing.updatedAt) : 0;
+        const nextTs = evt.updatedAt ? Date.parse(evt.updatedAt) : 0;
+        if (!existingTs || (nextTs && nextTs >= existingTs)) {
+          coalesced.set(evt.assignmentId, evt);
+        }
+      });
+      for (const evt of coalesced.values()) {
+        await applyAssignmentEvent(evt);
+      }
+    }, 60);
+  }, [applyAssignmentEvent]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeAssignmentsRefresh((event) => {
+      enqueueAssignmentEvent(event);
+    });
+    return () => {
+      unsubscribe();
+      if (flushTimerRef.current) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+    };
+  }, [enqueueAssignmentEvent]);
+  const interactionStore = useAssignmentsInteractionStore({ weeks: weekKeys, rowOrder });
+  const {
+    selection: {
+      selectedCell: selCell,
+      selectionStart: selStart,
+      isDragging: isDraggingSel,
+      onCellMouseDown: csMouseDown,
+      onCellMouseEnter: csMouseEnter,
+      onCellSelect: csSelect,
+      clearSelection: csClear,
+      isCellSelected: csIsSelected,
+      selectionSummary,
+      getSelectedCells,
+    },
+    scroll: { headerRef: headerScrollRef, bodyRef: bodyScrollRef, onHeaderScroll, onBodyScroll },
+    density: { setMainPadding },
+  } = interactionStore;
+  const handleHeaderScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (isMobileLayout) {
+        weekVirtualization.updateRange(e.currentTarget.scrollLeft, e.currentTarget.clientWidth);
+      }
+      onHeaderScroll(e);
+    },
+    [weekVirtualization, onHeaderScroll, isMobileLayout]
+  );
+  const handleBodyScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (isMobileLayout) {
+        weekVirtualization.updateRange(e.currentTarget.scrollLeft, e.currentTarget.clientWidth);
+      }
+      onBodyScroll(e);
+    },
+    [weekVirtualization, onBodyScroll, isMobileLayout]
+  );
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const node = bodyScrollRef.current;
+    if (!node) return;
+    const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    weekVirtualization.updateRange(node.scrollLeft, node.clientWidth || fallbackWidth);
+  }, [bodyScrollRef, weekVirtualization, weeks.length, isMobileLayout]);
+  // Ensure the grid header hugs the top/side edges when compact mode is on
+  // by switching the Layout "density" to compact (removes main padding).
+  useLayoutEffect(() => {
+    if (compact) setMainPadding('compact');
+    return () => setMainPadding('default');
+    // Only depends on compact flag and setter
+  }, [compact, setMainPadding]);
+  // topBarHeader is defined later after handlers
+  const selectedCell = useMemo(() => selCell ? (() => { const [p,a] = selCell.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selCell.weekKey }; })() : null, [selCell]);
+  const selectedCells = useMemo(() => {
+    const cells = getSelectedCells();
+    return cells.map(k => {
+      const [p, a] = k.rowKey.split(':');
+      return { personId: Number(p), assignmentId: Number(a), week: k.weekKey };
+    });
+  }, [getSelectedCells]);
+  const selectionStart = useMemo(() => selStart ? (() => { const [p,a] = selStart.rowKey.split(':'); return { personId: Number(p), assignmentId: Number(a), week: selStart.weekKey }; })() : null, [selStart]);
+  const focusAssignmentsSearch = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const input = document.getElementById('assignments-search') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, []);
+  const getHoursForCell = useCallback((personId: number, assignmentId: number, week: string) => {
+    const person = peopleById.get(personId) || visiblePeople.find((p) => p.id === personId);
+    if (!person) return 0;
+    const assignment = resolvePersonAssignments(person as PersonWithAssignments).find((row) => row.id === assignmentId);
+    return Number(assignment?.weeklyHours?.[week] || 0);
+  }, [peopleById, visiblePeople, resolvePersonAssignments]);
+  const selectedHoursTotal = useMemo(
+    () => selectedCells.reduce((sum, cell) => sum + getHoursForCell(cell.personId, cell.assignmentId, cell.week), 0),
+    [getHoursForCell, selectedCells]
+  );
+  const selectedHoursLabel = useMemo(() => {
+    const rounded = Math.round(selectedHoursTotal * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toFixed(2).replace(/\.?0+$/, '');
+  }, [selectedHoursTotal]);
+  const url = useGridUrlState();
+
+  // Column width state (extracted hook, assignGrid keys)
+  const {
+    clientColumnWidth,
+    setClientColumnWidth,
+    projectColumnWidth,
+    setProjectColumnWidth,
+    isResizing,
+    setIsResizing,
+    resizeStartX,
+    setResizeStartX,
+    resizeStartWidth,
+    setResizeStartWidth,
+  } = useGridColumnWidthsAssign();
+
+  // Create dynamic grid template based on column widths
+  const autoHoursColumnWidth = 28;
+  const gridTemplate = useMemo(() => {
+    const count = Math.max(1, (isMobileLayout ? mobileWeeks.length : weeks.length));
+    return `${clientColumnWidth}px ${projectColumnWidth}px 40px ${autoHoursColumnWidth}px repeat(${count}, 70px)`;
+  }, [clientColumnWidth, projectColumnWidth, mobileWeeks.length, weeks.length, isMobileLayout, autoHoursColumnWidth]);
+
+  // Calculate total minimum width
+  const totalMinWidth = useMemo(() => {
+    return clientColumnWidth + projectColumnWidth + 40 + autoHoursColumnWidth + (weeks.length * 70) + 20; // +20 for gaps/padding
+  }, [clientColumnWidth, projectColumnWidth, weeks.length, autoHoursColumnWidth]);
+
+  // Initialize from URL (weeks + view)
+  useEffect(() => {
+    try {
+      url.set('view', 'people');
+      const w = url.get('weeks');
+      if (w) {
+        const n = parseInt(w, 10);
+        if (!Number.isNaN(n) && n >= 1 && n <= 52) setWeeksHorizon(n);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setSearchMeta]);
+  // Persist weeks in URL
+  useEffect(() => { url.set('weeks', String(weeksHorizon)); }, [weeksHorizon]);
+
+  // Measure sticky header height so the week header can offset correctly
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState<number>(88);
+  useEffect(() => {
+    function measure() {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.getBoundingClientRect().height);
+      }
+    }
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
+    if (ro && headerRef.current) ro.observe(headerRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      if (ro && headerRef.current) ro.unobserve(headerRef.current);
+    };
+  }, []);
+
+  // Error-bounded computation with explicit null/undefined handling
+  const computeAllowedProjects = useMemo(() => {
+    try {
+      // Guard against missing data
+      if (!assignmentsData?.length || !projectsData?.length) {
+        return { projectHoursSum: new Map(), allowedProjectIds: new Set() };
+      }
+
+      const projectHoursSum = new Map<number, number>();
+      const projectsWithHours = new Set<number>();
+      const activeProjectIds = new Set<number>();
+
+      // Build projectHoursSum with null/undefined safety
+      assignmentsData.forEach(assignment => {
+        // Skip assignments without valid project reference
+        if (!assignment?.project || typeof assignment.project !== 'number') return;
+        
+        // Parse weeklyHours with null/undefined/string safety
+        const weeklyHours = assignment.weeklyHours || {};
+        let totalHours = 0;
+        
+        Object.values(weeklyHours).forEach(hours => {
+          const parsedHours = parseFloat(hours?.toString() || '0') || 0;
+          totalHours += parsedHours;
+        });
+        
+        const currentSum = projectHoursSum.get(assignment.project) || 0;
+        projectHoursSum.set(assignment.project, currentSum + totalHours);
+        
+        if (totalHours > 0) {
+          projectsWithHours.add(assignment.project);
+        }
+      });
+
+      // Build activeProjectIds with null/undefined safety
+      projectsData.forEach(project => {
+        if (!project?.id) return;
+        
+        const isActive = project.isActive === true;
+        const hasActiveStatus = activeLikeStatusKeys.has((project.status || '').toLowerCase());
+        
+        if (isActive || hasActiveStatus) {
+          activeProjectIds.add(project.id);
+        }
+      });
+
+      // Union operation
+      const allowedProjectIds = new Set([...projectsWithHours, ...activeProjectIds]);
+
+      return { projectHoursSum, allowedProjectIds };
+      
+    } catch (error) {
+      console.error('Error computing allowed projects:', error);
+      // Return safe fallback - show all projects on error
+      return { 
+        projectHoursSum: new Map(), 
+        allowedProjectIds: new Set(projectsData?.map(p => p?.id).filter(Boolean) || [])
+      };
+    }
+  }, [
+    // Memoization dependencies (recompute when these change):
+    assignmentsData,           // Assignment data array
+    projectsData,             // Project data array
+    activeLikeStatusKeys,
+    // Note: Department filter state not needed here as data is pre-filtered
+  ]);
+
+  const { allowedProjectIds } = computeAllowedProjects;
+
+  // Get deliverables for a specific project and week (indexed)
+  const getDeliverablesForProjectWeek = useDeliverablesIndex(deliverables);
+
+  const autoHoursSettingsByPhaseMap = useMemo(() => {
+    const out: Record<string, Map<number, AutoHoursRoleSetting>> = {};
+    autoHoursPhases.forEach((phase) => {
+      const map = new Map<number, AutoHoursRoleSetting>();
+      const rows = autoHoursSettingsByPhase?.[phase] || [];
+      for (const setting of rows) {
+        map.set(setting.roleId, setting);
+      }
+      out[phase] = map;
+    });
+    return out;
+  }, [autoHoursPhases, autoHoursSettingsByPhase]);
+
+  const autoHoursTemplateSettingsByPhaseMap = useMemo(() => {
+    const out: Record<number, Record<string, Map<number, AutoHoursRoleSetting>>> = {};
+    Object.entries(autoHoursTemplateSettings || {}).forEach(([tid, phases]) => {
+      const templateId = Number(tid);
+      const phaseMaps: Record<string, Map<number, AutoHoursRoleSetting>> = {};
+      autoHoursPhases.forEach((phase) => {
+        const map = new Map<number, AutoHoursRoleSetting>();
+        const rows = phases?.[phase] || [];
+        for (const setting of rows) {
+          map.set(setting.roleId, setting);
+        }
+        phaseMaps[phase] = map;
+      });
+      out[templateId] = phaseMaps;
+    });
+    return out;
+  }, [autoHoursPhases, autoHoursTemplateSettings]);
+
+  const classifyDeliverablePhase = useCallback((deliverable: Deliverable): string | null => {
+    const descRaw = (deliverable?.description || '').toLowerCase().trim();
+    const desc = descRaw.replace(/\s+/g, ' ');
+    if (desc.includes('bulletin') || desc.includes('addendum')) return null;
+    if (desc.includes('masterplan') || desc.includes('master plan') || desc.includes('masterplanning')) return null;
+
+    const tokenMatch = (text: string, token: string) => {
+      if (!token) return false;
+      if (token.includes(' ') || token.length > 3) return text.includes(token);
+      return new RegExp(`\\b${token.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`).test(text);
+    };
+
+    const phases = (phaseMappingEffective.phases || []).slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+    if (phaseMappingEffective.useDescriptionMatch && desc) {
+      for (const phase of phases) {
+        const tokens = phase.descriptionTokens || [];
+        if (tokens.some(t => tokenMatch(desc, t))) return phase.key;
+      }
+    }
+
+    if (deliverable?.percentage != null) {
+      const p = Math.round(Number(deliverable.percentage));
+      if (Number.isFinite(p)) {
+        for (const phase of phases) {
+          const rmin = phase.rangeMin;
+          const rmax = phase.rangeMax;
+          if (rmin == null || rmax == null) continue;
+          if (p >= rmin && p <= rmax) return phase.key;
+        }
+      }
+    }
+    return null;
+  }, [phaseMappingEffective]);
+
+  const deliverableWeekEntriesByProject = useMemo(() => {
+    const map = new Map<number, Array<{ weekIndex: number; phase: string }>>();
+    if (!weeks.length) return map;
+    for (const deliverable of deliverables || []) {
+      const projectId = (deliverable as any).project as number | undefined;
+      const date = (deliverable as any).date as string | null | undefined;
+      if (!projectId || !date) continue;
+      const weekIndex = weeks.findIndex(week => isDateInWeek(date, week.date));
+      if (weekIndex < 0) continue;
+      const phase = classifyDeliverablePhase(deliverable);
+      if (!phase) continue;
+      const list = map.get(projectId) || [];
+      if (!list.some(entry => entry.weekIndex === weekIndex && entry.phase === phase)) {
+        list.push({ weekIndex, phase });
+      }
+      map.set(projectId, list);
+    }
+    return map;
+  }, [classifyDeliverablePhase, deliverables, weeks]);
+
+  // Smart project search (respects current project status filters)
+  const searchProjects = (query: string): Project[] => {
+    try {
+      if (!projectsData?.length) return [];
+      
+      if (!query?.trim()) {
+        return [];
+      }
+
+      const searchWords = query.trim().toLowerCase().split(/\s+/);
+      
+      let results = projectsData.filter(project => {
+        if (!matchesStatusFilters(project as Project)) return false;
+        // Null/undefined safety for project properties
+        const searchableText = [
+          project?.name || '',
+          project?.client || '',
+          project?.projectNumber || ''
+        ].join(' ').toLowerCase();
+        
+        // All search words must be found in the combined searchable text
+        return searchWords.every(word => searchableText.includes(word));
+      });
+      
+      return results.slice(0, 8); // Limit results
+    } catch (error) {
+      console.error('Error in searchProjects:', error);
+      return []; // Safe fallback
+    }
+  };
+
+  // (Add-assignment handlers moved into useProjectAssignmentAdd)
+
+  // (showToast moved above with toast state)
+
+  // (status controls and editing cell logic extracted via hooks above)
+
+  // Check if the current selectedCells form a valid contiguous range for bulk apply
+  const isContiguousSelection = (): { ok: boolean; reason?: string } => {
+    if (!selectedCells || selectedCells.length <= 1) return { ok: true };
+
+    const personId = selectedCells[0].personId;
+    const allSamePerson = selectedCells.every(c => c.personId === personId);
+    if (!allSamePerson) return { ok: false, reason: 'Selection must be within a single person' };
+
+    // Ensure the selected weeks form a contiguous range
+    const weekIndex = (date: string) => weeks.findIndex(w => w.date === date);
+    const uniqueWeekIdx = Array.from(
+      new Set(selectedCells.map(c => weekIndex(c.week)).filter(i => i >= 0))
+    ).sort((a, b) => a - b);
+    if (uniqueWeekIdx.length === 0) return { ok: false, reason: 'Selection must include valid weeks' };
+    const start = uniqueWeekIdx[0];
+    for (let i = 1; i < uniqueWeekIdx.length; i++) {
+      const expected = start + i;
+      if (uniqueWeekIdx[i] !== expected) {
+        return { ok: false, reason: 'Selection must be a contiguous week range' };
+      }
+    }
+    return { ok: true };
+  };
+
+  const saveEditInFlightRef = useRef(false);
+  const saveEdit = async () => {
+    if (!editingCell || saveEditInFlightRef.current) return;
+    saveEditInFlightRef.current = true;
+    markSaveState('saving', 'Saving...');
+
+    const numValue = sanitizeHours(editingValue);
+
+    try {
+      // Bulk selection path
+      if (selectedCells && selectedCells.length > 1) {
+        const check = isContiguousSelection();
+        if (!check.ok) {
+          showToast(check.reason || 'Invalid selection for bulk apply', 'warning');
+          setEditingCell(null);
+          return;
+        }
+        const lockedCell = selectedCells.find((cell) => isWeekLockedForPerson(cell.personId, cell.week));
+        if (lockedCell) {
+          showPreHireWeekMessage(lockedCell.personId);
+          setEditingCell(null);
+          return;
+        }
+        const saved = await updateMultipleCells(selectedCells, numValue);
+        if (!saved) {
+          setEditingCell(null);
+          return;
+        }
+
+        // Mirror to assignmentsData for derived filters
+        setAssignmentsData(prev => {
+          const map = new Map(prev.map(a => [a.id, a] as const));
+          for (const cell of selectedCells) {
+            const a = map.get(cell.assignmentId);
+            if (a) {
+              a.weeklyHours = { ...a.weeklyHours, [cell.week]: numValue };
+            }
+          }
+          return Array.from(map.values());
+        });
+      } else {
+        // Single cell path
+        if (isWeekLockedForPerson(editingCell.personId, editingCell.week)) {
+          showPreHireWeekMessage(editingCell.personId);
+          setEditingCell(null);
+          return;
+        }
+        const saved = await updateAssignmentHours(
+          editingCell.personId,
+          editingCell.assignmentId,
+          editingCell.week,
+          numValue
+        );
+        if (!saved) {
+          setEditingCell(null);
+          return;
+        }
+        setAssignmentsData(prev => prev.map(a =>
+          a.id === editingCell.assignmentId
+            ? { ...a, weeklyHours: { ...a.weeklyHours, [editingCell.week]: numValue } }
+            : a
+        ));
+      }
+
+      // Move selection to next week (if possible) for smoother entry
+      const currentIdx = weeks.findIndex(w => w.date === editingCell.week);
+      if (currentIdx >= 0 && currentIdx < weeks.length - 1) {
+        const next = { personId: editingCell.personId, assignmentId: editingCell.assignmentId, week: weeks[currentIdx + 1].date };
+        csSelect(`${next.personId}:${next.assignmentId}`, next.week, false);
+      }
+      markSaveState('saved', 'Saved', 1400);
+    } catch (err: any) {
+      console.error('Failed to save edit:', err);
+      showToast('Failed to save hours: ' + (err?.message || 'Unknown error'), 'error');
+      markSaveState('error', 'Save failed');
+    } finally {
+      saveEditInFlightRef.current = false;
+      setEditingCell(null);
+    }
+  };
+
+  // Commit edits on outside click (avoid selection mouse events stealing focus)
+  useEffect(() => {
+    if (!editingCell) return;
+    const handleDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-week-cell-editing="true"]')) return;
+      saveEdit();
+    };
+    document.addEventListener('mousedown', handleDocMouseDown, true);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown, true);
+  }, [editingCell, saveEdit]);
+
+  // (cancelEdit provided by useEditingCellHook)
+
+  const handleCellSelection = (personId: number, assignmentId: number, week: string, isShiftClick?: boolean) => {
+    if (isWeekLockedForPerson(personId, week)) {
+      showPreHireWeekMessage(personId);
+      return;
+    }
+    csSelect(rowKeyFor(personId, assignmentId), week, isShiftClick);
+  };
+
+  // Click + drag selection support across rows
+  const handleCellMouseDown = (personId: number, assignmentId: number, week: string) => {
+    if (isWeekLockedForPerson(personId, week)) return;
+    csMouseDown(rowKeyFor(personId, assignmentId), week);
+  };
+
+  const handleCellMouseEnter = (personId: number, assignmentId: number, week: string) => {
+    if (isWeekLockedForPerson(personId, week)) return;
+    csMouseEnter(rowKeyFor(personId, assignmentId), week);
+  };
+
+  const handleEditStart = (personId: number, assignmentId: number, week: string, currentValue: string) => {
+    if (isWeekLockedForPerson(personId, week)) {
+      showPreHireWeekMessage(personId);
+      return;
+    }
+    startEditing(personId, assignmentId, week, currentValue);
+  };
+
+
+  // Snapshot query auto-fetches when weeks/department changes; no manual load needed here.
+
+  useGridKeyboardNavigation({
+    selectedCell,
+    editingCell,
+    isAddingAssignment: addUI.isAddingFor !== null,
+    weeks,
+    csSelect,
+    setEditingCell,
+    setEditingValue,
+    findAssignment: (personId: number, assignmentId: number) => {
+      const person = peopleById.get(personId) || visiblePeople.find(p => p.id === personId);
+      if (!person) return false;
+      const assignments = resolvePersonAssignments(person as PersonWithAssignments);
+      return assignments.some(a => a.id === assignmentId);
+    }
+  });
+
+  // Global mouse up handler for drag selection and column resizing
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isResizing) {
+        setIsResizing(null);
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizing) {
+        const deltaX = e.clientX - resizeStartX;
+        const newWidth = Math.max(80, resizeStartWidth + deltaX); // Min width of 80px
+
+        if (isResizing === 'client') {
+          setClientColumnWidth(newWidth);
+        } else if (isResizing === 'project') {
+          setProjectColumnWidth(newWidth);
+        }
+      }
+    };
+
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [isDraggingSel, isResizing, resizeStartX, resizeStartWidth]);
+
+  // Column resize handlers
+  const startColumnResize = (column: 'client' | 'project', e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(column);
+    setResizeStartX(e.clientX);
+    setResizeStartWidth(column === 'client' ? clientColumnWidth : projectColumnWidth);
+  };
+
+  // Use existing department filter state declared near top of component
+
+  // loadData implemented in useAssignmentsSnapshot
+
+  // (subscribeGridRefresh is handled inside useAssignmentsSnapshot)
+
+  // Load a person's assignments once when expanding.
+  // Prefer already-loaded assignments from state to avoid redundant network calls.
+  type AssignmentLoadMode = 'full' | 'filtered';
+
+  const fetchFilteredAssignmentsForPerson = useCallback(async (personId: number): Promise<Assignment[]> => {
+    const pageSize = 200;
+    let page = 1;
+    let count = 0;
+    let results: Assignment[] = [];
+
+    while (true) {
+      const res = await assignmentsApi.search(buildSearchPayload({ page, page_size: pageSize, person: personId }));
+      const rows = res.results || [];
+      results = results.concat(rows);
+      count = res.count ?? results.length;
+      if (results.length >= count || rows.length === 0) break;
+      page += 1;
+      if (page > 50) break;
+    }
+    return results;
+  }, [buildSearchPayload]);
+
+  const fetchFilteredAssignmentsPage = useCallback(async (personId: number, page: number): Promise<{ rows: Assignment[]; hasMore: boolean; }> => {
+    const res = await assignmentsApi.search(buildSearchPayload({ page, page_size: MOBILE_FILTERED_PAGE_SIZE, person: personId }));
+    const rows = res.results || [];
+    const hasMore = Boolean(res.next);
+    return { rows, hasMore };
+  }, [buildSearchPayload]);
+
+  const loadFilteredAssignmentsPage = useCallback(async (personId: number, page: number, opts?: { append?: boolean }) => {
+    setMobileLoadingMoreByPerson(prev => new Set(prev).add(personId));
+    try {
+      const { rows, hasMore } = await fetchFilteredAssignmentsPage(personId, page);
+      let nextRows: Assignment[] = [];
+      setFilteredAssignmentsByPerson((prev) => {
+        const existing = prev[personId] || [];
+        nextRows = opts?.append
+          ? (() => {
+            const seen = new Set(existing.map((a) => a.id));
+            const merged = [...existing];
+            rows.forEach((a) => {
+              if (!seen.has(a.id)) merged.push(a);
+            });
+            return merged;
+          })()
+          : rows;
+        return { ...prev, [personId]: nextRows };
+      });
+      setFilteredAssignmentsLoaded(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      setMobileAssignmentPageByPerson(prev => ({ ...prev, [personId]: page }));
+      setMobileHasMoreAssignmentsByPerson(prev => ({ ...prev, [personId]: hasMore }));
+      return nextRows;
+    } catch (e: any) {
+      showToast('Failed to load assignments: ' + (e?.message || 'Unknown error'), 'error');
+      return [];
+    } finally {
+      setMobileLoadingMoreByPerson(prev => { const next = new Set(prev); next.delete(personId); return next; });
+    }
+  }, [fetchFilteredAssignmentsPage, showToast]);
+
+  const ensureAssignmentsLoaded = async (
+    personId: number,
+    opts?: { mode?: AssignmentLoadMode; force?: boolean }
+  ): Promise<Assignment[]> => {
+    const person = people.find(p => p.id === personId);
+    const mode = opts?.mode ?? (serverFilterActive ? 'filtered' : 'full');
+    const force = opts?.force ?? false;
+
+    if (mode === 'filtered') {
+      if (isMobileLayout) {
+        if (!force && (filteredAssignmentsLoaded.has(personId) || loadingAssignments.has(personId))) {
+          return filteredAssignmentsByPerson[personId] || [];
+        }
+        setLoadingAssignments(prev => new Set(prev).add(personId));
+        try {
+          const rows = await loadFilteredAssignmentsPage(personId, 1, { append: false });
+          return rows || [];
+        } catch (e: any) {
+          showToast('Failed to load filtered assignments: ' + (e?.message || 'Unknown error'), 'error');
+          setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+          return [];
+        } finally {
+          setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+        }
+      }
+      if (!force && (filteredAssignmentsLoaded.has(personId) || loadingAssignments.has(personId))) {
+        return filteredAssignmentsByPerson[personId] || [];
+      }
+      setLoadingAssignments(prev => new Set(prev).add(personId));
+      try {
+        const rows = await fetchFilteredAssignmentsForPerson(personId);
+        setFilteredAssignmentsByPerson(prev => ({ ...prev, [personId]: rows }));
+        setFilteredAssignmentsLoaded(prev => {
+          const next = new Set(prev);
+          next.add(personId);
+          return next;
+        });
+        return rows || [];
+      } catch (e: any) {
+        showToast('Failed to load filtered assignments: ' + (e?.message || 'Unknown error'), 'error');
+        setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+        return [];
+      } finally {
+        setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+      }
+    }
+
+    if (!force && (loadedAssignmentIds.has(personId) || loadingAssignments.has(personId))) {
+      return person?.assignments || [];
+    }
+    if (!force && person && Array.isArray(person.assignments) && person.assignments.length > 0) {
+      setLoadedAssignmentIds(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      return person.assignments;
+    }
+    setLoadingAssignments(prev => new Set(prev).add(personId));
+    try {
+      const rows = await assignmentsApi.byPerson(personId, { vertical: verticalState.selectedVerticalId ?? undefined });
+      setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
+      setLoadedAssignmentIds(prev => {
+        const next = new Set(prev);
+        next.add(personId);
+        return next;
+      });
+      // Keep hoursByPerson in sync for this person using the refreshed rows
+      try {
+        const weekKeys = weeks.map(w => w.date);
+        setHoursByPerson(prev => {
+          const next = { ...prev } as Record<number, Record<string, number>>;
+          const totals: Record<string, number> = {};
+          for (const wk of weekKeys) {
+            let sum = 0;
+            for (const a of rows) {
+              const wh = (a as any).weeklyHours || {};
+              const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+              sum += v;
+            }
+            if (sum !== 0) totals[wk] = sum;
+          }
+          if (Object.keys(totals).length > 0) {
+            next[personId] = { ...(next[personId] || {}), ...totals };
+          }
+          return next;
+        });
+      } catch {}
+      return rows || [];
+    } catch (e: any) {
+      showToast('Failed to load assignments: ' + (e?.message || 'Unknown error'), 'error');
+      setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: false } : p)));
+      return [];
+    } finally {
+      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+    }
+  };
+
+  const loadMoreFilteredAssignmentsForPerson = useCallback(async (personId: number) => {
+    if (!serverFilterActive) return;
+    if (!mobileHasMoreAssignmentsByPerson[personId]) return;
+    if (mobileLoadingMoreByPerson.has(personId)) return;
+    const currentPage = mobileAssignmentPageByPerson[personId] || 1;
+    const nextPage = currentPage + 1;
+    await loadFilteredAssignmentsPage(personId, nextPage, { append: true });
+  }, [serverFilterActive, mobileHasMoreAssignmentsByPerson, mobileLoadingMoreByPerson, mobileAssignmentPageByPerson, loadFilteredAssignmentsPage]);
+
+  // Manual refresh for a person's assignments on demand
+  const refreshPersonAssignments = async (personId: number) => {
+    setLoadingAssignments(prev => new Set(prev).add(personId));
+    try {
+      if (serverFilterActive) {
+        const rows = await fetchFilteredAssignmentsForPerson(personId);
+        setFilteredAssignmentsByPerson(prev => ({ ...prev, [personId]: rows }));
+        setFilteredAssignmentsLoaded(prev => {
+          const next = new Set(prev);
+          next.add(personId);
+          return next;
+        });
+        showToast('Filtered assignments refreshed', 'success');
+      } else {
+        const rows = await assignmentsApi.byPerson(personId, { vertical: verticalState.selectedVerticalId ?? undefined });
+        setPeople(prev => prev.map(p => (p.id === personId ? { ...p, assignments: rows } : p)));
+        setLoadedAssignmentIds(prev => {
+          const next = new Set(prev);
+          next.add(personId);
+          return next;
+        });
+        // Recompute aggregated totals for this person from refreshed rows
+        try {
+          const weekKeys = weeks.map(w => w.date);
+          setHoursByPerson(prev => {
+            const next = { ...prev } as Record<number, Record<string, number>>;
+            const totals: Record<string, number> = {};
+            for (const wk of weekKeys) {
+              let sum = 0;
+              for (const a of rows) {
+                const wh = (a as any).weeklyHours || {};
+                const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+                sum += v;
+              }
+              if (sum !== 0) totals[wk] = sum;
+            }
+            if (Object.keys(totals).length > 0) {
+              next[personId] = { ...(next[personId] || {}), ...totals };
+            }
+            return next;
+          });
+        } catch {}
+        showToast('Assignments refreshed', 'success');
+      }
+    } catch (e: any) {
+      showToast('Failed to refresh assignments: ' + (e?.message || 'Unknown error'), 'error');
+    } finally {
+      setLoadingAssignments(prev => { const n = new Set(prev); n.delete(personId); return n; });
+    }
+  };
+
+  // Refresh assignments for all people (both expanded and collapsed) using a single bulk call
+  const refreshAllAssignments = async () => {
+    if (people.length === 0) {
+      showToast('No people available to refresh', 'warning');
+      return;
+    }
+
+    const personIds = people.map(p => p.id!).filter((id): id is number => typeof id === 'number');
+    if (personIds.length === 0) {
+      showToast('No people available to refresh', 'warning');
+      return;
+    }
+
+    setLoadingAssignments(prev => {
+      const next = new Set(prev);
+      personIds.forEach(id => next.add(id));
+      return next;
+    });
+
+    try {
+      const dept = deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId);
+      const inc = dept != null ? (deptState.includeChildren ? 1 : 0) : undefined;
+      const bulk = await assignmentsApi.listAll({
+        department: dept,
+        include_children: dept != null ? inc : undefined,
+        department_filters: dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+      });
+      const allAssignments = Array.isArray(bulk) ? bulk : [];
+
+      const byPerson = new Map<number, Assignment[]>();
+      for (const a of allAssignments) {
+        const pid = (a as any).person as number | undefined;
+        if (!pid) continue;
+        const current = byPerson.get(pid) || [];
+        current.push(a);
+        byPerson.set(pid, current);
+      }
+
+      setPeople(prev => prev.map(person => {
+        const id = person.id!;
+        const rows = byPerson.get(id) || [];
+        return { ...person, assignments: rows };
+      }));
+
+      setAssignmentsData(allAssignments);
+
+      try {
+        const weekKeys = weeks.map(w => w.date);
+        setHoursByPerson(() => {
+          const next: Record<number, Record<string, number>> = {};
+          for (const [pid, rows] of byPerson.entries()) {
+            const totals: Record<string, number> = {};
+            for (const wk of weekKeys) {
+              let sum = 0;
+              for (const a of rows) {
+                const wh = (a as any).weeklyHours || {};
+                const v = parseFloat((wh[wk] ?? 0).toString()) || 0;
+                sum += v;
+              }
+              if (sum !== 0) totals[wk] = sum;
+            }
+            next[pid] = totals;
+          }
+          return next;
+        });
+      } catch {}
+
+      setLoadedAssignmentIds(() => new Set(personIds));
+      if (serverFilterActive) {
+        setFilteredAssignmentsByPerson({});
+        setFilteredAssignmentsLoaded(new Set());
+        void fetchSearchMeta();
+      }
+      showToast(`Refreshed assignments for all ${people.length} people`, 'success');
+    } catch (error) {
+      showToast('Failed to refresh some assignments', 'error');
+    } finally {
+      setLoadingAssignments(prev => {
+        const next = new Set(prev);
+        personIds.forEach(id => next.delete(id));
+        return next;
+      });
+    }
+  };
+
+  // Ensure expanded rows stay populated when server-side filters are active.
+  useEffect(() => {
+    if (!serverFilterActive) return;
+    const expanded = (visiblePeople || []).filter(p => p?.id != null && p.isExpanded);
+    if (!expanded.length) return;
+    expanded.forEach((person) => {
+      const personId = person.id as number;
+      if (loadingAssignments.has(personId)) return;
+      if (Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, personId)) return;
+      if (loadedAssignmentIds.has(personId) && (person.assignments || []).length > 0) {
+        const localFiltered = getVisibleAssignments(person.assignments || []);
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: localFiltered }));
+        return;
+      }
+      void ensureAssignmentsLoaded(personId, { mode: 'filtered', force: true });
+    });
+  }, [
+    serverFilterActive,
+    visiblePeople,
+    filteredAssignmentsByPerson,
+    loadingAssignments,
+    loadedAssignmentIds,
+    getVisibleAssignments,
+    ensureAssignmentsLoaded,
+  ]);
+
+  // Toggle person expansion
+  const togglePersonExpanded = (personId: number) => {
+    const person = people.find(p => p.id === personId);
+    const willExpand = !(person?.isExpanded ?? false);
+    setPeople(prev => prev.map(p => (p.id === personId ? { ...p, isExpanded: !p.isExpanded } : p)));
+    if (willExpand) {
+      void ensureAssignmentsLoaded(personId);
+    }
+  };
+
+  const handleMobileAssignmentPress = (personId: number, assignmentId: number) => {
+    setMobileEditTarget({ personId, assignmentId });
+    void ensureAssignmentsLoaded(personId);
+  };
+
+  // Status filter matching provided by useProjectStatusFilters
+
+  // Status filter matching provided by useProjectStatusFilters
+
+  // Calculate person total using filtered assignments with null safety
+  const calculatePersonTotal = (assignments: Assignment[], week: string): number => {
+    try {
+      return (assignments || []).reduce((sum, assignment) => {
+        const hours = parseFloat(assignment?.weeklyHours?.[week]?.toString() || '0') || 0;
+        return sum + hours;
+      }, 0);
+    } catch (error) {
+      console.error('Error calculating person total:', error);
+      return 0; // Safe fallback
+    }
+  };
+
+  // Get person's total hours for a specific week (updated to use filtered assignments)
+  const getPersonTotalHours = (person: PersonWithAssignments, week: string) => {
+    if (serverFilterActive && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, person.id!)) {
+      const rows = filteredAssignmentsByPerson[person.id!] || [];
+      return calculatePersonTotal(rows, week);
+    }
+    const byWeek = hoursByPersonView[person.id!];
+    if (byWeek && Object.prototype.hasOwnProperty.call(byWeek, week)) {
+      return byWeek[week] || 0;
+    }
+    const assignments = resolvePersonAssignments(person);
+    return calculatePersonTotal(assignments, week);
+  };
+
+  // Add new assignment
+  const addAssignment = async (personId: number, project: Project) => {
+    try {
+      const newAssignment = await createAssignment({
+        person: personId,
+        project: project.id!,
+        weeklyHours: {}
+      }, assignmentsApi);
+      
+      setPeople(prev => prev.map(person => 
+        person.id === personId 
+          ? { ...person, assignments: [...person.assignments, newAssignment] }
+          : person
+      ));
+      setAssignmentsData(prev => [...prev, newAssignment]);
+      if (serverFilterActive) {
+        const matchesFilters = matchesStatusFilters(project as Project)
+          && matchesSearchTokensAssignment(newAssignment as Assignment);
+        if (matchesFilters && Object.prototype.hasOwnProperty.call(filteredAssignmentsByPerson, personId)) {
+          setFilteredAssignmentsByPerson((prev) => {
+            const rows = prev[personId] || [];
+            if (rows.some((a) => a.id === newAssignment.id)) return prev;
+            return { ...prev, [personId]: [...rows, newAssignment as Assignment] };
+          });
+        }
+        if (matchesFilters) {
+          setSearchMeta((prev) => {
+            if (!prev) return prev;
+            const key = String(personId);
+            const counts = prev.assignmentCountsByPerson || {};
+            const nextCount = (counts[key] || 0) + 1;
+            return {
+              ...prev,
+              assignmentCountsByPerson: { ...counts, [key]: nextCount },
+            };
+          });
+        }
+      }
+      // Show notification about assignment creation and potential overallocation risk
+      const person = people.find(p => p.id === personId);
+      if (person) {
+        const projectCount = person.assignments.length + 1; // Include the new assignment
+        
+        if (projectCount >= 3) {
+          showToast(
+            `?? ${person.name} is now assigned to ${projectCount} projects. Monitor workload to avoid overallocation.`,
+            'warning'
+          );
+        } else {
+          showToast(
+            `? ${person.name} successfully assigned to ${project.name}`,
+            'success'
+          );
+        }
+      }
+      // Reset add-assignment UI
+      try { addUI.reset(); } catch {}
+      
+    } catch (err: any) {
+      console.error('Failed to create assignment:', err);
+      showToast('Failed to create assignment: ' + err.message, 'error');
+    }
+  };
+
+  const updateFilteredTotalsForPerson = useCallback((personId: number, assignments: Assignment[]) => {
+    const totals: Record<string, number> = {};
+    assignments.forEach((a) => {
+      const wh = (a as any).weeklyHours || {};
+      Object.entries(wh).forEach(([wk, val]) => {
+        const v = parseFloat((val as any)?.toString?.() || '0') || 0;
+        if (!v) return;
+        totals[wk] = (totals[wk] || 0) + v;
+      });
+    });
+    setSearchMeta((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        filteredTotals: {
+          ...(prev.filteredTotals || {}),
+          [String(personId)]: totals,
+        },
+      };
+    });
+  }, []);
+
+  const applyFilteredTotalsDelta = useCallback((personId: number, deltas: Record<string, number>) => {
+    if (!deltas || Object.keys(deltas).length === 0) return;
+    setSearchMeta((prev) => {
+      if (!prev) return prev;
+      const key = String(personId);
+      const current = { ...(prev.filteredTotals?.[key] || {}) };
+      Object.entries(deltas).forEach(([week, delta]) => {
+        const next = (current[week] || 0) + delta;
+        if (Math.abs(next) < 0.001) {
+          delete current[week];
+        } else {
+          current[week] = Math.round(next * 100) / 100;
+        }
+      });
+      return {
+        ...prev,
+        filteredTotals: {
+          ...(prev.filteredTotals || {}),
+          [key]: current,
+        },
+      };
+    });
+  }, []);
+
+  const shouldUseFilteredTotalsDelta = useCallback((personId: number) => {
+    if (!isMobileLayout || !serverFilterActive) return false;
+    return Boolean(mobileHasMoreAssignmentsByPerson[personId]);
+  }, [isMobileLayout, serverFilterActive, mobileHasMoreAssignmentsByPerson]);
+
+  const buildWeeklyDeltas = useCallback((weeklyHours: Record<string, number> | undefined, multiplier = 1) => {
+    const deltas: Record<string, number> = {};
+    if (!weeklyHours) return deltas;
+    Object.entries(weeklyHours).forEach(([week, value]) => {
+      const v = parseFloat((value as any)?.toString?.() || '0') || 0;
+      if (!v) return;
+      deltas[week] = (deltas[week] || 0) + (v * multiplier);
+    });
+    return deltas;
+  }, []);
+
+  const adjustFilteredAssignmentCount = useCallback((personId: number, delta: number) => {
+    if (!delta) return;
+    setSearchMeta((prev) => {
+      if (!prev) return prev;
+      const key = String(personId);
+      const counts = prev.assignmentCountsByPerson || {};
+      const current = counts[key] || 0;
+      const nextCount = Math.max(0, current + delta);
+      if (nextCount === current) return prev;
+      return {
+        ...prev,
+        assignmentCountsByPerson: {
+          ...counts,
+          [key]: nextCount,
+        },
+      };
+    });
+  }, []);
+
+  // Remove assignment
+  const removeAssignment = async (assignmentId: number, personId: number) => {
+    const confirmed = await confirmAction({
+      title: 'Remove Assignment',
+      message: 'Are you sure you want to remove this assignment?',
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    let prevFilteredRows: Assignment[] | null = null;
+    let removedAssignment: Assignment | null = null;
+    let didOptimisticFilteredUpdate = false;
+    if (serverFilterActive) {
+      const rows = filteredAssignmentsByPerson[personId] || [];
+      const removed = rows.find((a) => a.id === assignmentId) || null;
+      removedAssignment = removed;
+      const nextRows = rows.filter((a) => a.id !== assignmentId);
+      if (nextRows.length !== rows.length) {
+        prevFilteredRows = rows;
+        didOptimisticFilteredUpdate = true;
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+        if (shouldUseFilteredTotalsDelta(personId) && removed) {
+          applyFilteredTotalsDelta(personId, buildWeeklyDeltas(removed.weeklyHours, -1));
+        } else {
+          updateFilteredTotalsForPerson(personId, nextRows);
+        }
+        adjustFilteredAssignmentCount(personId, -1);
+      }
+    }
+    try {
+      await removeAssignmentAction({ assignmentsApi, setPeople, people, personId, assignmentId, showToast });
+    } catch {
+      if (serverFilterActive && didOptimisticFilteredUpdate && prevFilteredRows) {
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: prevFilteredRows as Assignment[] }));
+        if (shouldUseFilteredTotalsDelta(personId) && removedAssignment) {
+          applyFilteredTotalsDelta(personId, buildWeeklyDeltas(removedAssignment.weeklyHours, 1));
+        } else {
+          updateFilteredTotalsForPerson(personId, prevFilteredRows);
+        }
+        adjustFilteredAssignmentCount(personId, 1);
+      }
+    }
+  };
+
+  // Update assignment hours
+  const updateAssignmentHours = async (personId: number, assignmentId: number, week: string, hours: number): Promise<boolean> => {
+    if (isWeekLockedForPerson(personId, week)) {
+      showPreHireWeekMessage(personId);
+      markSaveState('error', 'Pre-hire week locked');
+      return false;
+    }
+    markSaveState('saving', 'Saving...');
+    if (!serverFilterActive) {
+      await updateAssignmentHoursAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, personId, assignmentId, week, hours, showToast });
+      markSaveState('saved', 'Saved', 1200);
+      return true;
+    }
+    const person = peopleById.get(personId) || (visiblePeople || []).find(p => p.id === personId);
+    const visibleRows = person ? resolvePersonAssignments(person as PersonWithAssignments) : [];
+    const assignment = visibleRows.find((a) => a.id === assignmentId)
+      || (person?.assignments || []).find((a: any) => a.id === assignmentId);
+    if (!assignment) return false;
+
+    const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
+    const updatedWeeklyHours = { ...prevWeeklyHours, [week]: hours };
+
+    const nextRows = visibleRows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a));
+    const isFilteredLoaded = filteredAssignmentsLoaded.has(personId);
+    if (isFilteredLoaded) {
+      setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+    }
+    setPeople(prev => prev.map(p => p.id === personId
+      ? { ...p, assignments: (p.assignments || []).map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a) }
+      : p
+    ));
+    setAssignmentsData(prev => prev.map(a =>
+      a.id === assignmentId ? { ...a, weeklyHours: updatedWeeklyHours } : a
+    ));
+    if (shouldUseFilteredTotalsDelta(personId)) {
+      const delta = (hours || 0) - (prevWeeklyHours[week] || 0);
+      applyFilteredTotalsDelta(personId, { [week]: delta });
+    } else {
+      updateFilteredTotalsForPerson(personId, nextRows);
+    }
+    try {
+      // Keep unfiltered totals in sync for when filters are cleared.
+      if (person && loadedAssignmentIds.has(personId)) {
+        const total = (person.assignments || []).reduce((sum: number, a: any) => {
+          const wh = a.id === assignmentId ? updatedWeeklyHours : (a.weeklyHours || {});
+          const v = parseFloat((wh?.[week] as any)?.toString?.() || '0') || 0;
+          return sum + v;
+        }, 0);
+        setHoursByPerson(prev => {
+          const next = { ...prev };
+          next[personId] = { ...(next[personId] || {}) };
+          next[personId][week] = total;
+          return next;
+        });
+      }
+    } catch {}
+
+    try {
+      try {
+        await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi);
+      } catch (err: any) {
+        if (err?.status === 412) {
+          await updateAssignment(assignmentId, { weeklyHours: updatedWeeklyHours }, assignmentsApi, { skipIfMatch: true });
+        } else {
+          throw err;
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+      markSaveState('saved', 'Saved', 1200);
+      return true;
+    } catch (err: any) {
+      const revertedRows = visibleRows.map((a) => (a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a));
+      if (isFilteredLoaded) {
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: revertedRows }));
+      }
+      setPeople(prev => prev.map(p => p.id === personId
+        ? { ...p, assignments: (p.assignments || []).map((a: any) => a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a) }
+        : p
+      ));
+      setAssignmentsData(prev => prev.map(a =>
+        a.id === assignmentId ? { ...a, weeklyHours: prevWeeklyHours } : a
+      ));
+      if (shouldUseFilteredTotalsDelta(personId)) {
+        const delta = (prevWeeklyHours[week] || 0) - (hours || 0);
+        applyFilteredTotalsDelta(personId, { [week]: delta });
+      } else {
+        updateFilteredTotalsForPerson(personId, revertedRows);
+      }
+      try {
+        if (person && loadedAssignmentIds.has(personId)) {
+          const total = (person.assignments || []).reduce((sum: number, a: any) => {
+            const wh = a.id === assignmentId ? prevWeeklyHours : (a.weeklyHours || {});
+            const v = parseFloat((wh?.[week] as any)?.toString?.() || '0') || 0;
+            return sum + v;
+          }, 0);
+          setHoursByPerson(prev => {
+            const next = { ...prev };
+            next[personId] = { ...(next[personId] || {}) };
+            next[personId][week] = total;
+            return next;
+          });
+        }
+      } catch {}
+      console.error('Failed to update assignment hours:', err);
+      showToast('Failed to update hours: ' + (err?.message || 'Unknown error'), 'error');
+      markSaveState('error', 'Save failed');
+      lastRetryRef.current = async () => {
+        await updateAssignmentHours(personId, assignmentId, week, hours);
+      };
+      emitToast({
+        type: 'error',
+        message: 'Failed to update hours',
+        action: {
+          label: 'Retry',
+          onClick: async () => {
+            if (!lastRetryRef.current) return;
+            await lastRetryRef.current();
+          },
+        },
+      });
+      return false;
+    }
+  };
+
+  // Helper function to check if a cell is in the selected cells array
+  const isCellSelected = (personId: number, assignmentId: number, week: string) => {
+    return selectedCells.some(cell => 
+      cell.personId === personId && 
+      cell.assignmentId === assignmentId && 
+      cell.week === week
+    );
+  };
+
+  // Update multiple cells at once (for bulk editing)
+  const updateMultipleCells = async (cells: { personId: number, assignmentId: number, week: string }[], hours: number): Promise<boolean> => {
+    const lockedCell = cells.find((cell) => isWeekLockedForPerson(cell.personId, cell.week));
+    if (lockedCell) {
+      showPreHireWeekMessage(lockedCell.personId);
+      markSaveState('error', 'Pre-hire week locked');
+      return false;
+    }
+    markSaveState('saving', 'Saving...');
+    if (!serverFilterActive) {
+      await updateMultipleCellsAction({ assignmentsApi, queryClient, setPeople, setAssignmentsData, setHoursByPerson, hoursByPerson, people, cells, hours, showToast });
+      markSaveState('saved', 'Saved', 1200);
+      return true;
+    }
+
+    const updatesByAssignmentId = new Map<number, { personId: number; assignmentId: number; weeklyHours: Record<string, number>; prevWeeklyHours: Record<string, number>; }>();
+    cells.forEach((cell) => {
+      const rows = filteredAssignmentsByPerson[cell.personId] || [];
+      const assignment = rows.find((a) => a.id === cell.assignmentId);
+      if (!assignment) return;
+      if (!updatesByAssignmentId.has(cell.assignmentId)) {
+        updatesByAssignmentId.set(cell.assignmentId, {
+          personId: cell.personId,
+          assignmentId: cell.assignmentId,
+          weeklyHours: { ...(assignment.weeklyHours || {}) },
+          prevWeeklyHours: { ...(assignment.weeklyHours || {}) },
+        });
+      }
+      const update = updatesByAssignmentId.get(cell.assignmentId);
+      if (update) update.weeklyHours[cell.week] = hours;
+    });
+
+    const updatesArray = Array.from(updatesByAssignmentId.values());
+    if (updatesArray.length === 0) return false;
+
+    const touchedPeople = new Set(updatesArray.map((u) => u.personId));
+    setFilteredAssignmentsByPerson((prev) => {
+      const next = { ...prev };
+      updatesArray.forEach((u) => {
+        const rows = next[u.personId] || [];
+        next[u.personId] = rows.map((a) => (a.id === u.assignmentId ? { ...a, weeklyHours: u.weeklyHours } : a));
+      });
+      return next;
+    });
+    touchedPeople.forEach((pid) => {
+      if (shouldUseFilteredTotalsDelta(pid)) {
+        const deltas: Record<string, number> = {};
+        updatesArray
+          .filter((u) => u.personId === pid)
+          .forEach((u) => {
+            Object.entries(u.weeklyHours || {}).forEach(([wk, val]) => {
+              const nextVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+              const prevVal = parseFloat((u.prevWeeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+              const delta = nextVal - prevVal;
+              if (!delta) return;
+              deltas[wk] = (deltas[wk] || 0) + delta;
+            });
+          });
+        applyFilteredTotalsDelta(pid, deltas);
+      } else {
+        const rows = (filteredAssignmentsByPerson[pid] || []).map((a) => {
+          const u = updatesByAssignmentId.get(a.id!);
+          return u ? { ...a, weeklyHours: u.weeklyHours } : a;
+        });
+        updateFilteredTotalsForPerson(pid, rows);
+      }
+    });
+
+    let results: PromiseSettledResult<any>[] = [];
+    if (updatesArray.length > 1) {
+      try {
+        const bulk = await bulkUpdateAssignmentHours(
+          updatesArray.map((u) => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours })),
+          assignmentsApi
+        );
+        const ok = (bulk?.results || []).map((r: any) => ({ status: 'fulfilled', value: r })) as PromiseSettledResult<any>[];
+        results = ok;
+      } catch (e) {
+        results = updatesArray.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
+      }
+    } else {
+      results = await Promise.allSettled(
+        updatesArray.map(async (u) => {
+          try {
+            return await updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi);
+          } catch (err: any) {
+            if (err?.status === 412) {
+              return await updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi, { skipIfMatch: true });
+            }
+            throw err;
+          }
+        })
+      );
+    }
+
+    const failed = updatesArray.filter((_, idx) => results[idx]?.status === 'rejected');
+    const succeeded = results.some((r) => r.status === 'fulfilled');
+    if (succeeded) {
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+      markSaveState('saved', 'Saved', 1200);
+    }
+    if (failed.length > 0) {
+      setFilteredAssignmentsByPerson((prev) => {
+        const next = { ...prev };
+        failed.forEach((f) => {
+          const rows = next[f.personId] || [];
+          next[f.personId] = rows.map((a) => (a.id === f.assignmentId ? { ...a, weeklyHours: f.prevWeeklyHours } : a));
+        });
+        return next;
+      });
+      failed.forEach((f) => {
+        if (shouldUseFilteredTotalsDelta(f.personId)) {
+          const deltas: Record<string, number> = {};
+          Object.entries(f.prevWeeklyHours || {}).forEach(([wk, val]) => {
+            const prevVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+            const nextVal = parseFloat((updatesByAssignmentId.get(f.assignmentId)?.weeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+            const delta = prevVal - nextVal;
+            if (!delta) return;
+            deltas[wk] = (deltas[wk] || 0) + delta;
+          });
+          applyFilteredTotalsDelta(f.personId, deltas);
+        } else {
+          const rows = (filteredAssignmentsByPerson[f.personId] || []).map((a) => {
+            if (a.id === f.assignmentId) return { ...a, weeklyHours: f.prevWeeklyHours };
+            return a;
+          });
+          updateFilteredTotalsForPerson(f.personId, rows);
+        }
+      });
+      showToast(`Failed to update ${failed.length} assignment${failed.length === 1 ? '' : 's'}.`, 'error');
+      markSaveState('error', 'Some cells failed');
+      lastRetryRef.current = async () => {
+        await updateMultipleCells(cells, hours);
+      };
+      emitToast({
+        type: 'error',
+        message: `Failed to update ${failed.length} cells`,
+        action: {
+          label: 'Retry',
+          onClick: async () => {
+            if (!lastRetryRef.current) return;
+            await lastRetryRef.current();
+          },
+        },
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const copyForwardSelectedRange = useCallback(async () => {
+    if (!selectedCell || selectedCells.length <= 1) return;
+    const sourceHours = getHoursForCell(selectedCell.personId, selectedCell.assignmentId, selectedCell.week);
+    const targets = selectedCells.filter((cell) =>
+      !(cell.personId === selectedCell.personId && cell.assignmentId === selectedCell.assignmentId && cell.week === selectedCell.week),
+    );
+    if (!targets.length) return;
+    markSaveState('saving', 'Copying hours...');
+    try {
+      const saved = await updateMultipleCells(targets, sourceHours);
+      if (!saved) {
+        markSaveState('error', 'Copy forward failed');
+        return;
+      }
+      markSaveState('saved', `Copied ${sourceHours}h forward`, 1600);
+      showToast(`Copied ${sourceHours}h to ${targets.length} cells`, 'success');
+    } catch (error: any) {
+      markSaveState('error', 'Copy forward failed');
+      showToast(error?.message || 'Failed to copy-forward', 'error');
+    }
+  }, [selectedCell, selectedCells, getHoursForCell, updateMultipleCells, markSaveState, showToast]);
+
+  const handlePasteIntoGrid = useCallback(async (rawText: string) => {
+    if (!selectedCell) return false;
+    const raw = (rawText || '').trim();
+    if (!raw) return false;
+    const lines = raw.split(/\r?\n/).filter((line) => line.length > 0);
+    if (!lines.length) return false;
+    const matrix = lines.map((line) => line.split('\t').map((cell) => Number(cell.trim())));
+    if (!matrix.some((row) => row.some((value) => Number.isFinite(value)))) return false;
+
+    // Single-value paste applies to full selection when present.
+    if (matrix.length === 1 && matrix[0].length === 1 && selectedCells.length > 1) {
+      markSaveState('saving', 'Pasting...');
+      try {
+        const saved = await updateMultipleCells(selectedCells, matrix[0][0]);
+        if (!saved) {
+          markSaveState('error', 'Paste failed');
+          return false;
+        }
+        markSaveState('saved', 'Paste applied', 1400);
+        return true;
+      } catch {
+        markSaveState('error', 'Paste failed');
+        return false;
+      }
+    }
+
+    const startRowIndex = rowOrder.indexOf(rowKeyFor(selectedCell.personId, selectedCell.assignmentId));
+    const startWeekIndex = weeks.findIndex((week) => week.date === selectedCell.week);
+    if (startRowIndex < 0 || startWeekIndex < 0) return false;
+
+    const targets: Array<{ personId: number; assignmentId: number; week: string; value: number }> = [];
+    matrix.forEach((row, rIdx) => {
+      row.forEach((value, cIdx) => {
+        if (!Number.isFinite(value)) return;
+        const rowKey = rowOrder[startRowIndex + rIdx];
+        const week = weeks[startWeekIndex + cIdx]?.date;
+        if (!rowKey || !week) return;
+        const [personIdRaw, assignmentIdRaw] = rowKey.split(':');
+        const personId = Number(personIdRaw);
+        const assignmentId = Number(assignmentIdRaw);
+        if (!Number.isFinite(personId) || !Number.isFinite(assignmentId)) return;
+        targets.push({ personId, assignmentId, week, value });
+      });
+    });
+    if (!targets.length) return false;
+
+    markSaveState('saving', 'Pasting...');
+    const byValue = new Map<number, Array<{ personId: number; assignmentId: number; week: string }>>();
+    targets.forEach((target) => {
+      const list = byValue.get(target.value) || [];
+      list.push({ personId: target.personId, assignmentId: target.assignmentId, week: target.week });
+      byValue.set(target.value, list);
+    });
+    try {
+      // Group by value to reuse batched update path.
+      for (const [value, cells] of byValue.entries()) {
+        const saved = await updateMultipleCells(cells, value);
+        if (!saved) {
+          markSaveState('error', 'Paste failed');
+          return false;
+        }
+      }
+      markSaveState('saved', 'Paste applied', 1400);
+      return true;
+    } catch {
+      markSaveState('error', 'Paste failed');
+      return false;
+    }
+  }, [selectedCell, selectedCells, markSaveState, rowOrder, weeks, updateMultipleCells]);
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const rawText = event.clipboardData?.getData('text/plain') || '';
+      if (!rawText) return;
+      event.preventDefault();
+      void handlePasteIntoGrid(rawText);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [handlePasteIntoGrid]);
+
+  usePageShortcuts({
+    bindings: [
+      {
+        id: 'assignments-focus-search',
+        keys: ['/'],
+        description: 'Focus assignments search',
+        action: focusAssignmentsSearch,
+      },
+      {
+        id: 'assignments-escape',
+        keys: ['escape'],
+        description: 'Close assignment overlays',
+        action: () => {
+          setMobileEditTarget(null);
+          addUI.cancel();
+          csClear();
+        },
+      },
+      {
+        id: 'assignments-copy-forward',
+        keys: ['meta+shift+f', 'ctrl+shift+f'],
+        description: 'Copy selected value forward',
+        when: () => selectedCells.length > 1,
+        action: () => { void copyForwardSelectedRange(); },
+      },
+    ],
+  });
+
+  type AutoHoursUpdate = {
+    personId: number;
+    assignmentId: number;
+    weeklyHours: Record<string, number>;
+    prevWeeklyHours: Record<string, number>;
+    weeksTouched: string[];
+  };
+
+  const buildAutoHoursUpdates = useCallback((
+    assignments: Assignment[],
+    person: PersonWithAssignments,
+    mode: 'replace' | 'supplement'
+  ) => {
+    const updates: AutoHoursUpdate[] = [];
+    const skipped = { missingRole: 0, missingSettings: 0, missingDeliverables: 0, missingCapacity: 0 };
+    for (const assignment of assignments || []) {
+      if (!assignment?.id) continue;
+      const roleId = assignment.roleOnProjectId ?? null;
+      if (!roleId) {
+        skipped.missingRole += 1;
+        continue;
+      }
+      const projectId = assignment.project ?? null;
+      const project = projectId ? (projectsById as Map<number, any>).get(projectId) : null;
+      const templateId = project?.autoHoursTemplateId ?? null;
+      const deliverableEntries = projectId ? deliverableWeekEntriesByProject.get(projectId) : null;
+      if (!projectId || !deliverableEntries || deliverableEntries.length === 0) {
+        skipped.missingDeliverables += 1;
+        continue;
+      }
+      const capacity = person.weeklyCapacity ?? assignment.personWeeklyCapacity ?? 0;
+      if (!capacity || capacity <= 0) {
+        skipped.missingCapacity += 1;
+        continue;
+      }
+      const targetWeeks = new Set<string>();
+      const totals = new Map<string, number>();
+      let hasAnySettings = false;
+      deliverableEntries.forEach(({ weekIndex: deliverableIndex, phase }) => {
+        let settings: AutoHoursRoleSetting | undefined;
+        if (templateId) {
+          const allowedPhases = autoHoursTemplatePhaseKeysById.get(templateId);
+          if (allowedPhases && !allowedPhases.has(phase)) {
+            settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+          } else {
+            settings = autoHoursTemplateSettingsByPhaseMap?.[templateId]?.[phase]?.get(roleId);
+          }
+        } else {
+          settings = autoHoursSettingsByPhaseMap?.[phase]?.get(roleId);
+        }
+        if (!settings) {
+          return;
+        }
+        hasAnySettings = true;
+        for (let offset = 0; offset <= AUTO_HOURS_MAX_WEEKS; offset += 1) {
+          const targetIndex = deliverableIndex - offset;
+          if (targetIndex < 0 || targetIndex >= weeks.length) continue;
+          const weekKey = weeks[targetIndex]?.date;
+          if (!weekKey) continue;
+          targetWeeks.add(weekKey);
+          const pct = settings.percentByWeek?.[String(offset)] ?? 0;
+          totals.set(weekKey, (totals.get(weekKey) || 0) + pct);
+        }
+      });
+      if (!hasAnySettings) {
+        skipped.missingSettings += 1;
+        continue;
+      }
+      if (targetWeeks.size === 0) {
+        skipped.missingDeliverables += 1;
+        continue;
+      }
+      const prevWeeklyHours = { ...(assignment.weeklyHours || {}) };
+      const nextWeeklyHours = { ...(assignment.weeklyHours || {}) };
+      const weeksTouched: string[] = [];
+      let changed = false;
+      targetWeeks.forEach((weekKey) => {
+        const pct = clampPercent(totals.get(weekKey) || 0);
+        const hours = roundHours((capacity || 0) * pct / 100);
+        if (mode === 'supplement') {
+          const current = Number(nextWeeklyHours[weekKey] ?? 0) || 0;
+          if (current > 0 || hours <= 0) return;
+          nextWeeklyHours[weekKey] = hours;
+          weeksTouched.push(weekKey);
+          changed = true;
+          return;
+        }
+        const current = Number(nextWeeklyHours[weekKey] ?? 0) || 0;
+        if (current !== hours) changed = true;
+        nextWeeklyHours[weekKey] = hours;
+        weeksTouched.push(weekKey);
+      });
+      if (!changed) continue;
+      updates.push({
+        personId: person.id!,
+        assignmentId: assignment.id!,
+        weeklyHours: nextWeeklyHours,
+        prevWeeklyHours,
+        weeksTouched,
+      });
+    }
+    return { updates, skipped };
+  }, [autoHoursSettingsByPhaseMap, autoHoursTemplatePhaseKeysById, autoHoursTemplateSettingsByPhaseMap, deliverableWeekEntriesByProject, projectsById, weeks]);
+
+  const applyAutoHoursUpdates = async (updates: AutoHoursUpdate[]) => {
+    if (!updates.length) {
+      showToast('No auto hours changes to apply.', 'info');
+      return;
+    }
+    const updatesByAssignmentId = new Map<number, Record<string, number>>();
+    const updatesByPerson = new Map<number, AutoHoursUpdate[]>();
+    const byPersonWeeks = new Map<number, Set<string>>();
+    updates.forEach((u) => {
+      updatesByAssignmentId.set(u.assignmentId, u.weeklyHours);
+      const list = updatesByPerson.get(u.personId) || [];
+      list.push(u);
+      updatesByPerson.set(u.personId, list);
+      const weeksSet = byPersonWeeks.get(u.personId) || new Set<string>();
+      u.weeksTouched.forEach((wk) => weeksSet.add(wk));
+      byPersonWeeks.set(u.personId, weeksSet);
+    });
+
+    setPeople(prev => prev.map((person: any) => {
+      const personUpdates = updatesByPerson.get(person.id) || [];
+      if (personUpdates.length === 0) return person;
+      return {
+        ...person,
+        assignments: person.assignments.map((assignment: any) => {
+          const u = personUpdates.find(x => x.assignmentId === assignment.id);
+          return u ? { ...assignment, weeklyHours: u.weeklyHours } : assignment;
+        }),
+      };
+    }));
+    setAssignmentsData(prev => prev.map((a: any) => {
+      const u = updatesByAssignmentId.get(a.id as number);
+      return u ? { ...a, weeklyHours: u } : a;
+    }));
+    if (serverFilterActive) {
+      const byPerson = new Map<number, AutoHoursUpdate[]>();
+      updates.forEach((u) => {
+        if (!filteredAssignmentsLoaded.has(u.personId)) return;
+        const list = byPerson.get(u.personId) || [];
+        list.push(u);
+        byPerson.set(u.personId, list);
+      });
+      byPerson.forEach((list, personId) => {
+        const rows = filteredAssignmentsByPerson[personId] || [];
+        if (!rows.length) return;
+        const map = new Map<number, AutoHoursUpdate>();
+        list.forEach((u) => map.set(u.assignmentId, u));
+        const nextRows = rows.map((a) => {
+          const u = map.get(a.id as number);
+          return u ? { ...a, weeklyHours: u.weeklyHours } : a;
+        });
+        setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+        if (shouldUseFilteredTotalsDelta(personId)) {
+          const deltas: Record<string, number> = {};
+          list.forEach((u) => {
+            Object.entries(u.weeklyHours || {}).forEach(([wk, val]) => {
+              const nextVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+              const prevVal = parseFloat((u.prevWeeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+              const delta = nextVal - prevVal;
+              if (!delta) return;
+              deltas[wk] = (deltas[wk] || 0) + delta;
+            });
+          });
+          applyFilteredTotalsDelta(personId, deltas);
+        } else {
+          updateFilteredTotalsForPerson(personId, nextRows);
+        }
+      });
+    }
+
+    try {
+      setHoursByPerson(prev => {
+        const next: Record<number, Record<string, number>> = { ...prev };
+        for (const [pid, weeksSet] of byPersonWeeks.entries()) {
+          const person = people.find(p => p.id === pid);
+          if (!person) continue;
+          if (!next[pid]) next[pid] = { ...(prev[pid] || {}) };
+          for (const wk of weeksSet) {
+            const total = (person.assignments || []).reduce((sum: number, a: any) => {
+              const wh = updatesByAssignmentId.get(a.id as number) || a.weeklyHours || {};
+              const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+              return sum + v;
+            }, 0);
+            next[pid][wk] = total;
+          }
+        }
+        return next;
+      });
+    } catch {}
+
+    let results: PromiseSettledResult<any>[] = [];
+    const updatesPayload = updates.map(u => ({ assignmentId: u.assignmentId, weeklyHours: u.weeklyHours }));
+    if (updatesPayload.length > 1) {
+      try {
+        const bulk = await bulkUpdateAssignmentHours(updatesPayload, assignmentsApi);
+        results = (bulk?.results || []).map((r: any) => ({ status: 'fulfilled', value: r })) as PromiseSettledResult<any>[];
+      } catch (e) {
+        results = updatesPayload.map(() => ({ status: 'rejected', reason: e })) as PromiseSettledResult<any>[];
+      }
+    } else {
+      results = await Promise.allSettled(
+        updatesPayload.map(u => updateAssignment(u.assignmentId, { weeklyHours: u.weeklyHours }, assignmentsApi))
+      );
+    }
+
+    const failed: AutoHoursUpdate[] = [];
+    results.forEach((res, idx) => {
+      if (res.status === 'rejected') failed.push(updates[idx]);
+    });
+
+    if (results.some(r => r.status === 'fulfilled')) {
+      queryClient.invalidateQueries({ queryKey: ['capacityHeatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['workloadForecast'] });
+    }
+
+    if (failed.length > 0) {
+      const failedByAssignmentId = new Map<number, AutoHoursUpdate>();
+      const failedByPersonWeeks = new Map<number, Set<string>>();
+      failed.forEach((f) => {
+        failedByAssignmentId.set(f.assignmentId, f);
+        const weeksSet = failedByPersonWeeks.get(f.personId) || new Set<string>();
+        f.weeksTouched.forEach((wk) => weeksSet.add(wk));
+        failedByPersonWeeks.set(f.personId, weeksSet);
+      });
+      setPeople(prev => prev.map((person: any) => {
+        const failedForPerson = failed.filter(f => f.personId === person.id);
+        if (failedForPerson.length === 0) return person;
+        return {
+          ...person,
+          assignments: person.assignments.map((assignment: any) => {
+            const f = failedByAssignmentId.get(assignment.id as number);
+            return f ? { ...assignment, weeklyHours: f.prevWeeklyHours } : assignment;
+          }),
+        };
+      }));
+      setAssignmentsData(prev => prev.map((a: any) => {
+        const f = failedByAssignmentId.get(a.id as number);
+        return f ? { ...a, weeklyHours: f.prevWeeklyHours } : a;
+      }));
+      if (serverFilterActive) {
+        const byPerson = new Map<number, AutoHoursUpdate[]>();
+        failed.forEach((u) => {
+          if (!filteredAssignmentsLoaded.has(u.personId)) return;
+          const list = byPerson.get(u.personId) || [];
+          list.push(u);
+          byPerson.set(u.personId, list);
+        });
+        byPerson.forEach((list, personId) => {
+          const rows = filteredAssignmentsByPerson[personId] || [];
+          if (!rows.length) return;
+          const map = new Map<number, AutoHoursUpdate>();
+          list.forEach((u) => map.set(u.assignmentId, u));
+          const nextRows = rows.map((a) => {
+            const u = map.get(a.id as number);
+            return u ? { ...a, weeklyHours: u.prevWeeklyHours } : a;
+          });
+          setFilteredAssignmentsByPerson((prev) => ({ ...prev, [personId]: nextRows }));
+          if (shouldUseFilteredTotalsDelta(personId)) {
+            const deltas: Record<string, number> = {};
+            list.forEach((u) => {
+              Object.entries(u.prevWeeklyHours || {}).forEach(([wk, val]) => {
+                const prevVal = parseFloat((val as any)?.toString?.() || '0') || 0;
+                const nextVal = parseFloat((u.weeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+                const delta = prevVal - nextVal;
+                if (!delta) return;
+                deltas[wk] = (deltas[wk] || 0) + delta;
+              });
+            });
+            applyFilteredTotalsDelta(personId, deltas);
+          } else {
+            updateFilteredTotalsForPerson(personId, nextRows);
+          }
+        });
+      }
+      try {
+        setHoursByPerson(prev => {
+          const next: Record<number, Record<string, number>> = { ...prev };
+          for (const [pid, weeksSet] of failedByPersonWeeks.entries()) {
+            const person = people.find(p => p.id === pid);
+            if (!person) continue;
+            if (!next[pid]) next[pid] = { ...(prev[pid] || {}) };
+            for (const wk of weeksSet) {
+              const total = (person.assignments || []).reduce((sum: number, a: any) => {
+                const failedEntry = failedByAssignmentId.get(a.id as number);
+                if (failedEntry) {
+                  const v = parseFloat((failedEntry.prevWeeklyHours?.[wk] as any)?.toString?.() || '0') || 0;
+                  return sum + v;
+                }
+                const updated = updatesByAssignmentId.get(a.id as number);
+                const wh = updated || a.weeklyHours || {};
+                const v = parseFloat((wh?.[wk] as any)?.toString?.() || '0') || 0;
+                return sum + v;
+              }, 0);
+              next[pid][wk] = total;
+            }
+          }
+          return next;
+        });
+      } catch {}
+      showToast(`Failed to update ${failed.length} assignment(s). Changes were reverted for those.`, 'error');
+    } else {
+      showToast(`Auto hours applied to ${updates.length} assignment${updates.length === 1 ? '' : 's'}.`, 'success');
+    }
+  };
+
+  const describeAutoHoursSkip = (skipped: { missingRole: number; missingSettings: number; missingDeliverables: number; missingCapacity: number }) => {
+    const reasons: string[] = [];
+    if (skipped.missingRole) reasons.push('missing project role');
+    if (skipped.missingSettings) reasons.push('missing presets');
+    if (skipped.missingDeliverables) reasons.push('no deliverables in range');
+    if (skipped.missingCapacity) reasons.push('missing capacity');
+    return reasons.length ? `No auto hours changes to apply (${reasons.join(', ')}).` : 'No auto hours changes to apply.';
+  };
+
+  const applyAutoHoursForPerson = async (person: PersonWithAssignments, mode: 'replace' | 'supplement') => {
+    if (!canUseAutoHours) {
+      showToast('Auto hours actions are restricted to admins and managers.', 'warning');
+      return;
+    }
+    if (phaseMappingError) {
+      showToast(phaseMappingError, 'warning');
+    }
+    if (autoHoursSettingsLoading) {
+      showToast('Auto hours settings are still loading.', 'info');
+      return;
+    }
+    if (autoHoursSettingsError) {
+      showToast(autoHoursSettingsError, 'error');
+      return;
+    }
+    if (mode === 'replace') {
+      const confirmed = await confirmAction({
+        title: 'Replace Auto Hours',
+        message: 'This will replace hours based on auto hours presets and may overwrite existing hours. Continue?',
+        confirmLabel: 'Replace',
+        tone: 'warning',
+      });
+      if (!confirmed) return;
+    }
+    const assignments = await ensureAssignmentsLoaded(person.id!, { mode: 'full' });
+    if (!assignments || assignments.length === 0) {
+      showToast('No assignments found for this person.', 'info');
+      return;
+    }
+    const templateIds = assignments
+      .map(a => {
+        const project = a.project ? (projectsById as Map<number, any>).get(a.project) : null;
+        return project?.autoHoursTemplateId ?? null;
+      })
+      .filter((id): id is number => typeof id === 'number');
+    await ensureTemplateSettings(templateIds);
+    const { updates, skipped } = buildAutoHoursUpdates(assignments, person, mode);
+    if (updates.length === 0) {
+      showToast(describeAutoHoursSkip(skipped), 'info');
+      return;
+    }
+    await applyAutoHoursUpdates(updates);
+  };
+
+  const applyAutoHoursForAssignment = async (
+    assignment: Assignment,
+    personId: number,
+    mode: 'replace' | 'supplement'
+  ) => {
+    if (!canUseAutoHours) {
+      showToast('Auto hours actions are restricted to admins and managers.', 'warning');
+      return;
+    }
+    if (phaseMappingError) {
+      showToast(phaseMappingError, 'warning');
+    }
+    if (autoHoursSettingsLoading) {
+      showToast('Auto hours settings are still loading.', 'info');
+      return;
+    }
+    if (autoHoursSettingsError) {
+      showToast(autoHoursSettingsError, 'error');
+      return;
+    }
+    if (mode === 'replace') {
+      const confirmed = await confirmAction({
+        title: 'Replace Auto Hours',
+        message: 'This will replace hours based on auto hours presets and may overwrite existing hours. Continue?',
+        confirmLabel: 'Replace',
+        tone: 'warning',
+      });
+      if (!confirmed) return;
+    }
+    const person = people.find(p => p.id === personId);
+    if (!person) return;
+    const project = assignment.project ? (projectsById as Map<number, any>).get(assignment.project) : null;
+    const templateId = project?.autoHoursTemplateId ?? null;
+    if (templateId) {
+      await ensureTemplateSettings([templateId]);
+    }
+    const { updates, skipped } = buildAutoHoursUpdates([assignment], person, mode);
+    if (updates.length === 0) {
+      showToast(describeAutoHoursSkip(skipped), 'info');
+      return;
+    }
+    await applyAutoHoursUpdates(updates);
+  };
+
+  const { data: schemeData } = useUtilizationScheme({ enabled: false });
+  const scheme = schemeData ?? defaultUtilizationScheme;
+  const searchTooltip = (
+    <>
+      <p>Press Enter to add a filter token. Use OR / AND / NOT to combine filters.</p>
+      <p className="mt-1">Workload filters: available, optimal, full, overallocated, &lt;30, &gt;14, 10-20.</p>
+    </>
+  );
+  const searchBar = (
+    <div className={`relative group ${isMobileLayout ? 'w-full min-w-0' : 'w-[320px] min-w-[220px] max-w-[34vw] shrink-0'}`}>
+      <WorkPlanningSearchBar
+        id="assignments-search"
+        label="Search assignments"
+        tokens={searchTokens}
+        activeTokenId={activeTokenId}
+        searchOp={searchOp}
+        searchInput={searchInput}
+        onInputChange={setSearchInput}
+        onInputKeyDown={handleSearchKeyDown}
+        onTokenSelect={setActiveTokenId}
+        onTokenRemove={removeSearchToken}
+        onSearchOpChange={handleSearchOpChange}
+        placeholder="Search"
+        tokenLayout="scroll"
+        tooltip={searchTooltip}
+        hint={workloadHintVisible ? "Couldn't parse workload filter; using text search." : null}
+      />
+    </div>
+  );
+
+  const topBarHeader = (
+    <div className="flex items-center gap-1 min-w-0 w-full">
+      {searchBar}
+      <WeeksHorizonField value={weeksHorizon} onChange={setWeeksHorizon} />
+      <HeaderActions
+        onExpandAll={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+        onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+        onRefreshAll={refreshAllAssignments}
+        disabled={loading || (loadingAssignments.size > 0)}
+        compact={useAbbrevHeaderLabels}
+        compactLabels={{ expandAll: 'EA', collapseAll: 'CA', refreshAll: 'RE' }}
+      />
+      <AssignmentsFilterMenu
+        statusOptions={statusFilterOptions as unknown as readonly string[]}
+        selectedStatuses={selectedStatusFilters as unknown as Set<string>}
+        formatStatus={(status) => formatFilterStatus(status as any)}
+        onToggleStatus={(status) => toggleStatusFilter(status as any)}
+        buttonLabel="Filter"
+        buttonTitle="Filter assignments"
+      />
+      <a
+        href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
+        className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+        title="Project View"
+      >
+        {useAbbrevHeaderLabels ? 'PV' : 'Project View'}
+      </a>
+      <DeliverableLegendFloating
+        buttonLabel={useAbbrevHeaderLabels ? 'LG' : 'Legend'}
+        buttonTitle="Deliverable Types"
+      />
+      {selectedCells.length > 0 ? (
+        <div className="h-10 shrink-0 inline-flex items-center gap-2 px-2 rounded border border-[var(--border)] bg-[var(--surface)]">
+          <span className="text-xs text-[var(--muted)] whitespace-nowrap">{selectedCells.length} selected • {selectedHoursLabel}h</span>
+          <button
+            type="button"
+            className="h-8 px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            onClick={() => { void copyForwardSelectedRange(); }}
+            disabled={selectedCells.length < 2}
+          >
+            Copy Forward
+          </button>
+          <button
+            type="button"
+            className="h-8 px-2 rounded border border-red-500/40 text-xs text-red-200 hover:bg-red-500/10"
+            onClick={csClear}
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
+      {saveState !== 'idle' ? (
+        <div className="shrink-0">
+          <SaveStateBadge
+            state={saveState}
+            message={saveStateMessage}
+            onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const leftTopBarContent = compact && !isMobileLayout ? (
+    <TopBarPortal side="left">
+      <div className="text-base font-semibold text-[var(--text)] leading-tight whitespace-nowrap">Assignments</div>
+    </TopBarPortal>
+  ) : null;
+
+  if (loading) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          {leftTopBarContent}
+          {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
+          <PageState isLoading skeleton={<AssignmentsSkeleton />} />
+        </Layout>
+      );
+    }
+    return (
+      <Layout>
+        {leftTopBarContent}
+        {compact && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
+        <AssignmentsSkeleton />
+      </Layout>
+    );
+  }
+
+  if (error) {
+    if (pageStateEnabled) {
+      return (
+        <Layout>
+          <PageState error={error} onRetry={() => { void refreshAllAssignments(); }} />
+        </Layout>
+      );
+    }
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-400">{error}</div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const mobileToolbar = (
+    <div className="md:hidden sticky top-0 z-30 bg-[var(--bg)] border border-[var(--border)] rounded-lg shadow-sm px-3 py-2 space-y-2">
+      <div className="flex items-center justify-between gap-1">
+        <div className="min-w-0 flex-1 text-sm font-semibold text-[var(--text)]">Assignments</div>
+        <SaveStateBadge
+          state={saveState}
+          message={saveStateMessage}
+          onRetry={lastRetryRef.current ? () => { void lastRetryRef.current?.(); } : undefined}
+        />
+        <button
+          type="button"
+          className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+          onClick={refreshAllAssignments}
+          disabled={loading || loadingAssignments.size > 0}
+        >
+          Refresh
+        </button>
+        <WeeksHorizonField value={weeksHorizon} onChange={setWeeksHorizon} className="h-8 px-2" />
+        <AssignmentsFilterMenu
+          statusOptions={statusFilterOptions as unknown as readonly string[]}
+          selectedStatuses={selectedStatusFilters as unknown as Set<string>}
+          formatStatus={(status) => formatFilterStatus(status as any)}
+          onToggleStatus={(status) => toggleStatusFilter(status as any)}
+          buttonLabel="Filter"
+          buttonTitle="Filter assignments"
+          align="left"
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[200px]">
+          <WorkPlanningSearchBar
+            id="assignments-search-mobile"
+            label="Search assignments"
+            tokens={searchTokens}
+            activeTokenId={activeTokenId}
+            searchOp={searchOp}
+            searchInput={searchInput}
+            onInputChange={setSearchInput}
+            onInputKeyDown={handleSearchKeyDown}
+            onTokenSelect={setActiveTokenId}
+            onTokenRemove={removeSearchToken}
+            onSearchOpChange={handleSearchOpChange}
+            placeholder={searchTokens.length ? 'Add filter...' : 'Search (Enter)'}
+            compact
+            tokenLayout="wrap"
+            hint={workloadHintVisible ? "Couldn't parse workload filter; using text search." : null}
+          />
+        </div>
+      </div>
+      {!canEditAssignments && (
+        <div className="text-xs text-[var(--muted)]">Editing disabled for your role. You can still view assignments.</div>
+      )}
+    </div>
+  );
+
+  return (
+    <Layout>
+      {leftTopBarContent}
+      {compact && !isMobileLayout && (<TopBarPortal side="right">{topBarHeader}</TopBarPortal>)}
+      {isMobileLayout ? (
+        <div className="flex-1 flex flex-col min-w-0 px-4 py-4 space-y-4">
+          {mobileToolbar}
+          <MobilePersonAccordions
+            people={visiblePeopleWithAssignments as any}
+            weeks={weeks}
+            hoursByPerson={hoursByPersonView}
+            assignmentCountByPerson={serverFilterActive ? (searchMeta?.assignmentCountsByPerson || {}) : {}}
+            hasMoreAssignmentsByPerson={serverFilterActive ? mobileHasMoreAssignmentsByPerson : {}}
+            loadingMoreByPerson={serverFilterActive ? mobileLoadingMoreByPerson : new Set()}
+            onLoadMoreAssignments={(pid) => { void loadMoreFilteredAssignmentsForPerson(pid); }}
+            onExpand={(pid) => ensureAssignmentsLoaded(pid)}
+            onAssignmentPress={handleMobileAssignmentPress}
+            onRemoveAssignment={(pid, aid) => { void removeAssignment(aid, pid); }}
+            canEditAssignments={canEditAssignments}
+            onAddAssignment={(pid) => addUI.open(pid)}
+            activeAddPersonId={addUI.isAddingFor}
+            scheme={scheme}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col min-w-0">
+          {!compact && (
+            <HeaderBarComp
+              headerRef={headerRef}
+              title="Assignment Grid"
+              weeksCount={weeks.length}
+              isSnapshotMode={isSnapshotMode}
+              weeksHorizon={weeksHorizon}
+              setWeeksHorizon={setWeeksHorizon}
+              projectViewHref={(function(){ const s=selectedStatusFilters; const statusStr = (s.size===0 || s.has('Show All')) ? '' : `&status=${encodeURIComponent(Array.from(s).join(','))}`; return `/project-assignments?view=project&weeks=${weeksHorizon}${statusStr}`; })()}
+              peopleCount={visiblePeople.length}
+              assignmentsCount={visibleAssignmentsCount}
+              asyncJobId={asyncJob.id}
+              asyncProgress={asyncJob.progress}
+              asyncMessage={asyncJob.message}
+              loading={loading}
+              loadingAssignmentsInProgress={loadingAssignments.size > 0}
+              onExpandAllAndRefresh={async () => { try { setPeople(prev => prev.map(p => ({...p,isExpanded:true}))); await refreshAllAssignments(); } catch {} }}
+              onCollapseAll={() => setPeople(prev => prev.map(p => ({...p,isExpanded:false})))}
+              onRefreshAll={refreshAllAssignments}
+              statusFilterOptions={statusFilterOptions as unknown as readonly string[]}
+              selectedStatusFilters={selectedStatusFilters as unknown as Set<string>}
+              formatFilterStatus={(status) => formatFilterStatus(status as any)}
+              toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
+              departmentsOverride={departments}
+              searchBar={searchBar}
+            />
+          )}
+          <WeekHeaderComp
+            top={compact ? 0 : headerHeight}
+            minWidth={totalMinWidth}
+            gridTemplate={gridTemplate}
+            weeks={isMobileLayout ? mobileWeeks : weeks}
+            onStartResize={startColumnResize}
+            scrollRef={headerScrollRef}
+            onScroll={handleHeaderScroll}
+            onClientClick={() => setPersonSortMode('client_project')}
+            onWeeksClick={() => setPersonSortMode('deliverable')}
+            virtualPaddingLeft={isMobileLayout ? weekPaddingLeft : 0}
+            virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
+            showAutoHoursHeader={canUseAutoHours}
+          />
+          <div
+            className={`flex-1 overflow-x-auto bg-[var(--bg)] scrollbar-theme ${isMobileLayout ? 'snap-x snap-mandatory' : ''}`}
+            ref={bodyScrollRef}
+            onScroll={handleBodyScroll}
+          >
+            <div style={{ minWidth: totalMinWidth }}>
+              <div>
+                <PeopleSection
+                  people={visiblePeopleWithAssignments as any}
+                  weeks={isMobileLayout ? mobileWeeks : weeks}
+                  gridTemplate={gridTemplate}
+                  loadingAssignments={loadingAssignments}
+                  projectsById={projectsById as any}
+                  togglePersonExpanded={(pid) => togglePersonExpanded(pid)}
+                  addAssignment={addAssignment}
+                  removeAssignment={(assignmentId, personId) => removeAssignment(assignmentId, personId)}
+                  onCellSelect={handleCellSelection}
+                  onCellMouseDown={handleCellMouseDown}
+                  onCellMouseEnter={handleCellMouseEnter}
+                  editingCell={editingCell}
+                  onEditStart={handleEditStart}
+                  onEditSave={saveEdit}
+                  onEditCancel={cancelEdit}
+                  editingValue={editingValue}
+                  onEditValueChange={setEditingValue}
+                  selectedCell={selectedCell}
+                  selectedCells={selectedCells}
+                  getDeliverablesForProjectWeek={getDeliverablesForProjectWeek}
+                  getProjectStatus={getProjectStatus}
+                  statusDropdown={statusDropdown}
+                  projectStatus={projectStatus}
+                  onStatusChange={handleStatusChange}
+                  onAssignmentRoleChange={handleAssignmentRoleChange}
+                  virtualPaddingLeft={isMobileLayout ? weekPaddingLeft : 0}
+                  virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
+                  renderAddAction={(person) => (
+                    <button
+                      className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      title="Add new assignment"
+                      onClick={() => { addUI.open(person.id!); }}
+                    >
+                      +
+                    </button>
+                  )}
+                  renderAutoHoursAction={(person) => (
+                    canUseAutoHours ? (
+                      <AutoHoursActionButtons
+                        onReplace={() => void applyAutoHoursForPerson(person as any, 'replace')}
+                        onSupplement={() => void applyAutoHoursForPerson(person as any, 'supplement')}
+                      />
+                    ) : null
+                  )}
+                  renderAddRow={(person) => (
+                    <AddAssignmentRow
+                      personId={person.id!}
+                      weeks={isMobileLayout ? mobileWeeks : weeks}
+                      gridTemplate={gridTemplate}
+                      newProjectName={addUI.newProjectName}
+                      onSearchChange={addUI.onSearchChange}
+                      projectSearchResults={addUI.projectSearchResults}
+                      selectedDropdownIndex={addUI.selectedDropdownIndex}
+                      setSelectedDropdownIndex={addUI.setSelectedDropdownIndex}
+                      showProjectDropdown={addUI.showProjectDropdown}
+                      setShowProjectDropdown={addUI.setShowProjectDropdown}
+                      selectedProject={addUI.selectedProject}
+                      onProjectSelect={addUI.onProjectSelect}
+                      onAddProject={(proj) => addUI.addProject(person.id!, proj)}
+                      onAddSelected={() => addUI.addSelected(person.id!)}
+                      onCancel={addUI.cancel}
+                    />
+                  )}
+                  showAddRow={(person) => person.isExpanded && addUI.isAddingFor === person.id}
+                  renderWeekTotals={(p, week) => {
+                    const totalHours = getPersonTotalHours(p as any, week.date);
+                    const pill = getUtilizationPill({ hours: totalHours, capacity: (p as any).weeklyCapacity!, scheme, output: 'classes' });
+                    const aria = totalHours > 0 ? `${totalHours} hours` : '0 hours';
+                    return (
+                      <div className={`inline-flex items-center justify-center h-6 px-2 leading-none rounded-full text-xs font-medium min-w-[40px] text-center ${pill.classes}`} aria-label={aria}>
+                        {pill.label}
+                      </div>
+                    );
+                  }}
+                  onAutoHoursReplaceAssignment={canUseAutoHours ? ((assignment, personId) => void applyAutoHoursForAssignment(assignment, personId, 'replace')) : undefined}
+                  onAutoHoursSupplementAssignment={canUseAutoHours ? ((assignment, personId) => void applyAutoHoursForAssignment(assignment, personId, 'supplement')) : undefined}
+                  />
+              </div>
+              {(() => {
+                const s = scheme;
+                const labels = s.mode === 'absolute_hours'
+                  ? {
+                      blue: `${s.blue_min}-${s.blue_max}h`,
+                      green: `${s.green_min}-${s.green_max}h`,
+                      orange: `${s.orange_min}-${s.orange_max}h`,
+                      red: `${s.red_min}h+`,
+                    }
+                  : {
+                      blue: '<=70%',
+                      green: '70-85%',
+                      orange: '85-100%',
+                      red: '>100%',
+                    } as const;
+                return <StatusBar labels={labels} selectionSummary={selectionSummary} />;
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+      {isMobileLayout ? (
+        <MobileAddAssignmentSheet addController={addUI} people={people as any} canEditAssignments={canEditAssignments} />
+      ) : null}
+      <MobileAssignmentSheet
+        target={mobileEditTarget}
+        people={people as any}
+        assignmentsByPerson={serverFilterActive ? filteredAssignmentsByPerson : undefined}
+        weeks={weeks}
+        onClose={() => setMobileEditTarget(null)}
+        onSaveHours={async (personId, assignmentId, week, hours) => {
+          await updateAssignmentHours(personId, assignmentId, week, hours);
+        }}
+        onRoleChange={handleAssignmentRoleChange}
+        loadingAssignments={loadingAssignments}
+        canEditAssignments={canEditAssignments}
+      />
+      {!queueToastsEnabled && toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
+        />
+      )}
+    </Layout>
+  );
+};
+
+export default AssignmentGrid;
+
+
+
+
+
+
+
+
+import { removeAssignmentAction, updateAssignmentHoursAction, updateMultipleCellsAction } from '@/pages/Assignments/grid/assignmentActions';

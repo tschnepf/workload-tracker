@@ -1,16 +1,18 @@
 import React from 'react';
+import WorkPlanningSearchBar from '@/features/work-planning/search/WorkPlanningSearchBar';
+import type { WorkPlanningSearchOp, WorkPlanningSearchToken } from '@/features/work-planning/search/useWorkPlanningSearchTokens';
 
 interface Props {
   statusOptions: readonly string[];
   selectedStatusFilters: Set<string>;
   onToggleStatus: (status: string) => void;
-  searchTokens: Array<{ id: string; term: string; op: 'or' | 'and' | 'not' }>;
+  searchTokens: WorkPlanningSearchToken[];
   searchInput: string;
-  searchOp: 'or' | 'and' | 'not';
+  searchOp: WorkPlanningSearchOp;
   activeTokenId: string | null;
   onSearchInput: (value: string) => void;
   onSearchKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-  onSearchOpChange: (op: 'or' | 'and' | 'not') => void;
+  onSearchOpChange: (op: WorkPlanningSearchOp) => void;
   onSelectToken: (id: string | null) => void;
   onRemoveToken: (id: string) => void;
   formatFilterStatus: (status: string) => string;
@@ -41,8 +43,6 @@ const FiltersBar: React.FC<Props> = ({
   rightSlot,
   compact = false,
 }) => {
-  const activeToken = activeTokenId ? (searchTokens.find((token) => token.id === activeTokenId) || null) : null;
-
   return (
     <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
       <div>
@@ -71,72 +71,22 @@ const FiltersBar: React.FC<Props> = ({
 
       <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
         <div className="flex-1 min-w-0">
-          <label className="sr-only" htmlFor="projects-search">Search projects</label>
-          <div className={`flex items-stretch bg-[var(--card)] border border-[var(--border)] ${compact ? 'rounded' : 'rounded-md'} overflow-hidden`}>
-            <div className={`flex items-center border-r border-[var(--border)] bg-[var(--surface)] ${compact ? 'px-1.5' : 'px-2'}`}>
-              <select
-                className={`bg-transparent uppercase tracking-wide text-[var(--muted)] focus:outline-none ${compact ? 'text-[10px]' : 'text-[11px]'}`}
-                value={activeToken?.op ?? searchOp}
-                onChange={(e) => onSearchOpChange(e.target.value as 'or' | 'and' | 'not')}
-                aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
-              >
-                <option value="or">OR</option>
-                <option value="and">AND</option>
-                <option value="not">NOT</option>
-              </select>
-            </div>
-            <div className={`flex flex-wrap items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} flex-1 min-w-0`}>
-              {searchTokens.map((token) => {
-                const isActive = token.id === activeTokenId;
-                return (
-                  <div
-                    key={token.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onSelectToken(token.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onSelectToken(token.id);
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1 ${compact ? 'px-1.5 py-0' : 'px-2 py-0.5'} rounded-full border text-[11px] ${
-                      isActive
-                        ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
-                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
-                    }`}
-                    title={`${token.op.toUpperCase()} ${token.term}`}
-                  >
-                    <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
-                    <span className="max-w-[140px] truncate text-[var(--text)]">{token.term}</span>
-                    <button
-                      type="button"
-                      className="ml-0.5 text-[var(--muted)] hover:text-[var(--text)]"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveToken(token.id);
-                      }}
-                      aria-label={`Remove ${token.term}`}
-                    >
-                      x
-                    </button>
-                  </div>
-                );
-              })}
-              <input
-                id="projects-search"
-                type="text"
-                value={searchInput}
-                onChange={(e) => {
-                  onSearchInput(e.target.value);
-                  onSelectToken(null);
-                }}
-                onKeyDown={onSearchKeyDown}
-                placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client, name, or number (Enter)'}
-                className={`flex-1 ${compact ? 'min-w-[120px]' : 'min-w-[160px]'} px-1 py-0.5 ${compact ? 'text-xs' : 'text-sm'} bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none`}
-              />
-            </div>
-          </div>
+          <WorkPlanningSearchBar
+            id="projects-search"
+            label="Search projects"
+            tokens={searchTokens}
+            activeTokenId={activeTokenId}
+            searchOp={searchOp}
+            searchInput={searchInput}
+            onInputChange={onSearchInput}
+            onInputKeyDown={onSearchKeyDown}
+            onTokenSelect={onSelectToken}
+            onTokenRemove={onRemoveToken}
+            onSearchOpChange={onSearchOpChange}
+            placeholder={searchTokens.length ? 'Add another filter...' : 'Search projects by client, name, or number (Enter)'}
+            compact={compact}
+            tokenLayout="wrap"
+          />
         </div>
         {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
       </div>

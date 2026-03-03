@@ -100,7 +100,7 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Status</div>
-              <div className="max-h-[220px] overflow-y-auto space-y-1 pr-1 scrollbar-theme">
+              <div className="max-h-[420px] overflow-y-auto space-y-1 pr-1 scrollbar-theme">
                 {statusOptions.map((status) => {
                   const isActive = status === 'Show All' ? showAllActive : selectedStatuses.has(status);
                   const label = formatStatus(status);

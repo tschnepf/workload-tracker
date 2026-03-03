@@ -17,7 +17,7 @@ const PersonGroupHeader: React.FC<PersonGroupHeaderProps> = ({ person, matchReas
   <div className="col-span-2 flex items-center">
     <button
       onClick={onToggle}
-      className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left hover:bg-[var(--surfaceHover)] transition-all duration-200 rounded-sm"
+      className="flex items-center gap-2 pl-3 pr-2 py-1 w-full text-left transition-colors duration-200 rounded-sm"
     >
       <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-[var(--muted)]">
         <svg width="12" height="12" viewBox="0 0 12 12" className={`transition-transform duration-200 ${person.isExpanded ? 'rotate-90' : 'rotate-0'}`}>

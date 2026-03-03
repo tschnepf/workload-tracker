@@ -22,10 +22,11 @@ describe('updateAssignmentRoleAction', () => {
     const assignmentsApi = { update: vi.fn().mockResolvedValue({}) };
     const showToast = vi.fn();
 
-    await updateAssignmentRoleAction({
+    const result = await updateAssignmentRoleAction({
       assignmentsApi,
       setPeople: makeSetState(peopleHolder),
       setAssignmentsData: makeSetState(asnHolder as any),
+      assignmentsData: asnHolder.value as any,
       people: peopleHolder.value,
       personId: 10,
       assignmentId: 100,
@@ -34,6 +35,7 @@ describe('updateAssignmentRoleAction', () => {
       showToast,
     });
 
+    expect(result).toBe(true);
     expect(assignmentsApi.update).toHaveBeenCalledWith(100, { roleOnProjectId: 5 }, undefined);
     expect(peopleHolder.value[0].assignments[0].roleOnProjectId).toBe(5);
     expect(peopleHolder.value[0].assignments[0].roleName).toBe('Engineer');
@@ -52,10 +54,11 @@ describe('updateAssignmentRoleAction', () => {
     const assignmentsApi = { update: vi.fn().mockRejectedValue(new Error('nope')) };
     const showToast = vi.fn();
 
-    await updateAssignmentRoleAction({
+    const result = await updateAssignmentRoleAction({
       assignmentsApi,
       setPeople: makeSetState(peopleHolder),
       setAssignmentsData: makeSetState(asnHolder as any),
+      assignmentsData: asnHolder.value as any,
       people: peopleHolder.value,
       personId: 10,
       assignmentId: 100,
@@ -64,11 +67,42 @@ describe('updateAssignmentRoleAction', () => {
       showToast,
     });
 
+    expect(result).toBe(false);
     // Rolled back
     expect(peopleHolder.value[0].assignments[0].roleOnProjectId).toBe(null);
     expect(peopleHolder.value[0].assignments[0].roleName).toBe(null);
     expect(asnHolder.value[0].roleOnProjectId).toBe(null);
     expect(asnHolder.value[0].roleName).toBe(null);
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Failed to update role'), 'error');
+  });
+
+  it('persists when assignment exists only in assignmentsData (project assignments view shape)', async () => {
+    const peopleHolder = {
+      value: [
+        { id: 10, name: 'Alice' },
+      ],
+    } as { value: any[] };
+    const asnHolder = { value: [{ id: 100, weeklyHours: {}, person: 10, roleOnProjectId: null, roleName: null }] } as { value: any[] };
+    const assignmentsApi = { update: vi.fn().mockResolvedValue({}) };
+    const showToast = vi.fn();
+
+    const result = await updateAssignmentRoleAction({
+      assignmentsApi,
+      setPeople: makeSetState(peopleHolder),
+      setAssignmentsData: makeSetState(asnHolder as any),
+      assignmentsData: asnHolder.value as any,
+      people: peopleHolder.value,
+      personId: 10,
+      assignmentId: 100,
+      roleId: 9,
+      roleName: 'Architect',
+      showToast,
+    });
+
+    expect(result).toBe(true);
+    expect(assignmentsApi.update).toHaveBeenCalledWith(100, { roleOnProjectId: 9 }, undefined);
+    expect(asnHolder.value[0].roleOnProjectId).toBe(9);
+    expect(asnHolder.value[0].roleName).toBe('Architect');
+    expect(showToast).not.toHaveBeenCalled();
   });
 });

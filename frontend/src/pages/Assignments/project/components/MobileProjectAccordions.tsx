@@ -1,6 +1,8 @@
 import React from 'react';
+import { Link } from 'react-router';
 import type { Assignment, Project } from '@/types/models';
 import type { WeekHeader } from '@/pages/Assignments/grid/utils';
+import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 
 type ProjectWithAssignments = Project & { assignments?: Assignment[]; isExpanded?: boolean };
 
@@ -33,6 +35,7 @@ const MobileProjectAccordions: React.FC<Props> = ({
   onLoadMoreAssignments,
   canEditAssignments = true,
 }) => {
+  const { open: openProjectDetails } = useProjectDetailsDrawer();
   const [expanded, setExpanded] = React.useState<number | null>(null);
   const sparkWeeks = React.useMemo(() => weeks.slice(0, MAX_WEEKS_IN_SPARK), [weeks]);
 
@@ -53,32 +56,57 @@ const MobileProjectAccordions: React.FC<Props> = ({
         const isLoadingMore = loadingMoreByProject?.has(project.id!) ?? false;
         return (
           <div key={project.id} className="bg-[var(--card)] border border-[var(--border)] rounded-lg overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between px-4 py-3"
-              onClick={() => toggle(project.id!)}
-              aria-expanded={isOpen}
-            >
-              <div className="text-left">
-                <div className="text-base font-semibold text-[var(--text)]">{project.name}</div>
-                {project.client ? (
-                  <div className="text-xs text-[var(--muted)]">{project.client}</div>
-                ) : null}
-              </div>
-              <div className="flex items-end gap-1">
-                {weekTotals.map((value, idx) => {
-                  const height = Math.max(6, Math.round((value / maxHour) * 36));
-                  return (
-                    <div
-                      key={`${project.id}-spark-${idx}`}
-                      className="w-2 rounded-full transition-all bg-[var(--primary)]"
-                      style={{ height }}
-                      title={`${sparkWeeks[idx]?.display || ''}: ${value}h`}
-                    />
-                  );
-                })}
-              </div>
-            </button>
+            <div className="flex items-center gap-2 px-4 py-3">
+              <button
+                type="button"
+                className="flex-1 min-w-0 flex items-center justify-between"
+                onClick={() => toggle(project.id!)}
+                aria-expanded={isOpen}
+              >
+                <div className="text-left min-w-0">
+                  <div className="text-base font-semibold text-[var(--text)] truncate">{project.name}</div>
+                  {project.client ? (
+                    <div className="text-xs text-[var(--muted)] truncate">{project.client}</div>
+                  ) : null}
+                </div>
+                <div className="flex items-end gap-1 pl-2">
+                  {weekTotals.map((value, idx) => {
+                    const height = Math.max(6, Math.round((value / maxHour) * 36));
+                    return (
+                      <div
+                        key={`${project.id}-spark-${idx}`}
+                        className="w-2 rounded-full transition-all bg-[var(--primary)]"
+                        style={{ height }}
+                        title={`${sparkWeeks[idx]?.display || ''}: ${value}h`}
+                      />
+                    );
+                  })}
+                </div>
+              </button>
+              <button
+                type="button"
+                className="shrink-0 inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+                onClick={() => openProjectDetails(project.id!)}
+                aria-label="Open project details"
+                title="Open project details"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
+                </svg>
+              </button>
+              <Link
+                to={`/projects/${project.id}/dashboard`}
+                className="shrink-0 inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+                aria-label="Open project dashboard"
+                title="Open project dashboard"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+                  <rect x="3" y="4" width="7" height="7" rx="1.2" />
+                  <rect x="14" y="4" width="7" height="7" rx="1.2" />
+                  <rect x="3" y="15" width="18" height="5" rx="1.2" />
+                </svg>
+              </Link>
+            </div>
             {isOpen ? (
               <div className="px-4 pb-4 space-y-3 text-sm text-[var(--text)]">
                 {assignments.length === 0 ? (

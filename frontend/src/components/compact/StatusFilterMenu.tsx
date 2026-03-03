@@ -97,7 +97,7 @@ const StatusFilterMenu: React.FC<Props> = ({
           aria-label="Project status filters"
         >
           <div className="text-[11px] uppercase tracking-wide text-[var(--muted)] mb-1">Status</div>
-          <div className="max-h-[260px] overflow-y-auto space-y-1 pr-1 scrollbar-theme">
+          <div className="max-h-[420px] overflow-y-auto space-y-1 pr-1 scrollbar-theme">
             {statusOptions.map((status) => {
               const isActive = status === 'Show All' ? showAllActive : selectedStatuses.has(status);
               const label = formatStatus(status);

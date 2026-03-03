@@ -49,9 +49,9 @@ const WeeksHorizonField: React.FC<Props> = ({
       </label>
       <input
         id={inputId}
-        type="number"
-        min={min}
-        max={max}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={inputValue}
         onChange={(event) => {
           const next = event.target.value;

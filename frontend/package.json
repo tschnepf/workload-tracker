@@ -25,6 +25,7 @@
         "openapi:regen": "npm run openapi:types",
         "check:health": "node scripts/check-file-health.mjs",
         "check:health:projects": "node scripts/check-file-health-projects.mjs",
+        "check:line-caps:work-planning": "node scripts/check-page-line-caps.mjs",
         "prepare": "husky install",
         "check:fullcalendar-chunk": "node scripts/check-fullcalendar-chunk.mjs"
     },
