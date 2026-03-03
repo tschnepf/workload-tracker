@@ -187,6 +187,7 @@ const PeopleList: React.FC = () => {
     error: listError,
     fetchNextPage,
     hasNextPage,
+    isFetchingNextPage,
   } = usePeopleSearch(
     peopleSearchOptions,
     {
@@ -204,6 +205,8 @@ const PeopleList: React.FC = () => {
     autoSelectFirst: false,
   });
   const lastBulkToggleIndexRef = useRef<number | null>(null);
+  const mobileListRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreInFlightRef = useRef(false);
   const focusPeopleSearch = useCallback(() => {
     if (typeof document === 'undefined') return;
     const input = document.getElementById('people-search') as HTMLInputElement | null;
@@ -211,6 +214,28 @@ const PeopleList: React.FC = () => {
     input?.select();
   }, []);
   const visiblePeople = people;
+  const handleLoadMore = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage || loadMoreInFlightRef.current) return;
+    loadMoreInFlightRef.current = true;
+    void fetchNextPage().finally(() => {
+      loadMoreInFlightRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  const maybeLoadMoreMobile = useCallback(() => {
+    const scrollEl = mobileListRef.current;
+    if (!scrollEl || !isMobileLayout || !hasNextPage || isFetchingNextPage) return;
+    if (scrollEl.clientHeight <= 0) return;
+    const distanceToBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+    if (distanceToBottom <= 180) {
+      handleLoadMore();
+    }
+  }, [handleLoadMore, hasNextPage, isFetchingNextPage, isMobileLayout]);
+
+  useEffect(() => {
+    maybeLoadMoreMobile();
+  }, [visiblePeople.length, maybeLoadMoreMobile]);
+
   const activeFilterItems = useMemo<FilterSummaryItem[]>(() => {
     const items: FilterSummaryItem[] = [];
     departmentFilter.forEach((deptId) => {
@@ -460,7 +485,8 @@ const PeopleList: React.FC = () => {
             sortDirection={sortDirection}
             onColumnSort={handleColumnSort}
             hasMore={!!hasNextPage}
-            onLoadMore={() => fetchNextPage()}
+            isLoadingMore={isFetchingNextPage}
+            onLoadMore={handleLoadMore}
           />
           
           <BulkActionsBar
@@ -501,7 +527,11 @@ const PeopleList: React.FC = () => {
 
   const mobileView = (
       <div className="ux-page-shell h-full min-h-0 flex flex-col bg-[var(--bg)]">
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+        <div
+          className="flex-1 flex flex-col min-h-0 overflow-y-auto"
+          ref={mobileListRef}
+          onScroll={maybeLoadMoreMobile}
+        >
           {effectiveListLoading ? (
             loadingContent
           ) : (
@@ -618,10 +648,11 @@ const PeopleList: React.FC = () => {
                 <div className="p-3 flex justify-center">
                   <button
                     type="button"
-                    className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]"
-                    onClick={() => fetchNextPage()}
+                    className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={handleLoadMore}
+                    disabled={isFetchingNextPage}
                   >
-                    Load more
+                    {isFetchingNextPage ? 'Loading...' : 'Load more'}
                   </button>
                 </div>
               )}

@@ -16,3 +16,11 @@ class ProviderRegistryTests(SimpleTestCase):
         catalog = registry.get_object_catalog('bqe', 'projects')
         self.assertIsInstance(catalog, dict)
         self.assertEqual(catalog['key'], 'projects')
+
+    def test_registry_loads_azure(self):
+        registry = get_registry()
+        provider = registry.get_provider('azure')
+        self.assertIsNotNone(provider)
+        self.assertEqual(provider.key, 'azure')
+        users_catalog = registry.get_object_catalog('azure', 'users')
+        self.assertIsNotNone(users_catalog)

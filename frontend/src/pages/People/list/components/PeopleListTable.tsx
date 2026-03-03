@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect } from 'react';
 import type { Person } from '@/types/models';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
@@ -9,6 +9,9 @@ type Props = {
   selectedPeopleIds: Set<number>;
   onRowClick: (person: Person, index: number) => void;
   onToggleSelect: (personId: number, checked: boolean, shiftKey?: boolean, index?: number) => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
 };
 
 const PeopleListTable: React.FC<Props> = ({
@@ -18,9 +21,22 @@ const PeopleListTable: React.FC<Props> = ({
   selectedPeopleIds,
   onRowClick,
   onToggleSelect,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }) => {
   const listParentRef = useRef<HTMLDivElement | null>(null);
   const enableVirtual = items.length > 200;
+
+  const maybeLoadMore = useCallback(() => {
+    const scrollEl = listParentRef.current;
+    if (!scrollEl || !hasMore || isLoadingMore) return;
+    if (scrollEl.clientHeight <= 0) return;
+    const distanceToBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+    if (distanceToBottom <= 160) {
+      onLoadMore();
+    }
+  }, [hasMore, isLoadingMore, onLoadMore]);
 
   const rowVirtualizer = useVirtualizer({
     count: items.length,
@@ -28,6 +44,10 @@ const PeopleListTable: React.FC<Props> = ({
     estimateSize: () => 44,
     overscan: 6,
   });
+
+  useEffect(() => {
+    maybeLoadMore();
+  }, [items.length, maybeLoadMore]);
 
   const content = useMemo(() => {
     if (items.length === 0) {
@@ -133,7 +153,12 @@ const PeopleListTable: React.FC<Props> = ({
   }, [items, bulkMode, selectedPersonId, selectedPeopleIds, onRowClick, onToggleSelect, enableVirtual]);
 
   return (
-    <div className="overflow-y-auto h-full bg-[var(--card)]" ref={listParentRef}>
+    <div
+      className="overflow-y-auto h-full bg-[var(--card)]"
+      ref={listParentRef}
+      data-testid="people-list-scroll"
+      onScroll={maybeLoadMore}
+    >
       {content}
     </div>
   );

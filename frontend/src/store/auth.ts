@@ -42,6 +42,13 @@ export type AuthState = {
   settings: UserSettings;
 };
 
+export type AzureSsoStatus = {
+  enabled: boolean;
+  enforced: boolean;
+  passwordLoginEnabledNonBreakGlass: boolean;
+  breakGlassConfigured: boolean;
+};
+
 const API_BASE_URL = resolveApiBase((typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || undefined);
 const OPENAPI_MIGRATION_ENABLED = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_OPENAPI_MIGRATION_ENABLED === 'true');
 const COOKIE_REFRESH = !!(typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any).VITE_COOKIE_REFRESH_AUTH === 'true');
@@ -191,6 +198,39 @@ export async function login(usernameOrEmail: string, password: string): Promise<
     }
   }
   resetIdentityTransitionCaches('login');
+  await hydrateProfile();
+}
+
+export async function getAzureSsoStatus(): Promise<AzureSsoStatus> {
+  return http<AzureSsoStatus>(`/auth/sso/status/`, { method: 'GET' });
+}
+
+export async function startAzureSso(): Promise<void> {
+  const payload = await http<{ authorizeUrl: string }>(`/auth/sso/azure/start/`, { method: 'POST' });
+  const url = payload?.authorizeUrl;
+  if (!url) {
+    throw new Error('Azure SSO authorization URL is missing.');
+  }
+  if (typeof window !== 'undefined') {
+    window.location.assign(url);
+  }
+}
+
+export async function completeAzureSso(code: string): Promise<void> {
+  const body = JSON.stringify({ code });
+  if (COOKIE_REFRESH) {
+    const tok = await http<{ access: string }>(`/auth/sso/complete/`, { method: 'POST', body, credentials: 'include' });
+    setState({ refreshToken: null, accessToken: tok.access });
+  } else {
+    const tok = await http<{ access: string; refresh?: string }>(`/auth/sso/complete/`, { method: 'POST', body });
+    if (tok.refresh) {
+      writeRefreshToStorage(tok.refresh);
+      setState({ refreshToken: tok.refresh, accessToken: tok.access });
+    } else {
+      setState({ refreshToken: null, accessToken: tok.access });
+    }
+  }
+  resetIdentityTransitionCaches('azure-sso-complete');
   await hydrateProfile();
 }
 

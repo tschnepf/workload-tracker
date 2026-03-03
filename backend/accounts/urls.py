@@ -1,5 +1,11 @@
 from django.urls import path
 from . import views
+from .sso import (
+    AzureSsoCallbackView,
+    AzureSsoCompleteView,
+    AzureSsoStartView,
+    AzureSsoStatusView,
+)
 
 
 urlpatterns = [
@@ -21,4 +27,8 @@ urlpatterns = [
     path('push-subscriptions/', views.PushSubscriptionsView.as_view(), name='push_subscriptions'),
     path('push-subscriptions/<int:subscription_id>/', views.PushSubscriptionDeleteView.as_view(), name='push_subscription_delete'),
     path('push/test/', views.PushTestView.as_view(), name='push_test'),
+    path('sso/status/', AzureSsoStatusView.as_view(), name='auth_sso_status'),
+    path('sso/azure/start/', AzureSsoStartView.as_view(), name='auth_sso_azure_start'),
+    path('sso/azure/callback/', AzureSsoCallbackView.as_view(), name='auth_sso_azure_callback'),
+    path('sso/complete/', AzureSsoCompleteView.as_view(), name='auth_sso_complete'),
 ]

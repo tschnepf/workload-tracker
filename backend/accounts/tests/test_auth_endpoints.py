@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from people.models import Person
+from integrations.models import AuthMethodPolicy
 
 
 class AuthEndpointsTests(TestCase):
@@ -16,6 +17,7 @@ class AuthEndpointsTests(TestCase):
         self.user = User.objects.create_user(username='alice', email='alice@example.com', password='testpass123')
         # Staff user for overrides
         self.staff = User.objects.create_user(username='staff', email='staff@example.com', password='testpass123', is_staff=True)
+        AuthMethodPolicy.objects.all().delete()
 
     def _auth(self, user):
         self.client.force_authenticate(user=user)
@@ -36,6 +38,26 @@ class AuthEndpointsTests(TestCase):
         resp2 = self.client.post('/api/token/refresh/', refresh_payload, format='json')
         self.assertEqual(resp2.status_code, status.HTTP_200_OK)
         self.assertTrue(resp2.data.get('access'))
+
+    def test_password_login_blocked_when_azure_enforced(self):
+        policy = AuthMethodPolicy.get_solo()
+        policy.azure_sso_enabled = True
+        policy.azure_sso_enforced = True
+        policy.password_login_enabled_non_break_glass = False
+        policy.break_glass_user = self.staff
+        policy.save()
+        resp = self.client.post('/api/token/', {'username': 'alice', 'password': 'testpass123'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_password_login_allows_break_glass_when_enforced(self):
+        policy = AuthMethodPolicy.get_solo()
+        policy.azure_sso_enabled = True
+        policy.azure_sso_enforced = True
+        policy.password_login_enabled_non_break_glass = False
+        policy.break_glass_user = self.staff
+        policy.save()
+        resp = self.client.post('/api/token/', {'username': 'staff', 'password': 'testpass123'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_me_and_settings_update(self):
         self._auth(self.user)
@@ -98,6 +120,12 @@ class AuthEndpointsTests(TestCase):
         self.assertEqual(self.client.get('/api/auth/me/').status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.patch('/api/auth/settings/', { 'settings': {} }, format='json').status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.post('/api/auth/link_person/', { 'person_id': None }, format='json').status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_sso_status_endpoint_is_public(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.get('/api/auth/sso/status/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('enabled', response.data)
 
     def test_notification_preferences_push_fields_roundtrip(self):
         self._auth(self.user)

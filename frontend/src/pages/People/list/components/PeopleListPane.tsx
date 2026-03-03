@@ -16,6 +16,7 @@ export interface PeopleListPaneProps {
   sortDirection: 'asc' | 'desc';
   onColumnSort: (c: Column) => void;
   hasMore: boolean;
+  isLoadingMore: boolean;
   onLoadMore: () => void;
 }
 
@@ -32,6 +33,7 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
     sortDirection,
     onColumnSort,
     hasMore,
+    isLoadingMore,
     onLoadMore,
   } = props;
 
@@ -86,11 +88,20 @@ export default function PeopleListPane(props: PeopleListPaneProps) {
         selectedPeopleIds={selectedPeopleIds}
         onRowClick={onRowClick}
         onToggleSelect={onToggleSelect}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={onLoadMore}
       />
 
       {hasMore && (
         <div className="p-2 flex justify-center">
-          <button onClick={onLoadMore} className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface)]">Load more</button>
+          <button
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="px-3 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isLoadingMore ? 'Loading...' : 'Load more'}
+          </button>
         </div>
       )}
     </div>

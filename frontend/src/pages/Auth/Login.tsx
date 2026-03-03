@@ -1,15 +1,39 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { login } from '@/store/auth';
+import { getAzureSsoStatus, login, startAzureSso } from '@/store/auth';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [hidePasswordLogin, setHidePasswordLogin] = useState(false);
   const navigate = useNavigate();
   const location = useLocation() as any;
   const from = location?.state?.from?.pathname || '/';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getAzureSsoStatus();
+        if (cancelled) return;
+        setSsoEnabled(!!status.enabled);
+        setHidePasswordLogin(
+          !!status.enabled && !!status.enforced && !status.passwordLoginEnabledNonBreakGlass
+        );
+      } catch {
+        if (cancelled) return;
+        setSsoEnabled(false);
+        setHidePasswordLogin(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,6 +55,30 @@ const Login: React.FC = () => {
       <div className="w-full max-w-sm bg-gray-800 p-6 rounded shadow">
         <h1 className="text-xl text-white mb-4">Sign in</h1>
         {error && <div className="bg-red-100 text-red-800 px-3 py-2 rounded mb-3">{error}</div>}
+        {ssoEnabled && (
+          <button
+            type="button"
+            disabled={ssoLoading}
+            onClick={async () => {
+              setSsoLoading(true);
+              setError(null);
+              try {
+                await startAzureSso();
+              } catch (err: any) {
+                const message = err?.data?.detail || err?.message || 'Unable to start Microsoft sign-in.';
+                setError(message);
+                setSsoLoading(false);
+              }
+            }}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded disabled:opacity-60 mb-4"
+          >
+            {ssoLoading ? 'Redirecting to Microsoft…' : 'Sign in with Microsoft'}
+          </button>
+        )}
+        {hidePasswordLogin && (
+          <p className="text-sm text-gray-300 mb-3">Password login is disabled for this account type.</p>
+        )}
+        {!hidePasswordLogin && (
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">Username or Email</label>
@@ -67,10 +115,10 @@ const Login: React.FC = () => {
             <a href="/reset-password" className="text-sm text-blue-300 hover:text-blue-200">Forgot password?</a>
           </div>
         </form>
+        )}
       </div>
     </div>
   );
 };
 
 export default Login;
-

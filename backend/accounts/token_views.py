@@ -16,6 +16,31 @@ from rest_framework import status
 from rest_framework.exceptions import ParseError
 
 
+def _password_login_policy_decision(username_or_email: str | None) -> tuple[bool, str | None]:
+    try:
+        from integrations.azure_identity import get_auth_method_policy
+    except Exception:  # nosec B110
+        return False, None
+    try:
+        policy = get_auth_method_policy()
+    except Exception:  # nosec B110
+        return False, None
+    if not policy.azure_sso_enforced:
+        return False, None
+    raw = (username_or_email or '').strip().lower()
+    if not raw:
+        return True, 'Password login is disabled. Use Sign in with Microsoft.'
+    break_glass = getattr(policy, 'break_glass_user', None)
+    if break_glass:
+        bg_username = (getattr(break_glass, 'username', '') or '').strip().lower()
+        bg_email = (getattr(break_glass, 'email', '') or '').strip().lower()
+        if raw and (raw == bg_username or (bg_email and raw == bg_email)):
+            return False, None
+    if policy.password_login_enabled_non_break_glass:
+        return False, None
+    return True, 'Password login is disabled. Use Sign in with Microsoft.'
+
+
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """Set the httpOnly refresh cookie if cookie mode is enabled."""
     if not settings.FEATURES.get('COOKIE_REFRESH_AUTH'):
@@ -75,6 +100,15 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
     serializer_class = UsernameOrEmailTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):  # type: ignore[override]
+        username = ''
+        try:
+            body = request.data if isinstance(request.data, dict) else {}
+            username = str(body.get('username') or body.get('email') or '').strip()
+        except Exception:  # nosec B110
+            username = ''
+        blocked, message = _password_login_policy_decision(username)
+        if blocked:
+            return Response({'detail': message or 'Password login is disabled.'}, status=status.HTTP_403_FORBIDDEN)
         response: Response = super().post(request, *args, **kwargs)
         if response.status_code >= 400:
             logging.getLogger(__name__).warning(

@@ -318,6 +318,14 @@ for _required_feature in REQUIRED_FEATURE_FLAGS:
 INTEGRATIONS_ENABLED = os.getenv('INTEGRATIONS_ENABLED', 'false').lower() == 'true'
 INTEGRATIONS_SECRET_KEY = os.getenv('INTEGRATIONS_SECRET_KEY')
 INTEGRATIONS_RESTORE_MAX_AGE_DAYS = int(os.getenv('INTEGRATIONS_RESTORE_MAX_AGE_DAYS', '14'))
+AZURE_SSO_TENANT_ID = os.getenv('AZURE_SSO_TENANT_ID', '')
+AZURE_SSO_REDIRECT_URI = os.getenv('AZURE_SSO_REDIRECT_URI', '')
+AZURE_SCIM_BEARER_TOKEN = os.getenv('AZURE_SCIM_BEARER_TOKEN', '')
+AZURE_SSO_SCOPES = [
+    item.strip()
+    for item in os.getenv('AZURE_SSO_SCOPES', 'openid,profile,email,offline_access,User.Read').split(',')
+    if item.strip()
+]
 
 # With header-only JWT auth, do not allow credentials by default.
 # Enable credentials when cookie-based refresh flow is active.
@@ -685,6 +693,10 @@ CELERY_BEAT_SCHEDULE = globals().get('CELERY_BEAT_SCHEDULE', {})
 CELERY_BEAT_SCHEDULE['integrations-rule-planner'] = {
     'task': 'integrations.tasks.integration_rule_planner',
     'schedule': timedelta(minutes=int(os.getenv('INTEGRATIONS_PLANNER_INTERVAL_MINUTES', '5'))),
+}
+CELERY_BEAT_SCHEDULE['azure-daily-reconcile'] = {
+    'task': 'integrations.tasks.azure_daily_reconcile',
+    'schedule': timedelta(hours=int(os.getenv('AZURE_GRAPH_RECONCILE_HOURS', '24'))),
 }
 
 # CSP rollout configuration

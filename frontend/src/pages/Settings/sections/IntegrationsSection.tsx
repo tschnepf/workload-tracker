@@ -32,6 +32,8 @@ import {
   retryJob,
   testConnection,
   testActivityConnection,
+  applyAzureReconciliation,
+  confirmAzureReconciliation,
   type ProjectMatchResponse,
   type IntegrationProviderSummary,
   type IntegrationConnection,
@@ -44,6 +46,18 @@ import {
   type IntegrationJob,
   type IntegrationHealth,
   type SecretKeyStatus,
+  getAzureProvisioningStatus,
+  getAzureStatus,
+  listAzureDepartmentMappings,
+  listAzureReconciliation,
+  listAzureRoleMappings,
+  overrideAzureReconciliation,
+  refreshAzureReconciliation,
+  rejectAzureReconciliation,
+  saveAzureDepartmentMappings,
+  saveAzureRoleMappings,
+  setAzureScimToken,
+  triggerAzureReconcile,
 } from '@/services/integrationsApi';
 import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
@@ -340,6 +354,113 @@ const IntegrationsSection: React.FC = () => {
   const jobSummary = health?.jobs;
   const syncDisabled = !!health && (!health.healthy || health.schedulerPaused);
   const schedulerPaused = !!health?.schedulerPaused;
+  const azureSelected = selectedProvider?.key === 'azure';
+
+  const [azureScimToken, setAzureScimTokenInput] = useState('');
+  const [azureDeptSource, setAzureDeptSource] = useState('');
+  const [azureDeptId, setAzureDeptId] = useState('');
+  const [azureRoleSource, setAzureRoleSource] = useState('');
+  const [azureRoleId, setAzureRoleId] = useState('');
+
+  const azureStatusQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'status'],
+    queryFn: () => getAzureStatus(),
+    enabled: azureSelected,
+    refetchInterval: 30_000,
+  });
+  const azureProvisioningQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'provisioning'],
+    queryFn: () => getAzureProvisioningStatus(),
+    enabled: azureSelected,
+    refetchInterval: 30_000,
+  });
+  const azureDepartmentMappingsQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'department-mappings'],
+    queryFn: () => listAzureDepartmentMappings(),
+    enabled: azureSelected,
+  });
+  const azureRoleMappingsQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'role-mappings'],
+    queryFn: () => listAzureRoleMappings(),
+    enabled: azureSelected,
+  });
+  const azureReconciliationQuery = useQuery({
+    queryKey: ['integrations', 'azure', 'reconciliation'],
+    queryFn: () => listAzureReconciliation(),
+    enabled: azureSelected,
+    refetchInterval: 30_000,
+  });
+
+  const azureSetScimTokenMutation = useMutation({
+    mutationFn: (token: string) => setAzureScimToken(token),
+    onSuccess: () => {
+      showToast('SCIM bearer token saved', 'success');
+      setAzureScimTokenInput('');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'status'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to save SCIM token', 'error'),
+  });
+  const azureReconcileMutation = useMutation({
+    mutationFn: () => triggerAzureReconcile({ includeGraph: true }),
+    onSuccess: () => {
+      showToast('Azure reconcile started', 'success');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'provisioning'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Azure reconcile failed', 'error'),
+  });
+  const azureRefreshReconciliationMutation = useMutation({
+    mutationFn: () => refreshAzureReconciliation(),
+    onSuccess: () => {
+      showToast('Reconciliation queue refreshed', 'success');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'provisioning'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to refresh reconciliation queue', 'error'),
+  });
+  const azureApplyMutation = useMutation({
+    mutationFn: () => applyAzureReconciliation(),
+    onSuccess: (data) => {
+      showToast(`Applied ${data?.applied ?? 0} confirmed matches`, 'success');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'provisioning'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to apply confirmed matches', 'error'),
+  });
+  const azureConfirmMutation = useMutation({
+    mutationFn: (id: number) => confirmAzureReconciliation(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] }),
+    onError: (err: any) => showToast(err?.message || 'Unable to confirm reconciliation row', 'error'),
+  });
+  const azureRejectMutation = useMutation({
+    mutationFn: (id: number) => rejectAzureReconciliation(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] }),
+    onError: (err: any) => showToast(err?.message || 'Unable to reject reconciliation row', 'error'),
+  });
+  const azureOverrideMutation = useMutation({
+    mutationFn: (payload: { id: number; userId?: number | null; personId?: number | null }) =>
+      overrideAzureReconciliation(payload.id, { userId: payload.userId ?? null, personId: payload.personId ?? null }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'reconciliation'] }),
+    onError: (err: any) => showToast(err?.message || 'Unable to override reconciliation row', 'error'),
+  });
+  const azureSaveDepartmentMapMutation = useMutation({
+    mutationFn: (payload: { sourceValue: string; departmentId: number | null }) => saveAzureDepartmentMappings([payload]),
+    onSuccess: () => {
+      setAzureDeptSource('');
+      setAzureDeptId('');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'department-mappings'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to save department mapping', 'error'),
+  });
+  const azureSaveRoleMapMutation = useMutation({
+    mutationFn: (payload: { sourceValue: string; roleId: number | null }) => saveAzureRoleMappings([payload]),
+    onSuccess: () => {
+      setAzureRoleSource('');
+      setAzureRoleId('');
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'azure', 'role-mappings'] });
+    },
+    onError: (err: any) => showToast(err?.message || 'Unable to save role mapping', 'error'),
+  });
 
   const metadataMismatch = providerCatalogQuery.data && selectedProvider
     && providerCatalogQuery.data.schemaVersion !== selectedProvider.schemaVersion;
@@ -859,7 +980,7 @@ const IntegrationsSection: React.FC = () => {
     <SettingsSectionFrame
       id={INTEGRATIONS_SECTION_ID}
       title="Integrations Hub"
-      description="Connect to BQE and manage sync rules, mapping, and job health."
+      description="Connect providers and manage sync rules, mapping, and job health."
       className="mt-6 space-y-6"
     >
       {syncDisabled && (
@@ -871,8 +992,7 @@ const IntegrationsSection: React.FC = () => {
       <div>
         <h3 className="text-lg font-semibold text-[var(--text)] mb-2">Available Integrations</h3>
         <p className="text-sm text-[var(--muted)] mb-3">
-          Select the provider you want to configure. Today only <strong>BQE CORE</strong> is available; future integrations
-          will appear here as additional cards.
+          Select the provider you want to configure. OAuth credentials and connection state are managed per provider.
         </p>
         {providerList}
       </div>
@@ -882,10 +1002,8 @@ const IntegrationsSection: React.FC = () => {
           <div>
             <h4 className="text-base font-semibold text-[var(--text)]">Provider Credentials</h4>
             <p className="text-sm text-[var(--muted)]">
-              Enter the BQE OAuth client details from the developer portal. BQE CORE uses OAuth 2.0 Authorization Code + PKCE
-              against <code>https://api-identity.bqecore.com/idp/connect/authorize</code> / <code>https://api-identity.bqecore.com/idp/connect/token</code> with the scopes
-              <code>readwrite:core offline_access openid email profile</code>. Secrets are encrypted via MultiFernet and the redirect
-              URI must match exactly.
+              Enter the OAuth client details for <strong>{selectedProvider.displayName}</strong>. Secrets are encrypted via
+              MultiFernet and redirect URIs must match the provider configuration exactly.
             </p>
           </div>
           {providerCredentialsQuery.isLoading ? (
@@ -920,7 +1038,7 @@ const IntegrationsSection: React.FC = () => {
               <div className="col-span-full text-xs text-[var(--muted)]">
                 {credentials?.hasClientSecret
                   ? 'Leave the secret blank to keep the current value.'
-                  : 'Paste the client secret from the BQE developer portal.'}
+                  : 'Paste the client secret from your identity provider portal.'}
               </div>
               <div className="col-span-full flex gap-2 flex-wrap">
                 <Button
@@ -1113,6 +1231,214 @@ const IntegrationsSection: React.FC = () => {
                 : 'No active connection yet. Click “Connect Provider” to add credentials.'}
             </div>
           )}
+        </div>
+      )}
+
+      {selectedProvider?.key === 'azure' && (
+        <div className="space-y-4">
+          <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-base font-semibold text-[var(--text)]">Azure Provisioning</h4>
+                <p className="text-sm text-[var(--muted)]">SCIM lifecycle ingest + Graph reconciliation status.</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={azureReconcileMutation.isPending}
+                  onClick={() => azureReconcileMutation.mutate()}
+                >
+                  {azureReconcileMutation.isPending ? 'Running…' : 'Reconcile Now'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={azureRefreshReconciliationMutation.isPending}
+                  onClick={() => azureRefreshReconciliationMutation.mutate()}
+                >
+                  Refresh Queue
+                </Button>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <div className="border border-[var(--border)] rounded p-3">
+                <div className="text-[var(--muted)]">Connected</div>
+                <div className="font-semibold">{azureStatusQuery.data?.connected ? 'Yes' : 'No'}</div>
+                <div className="text-[var(--muted)] mt-1">SCIM Token: {azureStatusQuery.data?.hasScimToken ? 'Configured' : 'Missing'}</div>
+              </div>
+              <div className="border border-[var(--border)] rounded p-3">
+                <div className="text-[var(--muted)]">Reconciliation Queue</div>
+                <div className="font-semibold">
+                  Proposed {azureProvisioningQuery.data?.reconciliation?.proposed ?? 0} •
+                  Conflicts {azureProvisioningQuery.data?.reconciliation?.conflict ?? 0} •
+                  Confirmed {azureProvisioningQuery.data?.reconciliation?.confirmed ?? 0}
+                </div>
+                <div className="text-[var(--muted)] mt-1">Last Graph Reconcile: {formatDate(azureStatusQuery.data?.lastReconcileAt)}</div>
+              </div>
+            </div>
+            <form
+              className="flex flex-col md:flex-row gap-2 items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!azureScimToken.trim()) return;
+                azureSetScimTokenMutation.mutate(azureScimToken.trim());
+              }}
+            >
+              <Input
+                label="SCIM Bearer Token"
+                type="password"
+                value={azureScimToken}
+                onChange={(e) => setAzureScimTokenInput((e.target as HTMLInputElement).value)}
+                placeholder="Paste Azure provisioning secret"
+              />
+              <Button
+                size="sm"
+                type="submit"
+                disabled={azureSetScimTokenMutation.isPending || !azureScimToken.trim()}
+              >
+                Save SCIM Token
+              </Button>
+            </form>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
+              <h4 className="text-base font-semibold text-[var(--text)]">Department Mapping</h4>
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!azureDeptSource.trim()) return;
+                  azureSaveDepartmentMapMutation.mutate({
+                    sourceValue: azureDeptSource.trim(),
+                    departmentId: azureDeptId ? Number(azureDeptId) : null,
+                  });
+                }}
+              >
+                <input
+                  className={INPUT_STYLES}
+                  placeholder="Azure department value"
+                  value={azureDeptSource}
+                  onChange={(e) => setAzureDeptSource(e.target.value)}
+                />
+                <input
+                  className={INPUT_STYLES}
+                  placeholder="Local department ID"
+                  value={azureDeptId}
+                  onChange={(e) => setAzureDeptId(e.target.value)}
+                />
+                <Button size="sm" type="submit" variant="secondary">Save</Button>
+              </form>
+              <div className="max-h-48 overflow-auto border border-[var(--border)] rounded p-2 text-sm">
+                {(azureDepartmentMappingsQuery.data ?? []).map((row) => (
+                  <div key={row.id} className="py-1 border-b border-[var(--border)] last:border-0">
+                    <strong>{row.sourceValue}</strong> → {row.departmentName || 'Unmapped'} {row.departmentId ? `(#${row.departmentId})` : ''}
+                  </div>
+                ))}
+                {!azureDepartmentMappingsQuery.data?.length && (
+                  <div className="text-[var(--muted)]">No mappings yet.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
+              <h4 className="text-base font-semibold text-[var(--text)]">Role Mapping</h4>
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!azureRoleSource.trim()) return;
+                  azureSaveRoleMapMutation.mutate({
+                    sourceValue: azureRoleSource.trim(),
+                    roleId: azureRoleId ? Number(azureRoleId) : null,
+                  });
+                }}
+              >
+                <input
+                  className={INPUT_STYLES}
+                  placeholder="Azure position/jobTitle"
+                  value={azureRoleSource}
+                  onChange={(e) => setAzureRoleSource(e.target.value)}
+                />
+                <input
+                  className={INPUT_STYLES}
+                  placeholder="Local role ID"
+                  value={azureRoleId}
+                  onChange={(e) => setAzureRoleId(e.target.value)}
+                />
+                <Button size="sm" type="submit" variant="secondary">Save</Button>
+              </form>
+              <div className="max-h-48 overflow-auto border border-[var(--border)] rounded p-2 text-sm">
+                {(azureRoleMappingsQuery.data ?? []).map((row) => (
+                  <div key={row.id} className="py-1 border-b border-[var(--border)] last:border-0">
+                    <strong>{row.sourceValue}</strong> → {row.roleName || 'Unmapped'} {row.roleId ? `(#${row.roleId})` : ''}
+                  </div>
+                ))}
+                {!azureRoleMappingsQuery.data?.length && (
+                  <div className="text-[var(--muted)]">No mappings yet.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border border-[var(--border)] rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-base font-semibold text-[var(--text)]">Migration Reconciliation</h4>
+              <Button size="sm" onClick={() => azureApplyMutation.mutate()} disabled={azureApplyMutation.isPending}>
+                {azureApplyMutation.isPending ? 'Applying…' : 'Apply Confirmed Matches'}
+              </Button>
+            </div>
+            <div className="max-h-80 overflow-auto border border-[var(--border)] rounded text-sm">
+              {(azureReconciliationQuery.data?.items ?? []).slice(0, 200).map((row) => (
+                <div key={row.id} className="p-2 border-b border-[var(--border)] last:border-0">
+                  <div className="font-medium">{row.displayName || row.upn || row.azurePrincipalId}</div>
+                  <div className="text-[var(--muted)]">{row.email || row.upn} • {row.status}</div>
+                  <div className="text-[var(--muted)]">Candidate: {row.candidateUser?.username || 'none'} / {row.candidatePerson?.name || 'none'}</div>
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={azureConfirmMutation.isPending}
+                      onClick={() => azureConfirmMutation.mutate(row.id)}
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={azureRejectMutation.isPending}
+                      onClick={() => azureRejectMutation.mutate(row.id)}
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={azureOverrideMutation.isPending}
+                      onClick={() => {
+                        const userInput = window.prompt('Override User ID (leave blank for none):', row.candidateUser?.id ? String(row.candidateUser.id) : '');
+                        const personInput = window.prompt('Override Person ID (leave blank for none):', row.candidatePerson?.id ? String(row.candidatePerson.id) : '');
+                        if (userInput == null && personInput == null) return;
+                        const parsedUser = userInput && userInput.trim() ? Number(userInput.trim()) : null;
+                        const parsedPerson = personInput && personInput.trim() ? Number(personInput.trim()) : null;
+                        azureOverrideMutation.mutate({
+                          id: row.id,
+                          userId: Number.isFinite(parsedUser as number) ? parsedUser : null,
+                          personId: Number.isFinite(parsedPerson as number) ? parsedPerson : null,
+                        });
+                      }}
+                    >
+                      Override
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {!azureReconciliationQuery.data?.items?.length && (
+                <div className="p-3 text-[var(--muted)]">No reconciliation rows yet. Run Reconcile Now first.</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

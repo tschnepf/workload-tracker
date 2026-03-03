@@ -58,6 +58,7 @@ const PersonExperiencePage = React.lazy(() => import('./pages/Reports/PersonExpe
 const Login = React.lazy(() => import('./pages/Auth/Login'))
 const ResetPassword = React.lazy(() => import('./pages/Auth/ResetPassword'))
 const SetPassword = React.lazy(() => import('./pages/Auth/SetPassword'))
+const SsoComplete = React.lazy(() => import('./pages/Auth/SsoComplete'))
 const OfflinePage = React.lazy(() => import('./pages/Offline/Offline'))
 const Profile = React.lazy(() => import('./pages/Profile/Profile'))
 const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'))
@@ -75,6 +76,7 @@ const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
       { path: 'reset-password', element: <ResetPassword /> },
       { path: 'set-password', element: <SetPassword /> },
+      { path: 'sso/complete', element: <SsoComplete /> },
       { path: 'offline', element: <OfflinePage /> },
       // Redirect root to dashboard (protected)
       { index: true, element: <RequireAuth><Navigate to="/my-work" replace /></RequireAuth> },

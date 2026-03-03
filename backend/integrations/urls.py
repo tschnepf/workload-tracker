@@ -23,6 +23,22 @@ from .views import (
     ProjectMatchingSuggestionView,
     ProjectMatchingConfirmView,
 )
+from .azure_views import (
+    AzureDepartmentMappingsView,
+    AzureMigrationApplyView,
+    AzureProvisioningReconcileNowView,
+    AzureProvisioningStatusView,
+    AzureReconciliationConfirmView,
+    AzureReconciliationListView,
+    AzureReconciliationOverrideView,
+    AzureReconciliationRefreshView,
+    AzureReconciliationRejectView,
+    AzureRoleMappingsView,
+    AzureScimTokenView,
+    AzureScimUserCreateView,
+    AzureScimUserPatchView,
+    AzureStatusView,
+)
 
 router = DefaultRouter()
 router.register(r'connections', IntegrationConnectionViewSet, basename='integration-connection')
@@ -47,5 +63,19 @@ urlpatterns = [
     path('secret-key/', IntegrationSecretKeyView.as_view(), name='integration-secret-key'),
     path('providers/<str:provider_key>/projects/matching/suggestions/', ProjectMatchingSuggestionView.as_view(), name='integration-project-matching-suggestions'),
     path('providers/<str:provider_key>/projects/matching/confirm/', ProjectMatchingConfirmView.as_view(), name='integration-project-matching-confirm'),
+    path('providers/azure/status/', AzureStatusView.as_view(), name='integration-azure-status'),
+    path('providers/azure/scim/token/', AzureScimTokenView.as_view(), name='integration-azure-scim-token'),
+    path('providers/azure/provisioning/status/', AzureProvisioningStatusView.as_view(), name='integration-azure-provisioning-status'),
+    path('providers/azure/provisioning/reconcile-now/', AzureProvisioningReconcileNowView.as_view(), name='integration-azure-reconcile-now'),
+    path('providers/azure/mappings/departments/', AzureDepartmentMappingsView.as_view(), name='integration-azure-mappings-departments'),
+    path('providers/azure/mappings/roles/', AzureRoleMappingsView.as_view(), name='integration-azure-mappings-roles'),
+    path('providers/azure/migration/reconciliation/', AzureReconciliationListView.as_view(), name='integration-azure-reconciliation'),
+    path('providers/azure/migration/reconciliation/refresh/', AzureReconciliationRefreshView.as_view(), name='integration-azure-reconciliation-refresh'),
+    path('providers/azure/migration/reconciliation/<int:id>/confirm/', AzureReconciliationConfirmView.as_view(), name='integration-azure-reconciliation-confirm'),
+    path('providers/azure/migration/reconciliation/<int:id>/override/', AzureReconciliationOverrideView.as_view(), name='integration-azure-reconciliation-override'),
+    path('providers/azure/migration/reconciliation/<int:id>/reject/', AzureReconciliationRejectView.as_view(), name='integration-azure-reconciliation-reject'),
+    path('providers/azure/migration/apply/', AzureMigrationApplyView.as_view(), name='integration-azure-migration-apply'),
+    path('providers/azure/scim/v2/Users', AzureScimUserCreateView.as_view(), name='integration-azure-scim-users-create'),
+    path('providers/azure/scim/v2/Users/<str:principal_id>', AzureScimUserPatchView.as_view(), name='integration-azure-scim-users-patch'),
     path('', include(router.urls)),
 ]

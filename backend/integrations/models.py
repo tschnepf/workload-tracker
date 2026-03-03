@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from cryptography.fernet import Fernet
 
@@ -315,3 +316,192 @@ def ensure_integrations_key_present():
     secret_key = getattr(settings, 'INTEGRATIONS_SECRET_KEY', None)
     if enabled and not secret_key:
         raise ImproperlyConfigured('INTEGRATIONS_SECRET_KEY is required when INTEGRATIONS_ENABLED=true')
+
+
+class AzureIdentityLink(models.Model):
+    connection = models.ForeignKey(
+        IntegrationConnection,
+        on_delete=models.CASCADE,
+        related_name='azure_identity_links',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='azure_identity_links',
+    )
+    tenant_id = models.CharField(max_length=128)
+    azure_oid = models.CharField(max_length=128)
+    upn_at_link = models.CharField(max_length=255, blank=True, default='')
+    email_at_link = models.CharField(max_length=255, blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_id', 'azure_oid'],
+                name='uniq_azure_identity_tid_oid',
+            ),
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=Q(is_active=True),
+                name='uniq_azure_identity_user_active',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['connection', 'is_active'], name='idx_azure_identity_conn_active'),
+            models.Index(fields=['user', 'is_active'], name='idx_azure_identity_user_active'),
+        ]
+
+
+class AzureDepartmentMapping(models.Model):
+    connection = models.ForeignKey(
+        IntegrationConnection,
+        on_delete=models.CASCADE,
+        related_name='azure_department_mappings',
+    )
+    source_value = models.CharField(max_length=255)
+    department = models.ForeignKey(
+        'departments.Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='azure_department_mappings',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['connection', 'source_value'],
+                name='uniq_azure_department_mapping',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['connection', 'source_value'], name='idx_azure_dept_map_lookup'),
+        ]
+
+
+class AzureRoleMapping(models.Model):
+    connection = models.ForeignKey(
+        IntegrationConnection,
+        on_delete=models.CASCADE,
+        related_name='azure_role_mappings',
+    )
+    source_value = models.CharField(max_length=255)
+    role = models.ForeignKey(
+        'roles.Role',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='azure_role_mappings',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['connection', 'source_value'],
+                name='uniq_azure_role_mapping',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['connection', 'source_value'], name='idx_azure_role_map_lookup'),
+        ]
+
+
+class AzureReconciliationRecord(models.Model):
+    STATUS_PROPOSED = 'proposed'
+    STATUS_CONFLICT = 'conflict'
+    STATUS_CONFIRMED = 'confirmed'
+    STATUS_REJECTED = 'rejected'
+    STATUS_APPLIED = 'applied'
+    STATUS_UNMATCHED = 'unmatched'
+    STATUS_CHOICES = (
+        (STATUS_PROPOSED, 'Proposed'),
+        (STATUS_CONFLICT, 'Conflict'),
+        (STATUS_CONFIRMED, 'Confirmed'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_APPLIED, 'Applied'),
+        (STATUS_UNMATCHED, 'Unmatched'),
+    )
+
+    connection = models.ForeignKey(
+        IntegrationConnection,
+        on_delete=models.CASCADE,
+        related_name='azure_reconciliation_records',
+    )
+    azure_principal_id = models.CharField(max_length=128)
+    tenant_id = models.CharField(max_length=128, blank=True, default='')
+    upn = models.CharField(max_length=255, blank=True, default='')
+    email = models.CharField(max_length=255, blank=True, default='')
+    display_name = models.CharField(max_length=255, blank=True, default='')
+    department = models.CharField(max_length=255, blank=True, default='')
+    job_title = models.CharField(max_length=255, blank=True, default='')
+    candidate_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='azure_reconciliation_candidates',
+    )
+    candidate_person = models.ForeignKey(
+        'people.Person',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='azure_reconciliation_candidates',
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNMATCHED)
+    confidence = models.FloatField(default=0.0)
+    reason_codes = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='azure_reconciliations_resolved',
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['connection', 'azure_principal_id'],
+                name='uniq_azure_reconciliation_principal',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['connection', 'status'], name='idx_azure_recon_conn_status'),
+            models.Index(fields=['status', 'updated_at'], name='idx_azure_recon_status_updated'),
+        ]
+
+
+class AuthMethodPolicy(models.Model):
+    azure_sso_enabled = models.BooleanField(default=False)
+    azure_sso_enforced = models.BooleanField(default=False)
+    password_login_enabled_non_break_glass = models.BooleanField(default=True)
+    break_glass_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='break_glass_policies',
+    )
+    frontend_complete_path = models.CharField(max_length=255, default='/sso/complete')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get_solo(cls) -> 'AuthMethodPolicy':
+        policy = cls.objects.order_by('id').first()
+        if policy:
+            return policy
+        return cls.objects.create()

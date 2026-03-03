@@ -1,0 +1,64 @@
+{
+  "providerSchemaVersion": "1.0.0",
+  "key": "azure",
+  "displayName": "Microsoft Entra ID",
+  "oauth": {
+    "flows": ["authorization_code_pkce"],
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "User.Read"
+    ],
+    "authBaseUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+    "tokenUrl": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+  },
+  "baseUrlVariants": {
+    "default": "https://graph.microsoft.com/v1.0",
+    "sandbox": "https://graph.microsoft.com/v1.0"
+  },
+  "rateLimits": {
+    "requestsPerMinute": 300,
+    "burst": 300,
+    "maxConcurrentPerConnection": 5,
+    "globalRequestsPerMinute": 600
+  },
+  "objects": [
+    {
+      "key": "users",
+      "label": "Directory Users",
+      "capabilities": {
+        "list": true,
+        "delta": true
+      },
+      "fields": [
+        { "key": "id", "label": "Object ID", "type": "string", "nullable": false },
+        { "key": "userPrincipalName", "label": "UPN", "type": "string", "nullable": false },
+        { "key": "mail", "label": "Email", "type": "string", "nullable": true },
+        { "key": "displayName", "label": "Display Name", "type": "string", "nullable": true },
+        { "key": "givenName", "label": "First Name", "type": "string", "nullable": true },
+        { "key": "surname", "label": "Last Name", "type": "string", "nullable": true },
+        { "key": "department", "label": "Department", "type": "string", "nullable": true },
+        { "key": "jobTitle", "label": "Position", "type": "string", "nullable": true },
+        { "key": "accountEnabled", "label": "Account Enabled", "type": "boolean", "nullable": false },
+        { "key": "userType", "label": "User Type", "type": "string", "nullable": true }
+      ],
+      "filters": {
+        "delta": {
+          "query": "users/delta",
+          "description": "Microsoft Graph users delta endpoint."
+        }
+      },
+      "mapping": {
+        "schemaVersion": "1.0.0",
+        "defaults": [
+          { "source": "department", "target": "person.department", "behavior": "follow_azure" },
+          { "source": "jobTitle", "target": "person.role", "behavior": "follow_azure" },
+          { "source": "displayName", "target": "person.name", "behavior": "follow_azure" },
+          { "source": "mail", "target": "user.email", "behavior": "follow_azure" }
+        ]
+      }
+    }
+  ]
+}

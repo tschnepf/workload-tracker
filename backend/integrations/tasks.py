@@ -20,6 +20,7 @@ from .state import save_state
 from .providers.bqe.projects_sync import sync_projects as bqe_sync_projects
 from .providers.bqe.clients_sync import sync_clients as bqe_sync_clients
 from .logging_utils import integration_log_extra
+from .azure_identity import get_azure_connection, graph_reconcile, refresh_reconciliation
 
 logger = logging.getLogger(__name__)
 
@@ -202,3 +203,23 @@ def integration_rule_planner():
         run_integration_rule.apply_async(args=[rule.id], kwargs={'expected_revision': rule.revision})
         rule.next_run_at = None
         rule.save(update_fields=['next_run_at'])
+
+
+@shared_task(bind=True)
+def azure_daily_reconcile(self):
+    connection = get_azure_connection()
+    if not connection:
+        logger.info('azure_daily_reconcile_skipped_no_connection')
+        return {'skipped': True, 'reason': 'no_connection'}
+    summary: dict[str, object] = {}
+    try:
+        summary['graph'] = graph_reconcile(connection, dry_run=False)
+    except Exception as exc:  # nosec B110
+        logger.warning('azure_daily_reconcile_graph_failed', exc_info=True)
+        summary['graph_error'] = str(exc)
+    try:
+        summary['reconciliation'] = refresh_reconciliation(connection)
+    except Exception as exc:  # nosec B110
+        logger.warning('azure_daily_reconcile_refresh_failed', exc_info=True)
+        summary['refresh_error'] = str(exc)
+    return summary

@@ -497,3 +497,177 @@ export async function confirmProjectMatches(providerKey: string, payload: Confir
   });
   return ensureData<Record<string, number>>(res, 'Project matching confirmation');
 }
+
+export type AzureProviderStatus = {
+  connected: boolean;
+  connectionId: number | null;
+  environment: string | null;
+  hasScimToken: boolean;
+  policy: {
+    azureSsoEnabled: boolean;
+    azureSsoEnforced: boolean;
+    passwordLoginEnabledNonBreakGlass: boolean;
+    breakGlassUserId: number | null;
+  };
+  lastReconcileAt: string | null;
+};
+
+export type AzureMappingItem = {
+  id: number;
+  sourceValue: string;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  roleId?: number | null;
+  roleName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AzureReconciliationItem = {
+  id: number;
+  azurePrincipalId: string;
+  tenantId: string;
+  upn: string;
+  email: string;
+  displayName: string;
+  department: string;
+  jobTitle: string;
+  status: 'proposed' | 'conflict' | 'confirmed' | 'rejected' | 'applied' | 'unmatched';
+  confidence: number;
+  reasonCodes: string[];
+  candidateUser?: { id: number; username: string; email: string } | null;
+  candidatePerson?: { id: number; name: string } | null;
+  updatedAt: string;
+};
+
+export async function getAzureStatus(): Promise<AzureProviderStatus> {
+  const res = await apiClient.GET('/integrations/providers/azure/status/' as any, { headers: authHeaders() });
+  return ensureData<AzureProviderStatus>(res, 'Azure status');
+}
+
+export async function updateAzurePolicy(payload: Partial<AzureProviderStatus['policy']>): Promise<AzureProviderStatus> {
+  const res = await apiClient.POST('/integrations/providers/azure/status/' as any, {
+    body: payload,
+    headers: authHeaders(),
+  });
+  return ensureData<AzureProviderStatus>(res, 'Azure policy update');
+}
+
+export async function setAzureScimToken(token: string): Promise<void> {
+  const res = await apiClient.POST('/integrations/providers/azure/scim/token/' as any, {
+    body: { token },
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Save SCIM token failed', status, res.error);
+  }
+}
+
+export async function getAzureProvisioningStatus(): Promise<Record<string, any>> {
+  const res = await apiClient.GET('/integrations/providers/azure/provisioning/status/' as any, {
+    headers: authHeaders(),
+  });
+  return ensureData<Record<string, any>>(res, 'Azure provisioning status');
+}
+
+export async function triggerAzureReconcile(payload?: { dryRun?: boolean; includeGraph?: boolean }): Promise<Record<string, any>> {
+  const res = await apiClient.POST('/integrations/providers/azure/provisioning/reconcile-now/' as any, {
+    body: payload || {},
+    headers: authHeaders(),
+  });
+  return ensureData<Record<string, any>>(res, 'Azure reconcile now');
+}
+
+export async function listAzureDepartmentMappings(): Promise<AzureMappingItem[]> {
+  const res = await apiClient.GET('/integrations/providers/azure/mappings/departments/' as any, {
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: AzureMappingItem[] }>(res, 'Azure department mappings');
+  return data.items;
+}
+
+export async function saveAzureDepartmentMappings(mappings: Array<{ sourceValue: string; departmentId: number | null }>): Promise<AzureMappingItem[]> {
+  const res = await apiClient.POST('/integrations/providers/azure/mappings/departments/' as any, {
+    body: { mappings },
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: AzureMappingItem[] }>(res, 'Save Azure department mappings');
+  return data.items;
+}
+
+export async function listAzureRoleMappings(): Promise<AzureMappingItem[]> {
+  const res = await apiClient.GET('/integrations/providers/azure/mappings/roles/' as any, {
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: AzureMappingItem[] }>(res, 'Azure role mappings');
+  return data.items;
+}
+
+export async function saveAzureRoleMappings(mappings: Array<{ sourceValue: string; roleId: number | null }>): Promise<AzureMappingItem[]> {
+  const res = await apiClient.POST('/integrations/providers/azure/mappings/roles/' as any, {
+    body: { mappings },
+    headers: authHeaders(),
+  });
+  const data = ensureData<{ items: AzureMappingItem[] }>(res, 'Save Azure role mappings');
+  return data.items;
+}
+
+export async function listAzureReconciliation(): Promise<{ items: AzureReconciliationItem[]; users: Array<{ id: number; username: string; email: string }>; people: Array<{ id: number; name: string; email: string; is_active: boolean }> }> {
+  const res = await apiClient.GET('/integrations/providers/azure/migration/reconciliation/' as any, {
+    headers: authHeaders(),
+  });
+  return ensureData<any>(res, 'Azure reconciliation list');
+}
+
+export async function refreshAzureReconciliation(): Promise<Record<string, any>> {
+  const res = await apiClient.POST('/integrations/providers/azure/migration/reconciliation/refresh/' as any, {
+    body: {},
+    headers: authHeaders(),
+  });
+  return ensureData<Record<string, any>>(res, 'Azure reconciliation refresh');
+}
+
+export async function confirmAzureReconciliation(id: number): Promise<void> {
+  const res = await apiClient.POST('/integrations/providers/azure/migration/reconciliation/{id}/confirm/' as any, {
+    params: { path: { id } },
+    body: {},
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Confirm reconciliation failed', status, res.error);
+  }
+}
+
+export async function overrideAzureReconciliation(id: number, payload: { userId?: number | null; personId?: number | null }): Promise<void> {
+  const res = await apiClient.POST('/integrations/providers/azure/migration/reconciliation/{id}/override/' as any, {
+    params: { path: { id } },
+    body: payload,
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Override reconciliation failed', status, res.error);
+  }
+}
+
+export async function rejectAzureReconciliation(id: number): Promise<void> {
+  const res = await apiClient.POST('/integrations/providers/azure/migration/reconciliation/{id}/reject/' as any, {
+    params: { path: { id } },
+    body: {},
+    headers: authHeaders(),
+  });
+  if (res.error) {
+    const status = res.response?.status ?? 500;
+    throw new ApiError('Reject reconciliation failed', status, res.error);
+  }
+}
+
+export async function applyAzureReconciliation(): Promise<Record<string, any>> {
+  const res = await apiClient.POST('/integrations/providers/azure/migration/apply/' as any, {
+    body: {},
+    headers: authHeaders(),
+  });
+  return ensureData<Record<string, any>>(res, 'Apply reconciliation');
+}
