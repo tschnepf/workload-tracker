@@ -71,7 +71,13 @@ import { emitToast, showToast as showToastBus } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
 import SaveStateBadge from '@/components/ux/SaveStateBadge';
 import { usePageShortcuts } from '@/hooks/usePageShortcuts';
-import { classifyWorkloadTokenTerm, normalizeWorkloadAliasTerm } from '@/utils/workloadSearch';
+import {
+  classifyWorkloadTokenTerm,
+  filterTextCompatibleTokens,
+  isNumericWorkloadTokenTerm,
+  matchesNumericWorkloadTerm,
+  normalizeWorkloadAliasTerm,
+} from '@/utils/workloadSearch';
 import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
 import WorkPlanningSearchBar from '@/features/work-planning/search/WorkPlanningSearchBar';
 import { useAutoHoursSettings } from '@/features/work-planning/auto-hours/useAutoHoursSettings';
@@ -229,9 +235,21 @@ const AssignmentGrid: React.FC = () => {
     [normalizedSearchTokens.length]
   );
   const serverFilterActive = searchTokensActive;
-  const searchTokensPayload = useMemo(
-    () => normalizedSearchTokens.map(({ term, op }) => ({ term, op })),
+  const textCompatibleSearchTokens = useMemo(
+    () => filterTextCompatibleTokens(normalizedSearchTokens),
     [normalizedSearchTokens]
+  );
+  const nonNumericSearchTokens = useMemo(
+    () => normalizedSearchTokens.filter((token) => !isNumericWorkloadTokenTerm(token.term)),
+    [normalizedSearchTokens]
+  );
+  const numericWorkloadSearchTokens = useMemo(
+    () => normalizedSearchTokens.filter((token) => isNumericWorkloadTokenTerm(token.term)),
+    [normalizedSearchTokens]
+  );
+  const searchTokensPayload = useMemo(
+    () => nonNumericSearchTokens.map(({ term, op }) => ({ term, op })),
+    [nonNumericSearchTokens]
   );
   const workloadWeekStart = useMemo(() => getCurrentSundayIso(), []);
   const departmentFilters = useMemo(() => (deptState.filters ?? [])
@@ -290,12 +308,12 @@ const AssignmentGrid: React.FC = () => {
   }, [serverFilterActive, hoursByPerson, searchMeta?.filteredTotals]);
 
   const matchesTokensText = useCallback((text: string) => {
-    if (!normalizedSearchTokens.length) return true;
+    if (!textCompatibleSearchTokens.length) return true;
     const haystack = (text || '').toLowerCase();
     let hasOr = false;
     let orMatched = false;
 
-    for (const token of normalizedSearchTokens) {
+    for (const token of textCompatibleSearchTokens) {
       const match = haystack.includes(token.term);
       if (token.op === 'not') {
         if (match) return false;
@@ -311,10 +329,10 @@ const AssignmentGrid: React.FC = () => {
 
     if (hasOr && !orMatched) return false;
     return true;
-  }, [normalizedSearchTokens]);
+  }, [textCompatibleSearchTokens]);
 
   const matchesSearchTokensAssignment = useCallback((assignment: Assignment) => {
-    if (!normalizedSearchTokens.length) return true;
+    if (!textCompatibleSearchTokens.length) return true;
     const project = assignment?.project ? projectsById.get(assignment.project) : undefined;
     const personName = assignment.personName
       || (assignment.person ? peopleById.get(assignment.person)?.name : '')
@@ -331,7 +349,7 @@ const AssignmentGrid: React.FC = () => {
       .filter(Boolean)
       .join(' ');
     return matchesTokensText(haystack);
-  }, [normalizedSearchTokens.length, projectsById, peopleById, matchesTokensText]);
+  }, [textCompatibleSearchTokens.length, projectsById, peopleById, matchesTokensText]);
 
   const addSearchToken = useCallback(() => {
     const term = searchInput.trim();
@@ -574,11 +592,47 @@ const AssignmentGrid: React.FC = () => {
     [searchMeta?.peopleMatchReason]
   );
 
+  const getPersonWorkloadTotalForFilterWeek = useCallback((personId: number): number => {
+    const byWeek = hoursByPerson?.[personId] || {};
+    if (Object.prototype.hasOwnProperty.call(byWeek, workloadWeekStart)) {
+      return Number(byWeek[workloadWeekStart] || 0);
+    }
+    const fallbackWeek = weeks[0]?.date;
+    if (fallbackWeek && Object.prototype.hasOwnProperty.call(byWeek, fallbackWeek)) {
+      return Number(byWeek[fallbackWeek] || 0);
+    }
+    return 0;
+  }, [hoursByPerson, workloadWeekStart, weeks]);
+
+  const matchesNumericWorkloadForPerson = useCallback((personId: number | null | undefined): boolean => {
+    if (!numericWorkloadSearchTokens.length) return true;
+    if (personId == null) return false;
+    const totalHours = getPersonWorkloadTotalForFilterWeek(personId);
+    let hasOr = false;
+    let orMatched = false;
+
+    for (const token of numericWorkloadSearchTokens) {
+      const match = matchesNumericWorkloadTerm(totalHours, token.term);
+      if (token.op === 'not') {
+        if (match) return false;
+        continue;
+      }
+      if (token.op === 'and') {
+        if (!match) return false;
+        continue;
+      }
+      hasOr = true;
+      if (match) orMatched = true;
+    }
+
+    if (hasOr && !orMatched) return false;
+    return true;
+  }, [getPersonWorkloadTotalForFilterWeek, numericWorkloadSearchTokens]);
+
   const visiblePeople = useMemo(() => {
-    if (!serverFilterActive) return people;
-    const matches = searchMeta?.people || [];
-    if (!matches.length) return [];
-    return matches.map((p) => {
+    const basePeople = !serverFilterActive
+      ? people
+      : (searchMeta?.people || []).map((p) => {
       const existing = peopleById.get(p.id);
       if (existing) {
         return {
@@ -597,7 +651,16 @@ const AssignmentGrid: React.FC = () => {
         isExpanded: false,
       };
     });
-  }, [serverFilterActive, people, peopleById, searchMeta?.people]);
+    if (!numericWorkloadSearchTokens.length) return basePeople;
+    return basePeople.filter((person) => matchesNumericWorkloadForPerson(person.id));
+  }, [
+    serverFilterActive,
+    people,
+    peopleById,
+    searchMeta?.people,
+    numericWorkloadSearchTokens.length,
+    matchesNumericWorkloadForPerson,
+  ]);
 
   const firstEligibleWeekForPerson = useCallback((personId: number): string | null => {
     const person = peopleById.get(personId) || visiblePeople.find((p) => p.id === personId);
@@ -628,9 +691,9 @@ const AssignmentGrid: React.FC = () => {
     return (visiblePeople || []).map((person) => ({
       ...person,
       assignments: resolvePersonAssignments(person as PersonWithAssignments),
-      matchReason: peopleMatchReasonById?.[String(person.id)],
+      matchReason: peopleMatchReasonById?.[String(person.id)] || (numericWorkloadSearchTokens.length ? 'workload' : undefined),
     }));
-  }, [visiblePeople, resolvePersonAssignments, peopleMatchReasonById]);
+  }, [visiblePeople, resolvePersonAssignments, peopleMatchReasonById, numericWorkloadSearchTokens.length]);
 
   const visibleAssignmentsCount = useMemo(() => {
     if (serverFilterActive && searchMeta) {
