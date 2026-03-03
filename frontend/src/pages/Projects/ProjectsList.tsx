@@ -261,22 +261,61 @@ const ProjectsList: React.FC = () => {
   // Next Deliverables map for list column + sorting
   const { nextMap: nextDeliverablesMap, prevMap: prevDeliverablesMap, refreshOne: refreshDeliverablesFor } = useProjectDeliverablesBulk(projects);
 
+  const leadAssignmentsDepartmentFilters = useMemo(() => {
+    if (deptState.selectedDepartmentId != null) return undefined;
+    if (!departmentFilters.length) return undefined;
+    // Assignment rows should match selected departments by membership (union),
+    // while project-level AND matching remains handled by the projects query.
+    return departmentFilters.map((filter) => ({
+      departmentId: filter.departmentId,
+      op: filter.op === 'not' ? 'not' as const : 'or' as const,
+    }));
+  }, [deptState.selectedDepartmentId, departmentFilters]);
+  const leadAssignmentsDepartmentFiltersKey = useMemo(
+    () => JSON.stringify(leadAssignmentsDepartmentFilters ?? []),
+    [leadAssignmentsDepartmentFilters]
+  );
+  const leadAssignmentsQueryFilters = useMemo(
+    () => ({
+      ...backendParams,
+      include_placeholders: 1 as const,
+      vertical: verticalState.selectedVerticalId ?? undefined,
+      department_filters: leadAssignmentsDepartmentFilters,
+    }),
+    [backendParams, verticalState.selectedVerticalId, leadAssignmentsDepartmentFilters]
+  );
   const leadAssignmentsKey = useMemo(
-    () => ['projectLeadAssignments', backendParams.department ?? null, backendParams.include_children ?? null, verticalState.selectedVerticalId ?? null],
-    [backendParams.department, backendParams.include_children, verticalState.selectedVerticalId]
+    () => [
+      'projectLeadAssignments',
+      backendParams.department ?? null,
+      backendParams.include_children ?? null,
+      leadAssignmentsDepartmentFiltersKey,
+      verticalState.selectedVerticalId ?? null,
+    ],
+    [backendParams.department, backendParams.include_children, leadAssignmentsDepartmentFiltersKey, verticalState.selectedVerticalId]
   );
   const leadAssignmentsQuery = useQuery<Assignment[], Error>({
     queryKey: leadAssignmentsKey,
-    queryFn: () => assignmentsApi.listAll({
-      ...backendParams,
-      include_placeholders: 1,
-      vertical: verticalState.selectedVerticalId ?? undefined,
-      department_filters: deptState.selectedDepartmentId == null ? departmentFilters : undefined,
-    }),
+    queryFn: () => assignmentsApi.listAll(leadAssignmentsQueryFilters),
     enabled: projects.length > 0 && (detailsPaneOpen || mobileDetailOpen),
     staleTime: 30_000,
   });
-  const leadAssignments = leadAssignmentsQuery.data ?? [];
+  const leadAssignments = useMemo(() => leadAssignmentsQuery.data ?? [], [leadAssignmentsQuery.data]);
+  const leadAssignmentsForList = useMemo(() => {
+    if (deptState.selectedDepartmentId != null || departmentFilters.length === 0) return leadAssignments;
+    const include = new Set<number>();
+    const exclude = new Set<number>();
+    departmentFilters.forEach((filter) => {
+      if (filter.op === 'not') exclude.add(filter.departmentId);
+      else include.add(filter.departmentId);
+    });
+    return leadAssignments.filter((assignment) => {
+      const deptId = assignment.personDepartmentId ?? null;
+      if (deptId != null && exclude.has(deptId)) return false;
+      if (include.size > 0) return deptId != null && include.has(deptId);
+      return true;
+    });
+  }, [leadAssignments, deptState.selectedDepartmentId, departmentFilters]);
   const departmentFilterId = deptState?.selectedDepartmentId != null ? Number(deptState.selectedDepartmentId) : null;
   const refetchProjectsSafe = useCallback(async () => {
     try { await refetchProjects(); } catch {}
@@ -313,7 +352,7 @@ const ProjectsList: React.FC = () => {
 
   const projectAssignmentDepartments = useMemo(() => {
     const map = new Map<number, Set<number>>();
-    leadAssignments.forEach((assignment) => {
+    leadAssignmentsForList.forEach((assignment) => {
       const projectId = assignment.project;
       const deptId = assignment.personDepartmentId;
       if (!projectId || deptId == null) return;
@@ -322,7 +361,7 @@ const ProjectsList: React.FC = () => {
       map.set(projectId, deptSet);
     });
     return map;
-  }, [leadAssignments]);
+  }, [leadAssignmentsForList]);
 
   const deptFilteredSortedProjects = useMemo(() => projects, [projects]);
   const resultsCount = totalCount || deptFilteredSortedProjects.length;
@@ -611,7 +650,7 @@ const ProjectsList: React.FC = () => {
 
   const projectLeadsMap = useMemo(() => {
     const map = new Map<number, string>();
-    if (!leadAssignments.length) return map;
+    if (!leadAssignmentsForList.length) return map;
     const peopleById = new Map<number, { name: string; departmentId?: number | null; departmentName?: string | null }>();
     const deptById = new Map<number, { name?: string; shortName?: string }>();
     people.forEach(p => {
@@ -623,7 +662,7 @@ const ProjectsList: React.FC = () => {
       if (d.id != null) deptById.set(d.id, { name: d.name, shortName: d.shortName });
     });
     const leadsByProject = new Map<number, Map<number | string, { name: string; deptLabel: string }>>();
-    leadAssignments.forEach((assignment) => {
+    leadAssignmentsForList.forEach((assignment) => {
       if (!assignment.project) return;
       const roleName = (assignment.roleName || '').toLowerCase();
       if (!roleName.includes('lead')) return;
@@ -654,11 +693,11 @@ const ProjectsList: React.FC = () => {
       map.set(projectId, sorted.join('\n'));
     });
     return map;
-  }, [leadAssignments, people, departments]);
+  }, [leadAssignmentsForList, people, departments]);
 
   const projectAssignmentsTooltipMap = useMemo(() => {
     const map = new Map<number, Array<{ deptLabel: string; items: Array<{ name: string; role: string }> }>>();
-    if (!leadAssignments.length) return map;
+    if (!leadAssignmentsForList.length) return map;
     const peopleById = new Map<number, { name: string; departmentId?: number | null; departmentName?: string | null }>();
     const deptById = new Map<number, { name?: string; shortName?: string }>();
     people.forEach(p => {
@@ -670,7 +709,7 @@ const ProjectsList: React.FC = () => {
       if (d.id != null) deptById.set(d.id, { name: d.name, shortName: d.shortName });
     });
     const grouped = new Map<number, Map<string, Array<{ name: string; role: string }>>>();
-    leadAssignments.forEach((assignment) => {
+    leadAssignmentsForList.forEach((assignment) => {
       if (!assignment.project) return;
       const personMeta = assignment.person != null ? peopleById.get(assignment.person) : undefined;
       const personName = assignment.personName
@@ -705,13 +744,13 @@ const ProjectsList: React.FC = () => {
       map.set(projectId, entries);
     });
     return map;
-  }, [leadAssignments, people, departments]);
+  }, [leadAssignmentsForList, people, departments]);
 
   const projectQaAssignmentsMap = useMemo(() => {
     const map = new Map<number, Assignment[]>();
-    if (!leadAssignments.length) return map;
+    if (!leadAssignmentsForList.length) return map;
     const grouped = new Map<number, Map<string, Assignment[]>>();
-    leadAssignments.forEach((assignment) => {
+    leadAssignmentsForList.forEach((assignment) => {
       if (!assignment.project) return;
       const roleName = (assignment.roleName || '').toLowerCase();
       if (!roleName.includes('qa') && !roleName.includes('quality')) return;
@@ -739,7 +778,7 @@ const ProjectsList: React.FC = () => {
       map.set(projectId, ordered);
     });
     return map;
-  }, [leadAssignments, departmentLabelMap]);
+  }, [leadAssignmentsForList, departmentLabelMap]);
 
   // Conflict checker for add-assignment flow
   const checkAssignmentConflicts = useCallback(async (
@@ -788,7 +827,7 @@ const ProjectsList: React.FC = () => {
 
   const handleQaAssignmentUpdated = useCallback(async (projectId: number) => {
     try {
-      const fresh = await assignmentsApi.listAll({ ...backendParams, include_placeholders: 1 }, { noCache: true });
+      const fresh = await assignmentsApi.listAll(leadAssignmentsQueryFilters, { noCache: true });
       queryClient.setQueryData(leadAssignmentsKey, fresh);
     } catch {
       try { await leadAssignmentsQuery.refetch(); } catch {}
@@ -796,7 +835,7 @@ const ProjectsList: React.FC = () => {
     if (selectedProject?.id && selectedProject.id === projectId) {
       try { await reloadAssignments(projectId); } catch {}
     }
-  }, [backendParams, leadAssignmentsKey, leadAssignmentsQuery, queryClient, reloadAssignments, selectedProject?.id]);
+  }, [leadAssignmentsQueryFilters, leadAssignmentsKey, leadAssignmentsQuery, queryClient, reloadAssignments, selectedProject?.id]);
 
   // Memoized role suggestions based on person skills
   const getSkillBasedRoleSuggestions = useCallback((person: Person | null): string[] => {
