@@ -2,12 +2,13 @@ import React from 'react';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 import { useSettingsData } from '../SettingsDataContext';
 import DeliverableTaskTemplatesEditor from '@/components/settings/DeliverableTaskTemplatesEditor';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 export const DELIVERABLE_TASK_TEMPLATES_SECTION_ID = 'deliverable-task-templates';
 
 const DeliverableTaskTemplatesSection: React.FC = () => {
   const { auth } = useSettingsData();
-  if (!auth.user?.is_staff) return null;
+  if (!isAdminOrManager(auth.user)) return null;
 
   return (
     <SettingsSectionFrame

@@ -90,26 +90,30 @@ const SettingsSplitPane: React.FC<SettingsSplitPaneProps> = ({ sections }) => {
           placeholder="Search sections…"
         />
         <nav role="tablist" aria-label="Settings sections" className="mt-4 space-y-1 overflow-auto">
-          {filteredSections.map((section) => {
+          {filteredSections.map((section, index) => {
             const isActive = section.id === activeSectionId;
             return (
-              <button
-                key={section.id}
-                role="tab"
-                aria-selected={isActive}
-                className={clsx(
-                  'w-full text-left px-3 py-2 rounded border',
-                  isActive
-                    ? 'bg-[var(--surfaceHover)] border-[var(--primary)] text-[var(--text)]'
-                    : 'border-transparent text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]',
+              <React.Fragment key={section.id}>
+                {section.separatorBefore && index > 0 && (
+                  <div className="my-2 border-t border-[var(--border)]" aria-hidden />
                 )}
-                onClick={() => {
-                  setSelectedId(section.id);
-                  trackPerformanceEvent('settings.section.select', 1, 'count', { section: section.id });
-                }}
-              >
-                {section.title}
-              </button>
+                <button
+                  role="tab"
+                  aria-selected={isActive}
+                  className={clsx(
+                    'w-full text-left px-3 py-2 rounded border',
+                    isActive
+                      ? 'bg-[var(--surfaceHover)] border-[var(--primary)] text-[var(--text)]'
+                      : 'border-transparent text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]',
+                  )}
+                  onClick={() => {
+                    setSelectedId(section.id);
+                    trackPerformanceEvent('settings.section.select', 1, 'count', { section: section.id });
+                  }}
+                >
+                  {section.title}
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>

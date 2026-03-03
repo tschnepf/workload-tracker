@@ -887,21 +887,21 @@ class SettingsPageSnapshotView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [UiPageSnapshotThrottle]
     _SECTIONS = [
-        {'id': 'role-management', 'title': 'Role Management', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'verticals', 'title': 'Verticals', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'department-project-roles', 'title': 'Department Project Roles', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
-        {'id': 'project-statuses', 'title': 'Project Statuses', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'utilization-scheme', 'title': 'Utilization Scheme', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'project-templates', 'title': 'Project Template', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'role-management', 'title': 'Company Roles', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'verticals', 'title': 'Company Verticals', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'department-project-roles', 'title': 'Department Project Roles', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'project-statuses', 'title': 'Project Status and Colors', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'project-templates', 'title': 'Project Manloader Template', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'deliverable-task-templates', 'title': 'Deliverable Task Templates', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'utilization-scheme', 'title': 'Utilization Hours and Color Scheme', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'deliverable-phase-mapping', 'title': 'Deliverable Phase Mapping', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'deliverable-task-templates', 'title': 'Deliverable Task Templates', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'backup-restore', 'title': 'Backup & Restore', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'integrations', 'title': 'Integrations Hub', 'requires_admin': True, 'allow_manager': False, 'integrations_only': True},
         {'id': 'admin-audit-log', 'title': 'Admin Audit Log', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
-        {'id': 'project-audit-log', 'title': 'Project Audit Log', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'project-audit-log', 'title': 'Project Audit Log', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
     ]
 
     def _visible_sections(self, request):
@@ -999,7 +999,7 @@ class SettingsPageSnapshotView(APIView):
 
 
 class PreDeliverableGlobalSettingsView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     @extend_schema(responses=PreDeliverableGlobalSettingsItemSerializer(many=True))
     def get(self, request):
@@ -2646,7 +2646,7 @@ class DeliverablePhaseMappingSettingsView(APIView):
 
 
 class QATaskSettingsView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     @extend_schema(responses=QATaskSettingsSerializer)
     def get(self, request):
@@ -2663,12 +2663,12 @@ class QATaskSettingsView(APIView):
 
 
 class CalendarFeedsView(APIView):
-    """Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+    """Endpoint to view/update tokens for calendar feeds (read-only ICS).
 
-    - GET: returns current token values
-    - PATCH: set a specific token or regenerate with {regenerate: true}
+    - GET: all authenticated users can view current token values
+    - PATCH: admin-only update or regenerate with {regenerate: true}
     """
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(responses=CalendarFeedSettingsSerializer)
     def get(self, request):
@@ -2683,6 +2683,8 @@ class CalendarFeedsView(APIView):
         responses=CalendarFeedSettingsSerializer,
     )
     def patch(self, request):
+        if not is_admin_user(getattr(request, 'user', None)):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
         obj = CalendarFeedSettings.get_active()
         regen = bool(request.data.get('regenerate'))
         token = request.data.get('deliverables_token')

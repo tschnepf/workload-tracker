@@ -3,12 +3,13 @@ import PreDeliverablesBackfill from '@/components/settings/PreDeliverablesBackfi
 import QATaskDefaults from '@/components/settings/QATaskDefaults';
 import { useSettingsData } from '../SettingsDataContext';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 export const PRE_DELIVERABLES_SECTION_ID = 'pre-deliverables';
 
 const PreDeliverablesSection: React.FC = () => {
   const { auth } = useSettingsData();
-  if (!auth.user?.is_staff) return null;
+  if (!isAdminOrManager(auth.user)) return null;
 
   return (
     <SettingsSectionFrame

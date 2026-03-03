@@ -104,16 +104,16 @@ class ProjectStatusDefinitionViewSet(viewsets.ViewSet):
             })
         return ProjectStatusDefinitionSerializer(payload, many=True).data
 
-    def _require_admin(self, request):
-        return is_admin_user(getattr(request, 'user', None))
+    def _require_manager_or_admin(self, request):
+        return is_admin_or_manager(getattr(request, 'user', None))
 
     def list(self, request):
         data = self._serialize(self._queryset())
         return Response(data)
 
     def create(self, request):
-        if not self._require_admin(request):
-            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        if not self._require_manager_or_admin(request):
+            return Response({'detail': 'Manager or admin access required'}, status=status.HTTP_403_FORBIDDEN)
         serializer = ProjectStatusDefinitionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(is_system=False)
@@ -123,8 +123,8 @@ class ProjectStatusDefinitionViewSet(viewsets.ViewSet):
         return Response(created, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, key=None):
-        if not self._require_admin(request):
-            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        if not self._require_manager_or_admin(request):
+            return Response({'detail': 'Manager or admin access required'}, status=status.HTTP_403_FORBIDDEN)
         obj = ProjectStatusDefinition.objects.filter(key=(key or '').strip().lower()).first()
         if not obj:
             return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -139,8 +139,8 @@ class ProjectStatusDefinitionViewSet(viewsets.ViewSet):
         return Response(updated)
 
     def destroy(self, request, key=None):
-        if not self._require_admin(request):
-            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        if not self._require_manager_or_admin(request):
+            return Response({'detail': 'Manager or admin access required'}, status=status.HTTP_403_FORBIDDEN)
         obj = ProjectStatusDefinition.objects.filter(key=(key or '').strip().lower()).first()
         if not obj:
             return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -1962,12 +1962,14 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
 
 class ProjectAuditLogsView(APIView):
-    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [UserRateThrottle]
 
     @extend_schema(parameters=[OpenApiParameter(name='limit', type=int, required=False)], responses=AdminAuditLogSerializer(many=True))
     def get(self, request):
-        """Read-only endpoint for recent project create/delete audit logs (admin only)."""
+        """Read-only endpoint for recent project create/delete audit logs (manager/admin only)."""
+        if not is_admin_or_manager(getattr(request, 'user', None)):
+            return Response({'detail': 'Manager or admin access required'}, status=status.HTTP_403_FORBIDDEN)
         try:
             limit = int(request.query_params.get('limit', '50'))
         except Exception:

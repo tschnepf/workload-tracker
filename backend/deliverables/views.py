@@ -42,7 +42,6 @@ from .permissions import DeliverableTaskPermission
 from accounts.permissions import is_admin_or_manager, IsAdminOrManager
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from assignments.utils.project_membership import current_project_ids
-from rest_framework.permissions import IsAdminUser
 from projects.change_log import record_project_change
 try:
     from core.tasks import backfill_pre_deliverables_async  # type: ignore
@@ -1111,9 +1110,9 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             },
         ),
     )
-    @action(detail=False, methods=['post'], url_path='backfill', permission_classes=[permissions.IsAuthenticated, IsAdminUser])
+    @action(detail=False, methods=['post'], url_path='backfill', permission_classes=[permissions.IsAuthenticated, IsAdminOrManager])
     def backfill(self, request):
-        """Staff-only: backfill or regenerate pre-items for a project/date window.
+        """Manager/admin: backfill or regenerate pre-items for a project/date window.
 
         If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
         returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
@@ -1130,7 +1129,7 @@ class PreDeliverableItemViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 task = enqueue_user_facing_task(
                     backfill_pre_deliverables_async,
                     user=request.user,
-                    is_admin_only=True,
+                    is_admin_only=False,
                     purpose='deliverables_preitems_backfill',
                     args=(project_id, str(start) if start else None, str(end) if end else None, regenerate),
                 )

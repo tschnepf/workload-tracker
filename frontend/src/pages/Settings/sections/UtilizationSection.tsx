@@ -11,7 +11,7 @@ const UtilizationSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={UTILIZATION_SECTION_ID}
-      title="Utilization Scheme"
+      title="Utilization Hours and Color Scheme"
       description="Adjust hour ranges and colors used to represent utilization across the app."
       className="mt-6"
     >

@@ -7,7 +7,7 @@ import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
-import { isAdminOrManager, isAdminUser } from '@/utils/roleAccess';
+import { isAdminUser } from '@/utils/roleAccess';
 
 type AdminUser = {
   id: number;
@@ -34,7 +34,7 @@ export const ADMIN_USERS_SECTION_ID = 'admin-users';
 
 const AdminUsersSection: React.FC = () => {
   const { auth } = useSettingsData();
-  const canManageUsers = isAdminOrManager(auth.user);
+  const canManageUsers = isAdminUser(auth.user);
   const isAdmin = isAdminUser(auth.user);
 
   const [peopleOptions, setPeopleOptions] = useState<PersonOption[]>([]);

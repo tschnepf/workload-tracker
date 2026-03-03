@@ -19,7 +19,11 @@ async function patchCalendarFeeds(payload: { deliverables_token?: string; regene
   return res.json() as Promise<{ deliverables_token: string; updated_at: string }>;
 }
 
-export default function CalendarFeeds() {
+type CalendarFeedsProps = {
+  canAdminRegenerate?: boolean;
+};
+
+export default function CalendarFeeds({ canAdminRegenerate = false }: CalendarFeedsProps) {
   const [loading, setLoading] = React.useState(true);
   const [token, setToken] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -44,6 +48,10 @@ export default function CalendarFeeds() {
   }, []);
 
   const handleSave = async () => {
+    if (!canAdminRegenerate) {
+      showToast('Only admins can modify calendar feed tokens', 'error');
+      return;
+    }
     try {
       setSaving(true);
       const data = await patchCalendarFeeds({ deliverables_token: token });
@@ -58,6 +66,10 @@ export default function CalendarFeeds() {
   };
 
   const handleRegenerate = async () => {
+    if (!canAdminRegenerate) {
+      showToast('Only admins can regenerate calendar feed tokens', 'error');
+      return;
+    }
     const ok = await confirmAction({
       title: 'Regenerate Token',
       message: 'Regenerate token? Existing subscriptions will stop updating.',
@@ -109,18 +121,40 @@ export default function CalendarFeeds() {
             </div>
             <div>
               <label className="block text-sm text-[var(--muted)] mb-1">Token</label>
-              <input className="w-full bg-[var(--surface)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)]" value={token} onChange={e => setToken((e.target as HTMLInputElement).value)} />
+              <input
+                className="w-full bg-[var(--surface)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)]"
+                value={token}
+                readOnly={!canAdminRegenerate}
+                onChange={e => setToken((e.target as HTMLInputElement).value)}
+              />
             </div>
           </div>
 
           <div className="mt-3 flex gap-2">
-            <button disabled={saving} className={`px-3 py-2 rounded ${saving ? 'opacity-50 cursor-not-allowed' : 'bg-[var(--primary)] text-white border border-[var(--primary)] hover:opacity-90'}`} onClick={handleSave}>
+            <button
+              disabled={saving || !canAdminRegenerate}
+              className={`px-3 py-2 rounded ${
+                saving || !canAdminRegenerate
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'bg-[var(--primary)] text-white border border-[var(--primary)] hover:opacity-90'
+              }`}
+              onClick={handleSave}
+            >
               {saving ? 'Saving…' : 'Save'}
             </button>
-            <button disabled={saving} className="px-3 py-2 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]" onClick={handleRegenerate}>
+            <button
+              disabled={saving || !canAdminRegenerate}
+              className="px-3 py-2 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleRegenerate}
+            >
               Regenerate Token
             </button>
           </div>
+          {!canAdminRegenerate && (
+            <div className="mt-2 text-xs text-[var(--muted)]">
+              Read-only access. Only admins can update or regenerate tokens.
+            </div>
+          )}
 
           <div className="mt-4 text-[var(--muted)] text-sm">
             <div>Outlook: Add calendar → Subscribe from web → paste URL.</div>

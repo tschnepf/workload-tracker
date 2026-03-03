@@ -9,13 +9,14 @@ import { showToast } from '@/lib/toastBus';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useSettingsData } from '../SettingsDataContext';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
-import { isAdminOrManager } from '@/utils/roleAccess';
+import { isAdminUser } from '@/utils/roleAccess';
 
 export const ROLE_MANAGEMENT_SECTION_ID = 'role-management';
 
 const RoleManagementSection: React.FC = () => {
   const { auth } = useSettingsData();
-  const canReorder = isAdminOrManager(auth.user);
+  const isAdmin = isAdminUser(auth.user);
+  const canReorder = isAdmin;
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,9 +40,11 @@ const RoleManagementSection: React.FC = () => {
   }, []);
 
   useAuthenticatedEffect(() => {
-    if (!auth.accessToken) return;
+    if (!auth.accessToken || !isAdmin) return;
     loadRoles();
-  }, [auth.accessToken, loadRoles]);
+  }, [auth.accessToken, isAdmin, loadRoles]);
+
+  if (!isAdmin) return null;
 
   const refreshRolesQuietly = useCallback(async () => {
     try {
@@ -113,7 +116,7 @@ const RoleManagementSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={ROLE_MANAGEMENT_SECTION_ID}
-      title="Role Management"
+      title="Company Roles"
       description="Manage job roles used throughout the system. Roles can be assigned to people and used for reporting."
       actions={actions}
     >

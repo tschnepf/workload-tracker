@@ -21,6 +21,7 @@ export type SettingsSectionDefinition = {
   title: string;
   requiresAdmin: boolean;
   allowManager?: boolean;
+  separatorBefore?: boolean;
   featureFlag?: (caps?: Capabilities) => boolean;
   component: React.ComponentType;
 };
@@ -28,13 +29,13 @@ export type SettingsSectionDefinition = {
 export const settingsSections: SettingsSectionDefinition[] = [
   {
     id: ROLE_MANAGEMENT_SECTION_ID,
-    title: 'Role Management',
-    requiresAdmin: false,
+    title: 'Company Roles',
+    requiresAdmin: true,
     component: RoleManagementSection,
   },
   {
     id: VERTICALS_SECTION_ID,
-    title: 'Verticals',
+    title: 'Company Verticals',
     requiresAdmin: true,
     component: VerticalsSection,
   },
@@ -42,57 +43,62 @@ export const settingsSections: SettingsSectionDefinition[] = [
     id: DEPARTMENT_ROLES_SECTION_ID,
     title: 'Department Project Roles',
     requiresAdmin: true,
-    allowManager: true,
     component: DepartmentRolesSection,
   },
   {
     id: PROJECT_STATUSES_SECTION_ID,
-    title: 'Project Statuses',
+    title: 'Project Status and Colors',
     requiresAdmin: true,
+    allowManager: true,
+    separatorBefore: true,
     component: ProjectStatusesSection,
   },
   {
-    id: UTILIZATION_SECTION_ID,
-    title: 'Utilization Scheme',
-    requiresAdmin: false,
-    component: UtilizationSection,
+    id: AUTO_HOURS_SECTION_ID,
+    title: 'Project Manloader Template',
+    requiresAdmin: true,
+    allowManager: true,
+    component: AutoHoursSection,
   },
   {
     id: PRE_DELIVERABLES_SECTION_ID,
     title: 'Pre-Deliverables',
     requiresAdmin: true,
+    allowManager: true,
     component: PreDeliverablesSection,
-  },
-  {
-    id: AUTO_HOURS_SECTION_ID,
-    title: 'Project Template',
-    requiresAdmin: true,
-    component: AutoHoursSection,
-  },
-  {
-    id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,
-    title: 'Deliverable Phase Mapping',
-    requiresAdmin: true,
-    component: DeliverablePhaseMappingSection,
   },
   {
     id: DELIVERABLE_TASK_TEMPLATES_SECTION_ID,
     title: 'Deliverable Task Templates',
     requiresAdmin: true,
+    allowManager: true,
     component: DeliverableTaskTemplatesSection,
   },
   {
     id: CALENDAR_FEEDS_SECTION_ID,
     title: 'Calendar Feeds',
-    requiresAdmin: true,
+    requiresAdmin: false,
+    separatorBefore: true,
     component: CalendarFeedsSection,
   },
   {
     id: ADMIN_USERS_SECTION_ID,
     title: 'Create User & Admin Users',
     requiresAdmin: true,
-    allowManager: true,
+    separatorBefore: true,
     component: AdminUsersSection,
+  },
+  {
+    id: UTILIZATION_SECTION_ID,
+    title: 'Utilization Hours and Color Scheme',
+    requiresAdmin: true,
+    component: UtilizationSection,
+  },
+  {
+    id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,
+    title: 'Deliverable Phase Mapping',
+    requiresAdmin: true,
+    component: DeliverablePhaseMappingSection,
   },
   {
     id: BACKUP_RESTORE_SECTION_ID,
@@ -117,6 +123,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
     id: PROJECT_AUDIT_LOG_SECTION_ID,
     title: 'Project Audit Log',
     requiresAdmin: true,
+    allowManager: true,
     component: ProjectAuditLogSection,
   },
 ];

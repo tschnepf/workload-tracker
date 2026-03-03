@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 import Button from '@/components/ui/Button';
 import { useSettingsData } from '../SettingsDataContext';
-import { isAdminUser } from '@/utils/roleAccess';
+import { isAdminOrManager } from '@/utils/roleAccess';
 import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
 import type { ProjectStatusDefinition } from '@/types/models';
@@ -50,7 +50,7 @@ function toEditState(item: ProjectStatusDefinition): EditState {
 const ProjectStatusesSection: React.FC = () => {
   const { auth } = useSettingsData();
   const queryClient = useQueryClient();
-  const canManage = isAdminUser(auth.user);
+  const canManage = isAdminOrManager(auth.user);
   const { definitions, isLoading, isError, error } = useProjectStatusDefinitions({ enabled: canManage });
   const [newKey, setNewKey] = useState('');
   const [newState, setNewState] = useState<EditState>({
@@ -199,7 +199,7 @@ const ProjectStatusesSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={PROJECT_STATUSES_SECTION_ID}
-      title="Project Statuses"
+      title="Project Status and Colors"
       description="Define project statuses used across forms, filters, and analytics. Keys are immutable after creation."
       className="mt-6"
     >

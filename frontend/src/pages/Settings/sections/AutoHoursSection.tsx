@@ -1,20 +1,20 @@
 import React from 'react';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 import { useSettingsData } from '../SettingsDataContext';
-import { isAdminUser } from '@/utils/roleAccess';
+import { isAdminOrManager } from '@/utils/roleAccess';
 import AutoHoursTemplatesEditor from '@/components/settings/AutoHoursTemplatesEditor';
 
 export const AUTO_HOURS_SECTION_ID = 'project-templates';
 
 const AutoHoursSection: React.FC = () => {
   const { auth } = useSettingsData();
-  const canAccess = isAdminUser(auth.user);
+  const canAccess = isAdminOrManager(auth.user);
   if (!canAccess) return null;
 
   return (
     <>
       <SettingsSectionFrame
-        title="Project Templates"
+        title="Project Manloader Template"
         description="Create templates to override the global defaults on a per-project basis."
         className="mt-6"
       >

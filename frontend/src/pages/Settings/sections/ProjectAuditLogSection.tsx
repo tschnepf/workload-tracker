@@ -4,6 +4,7 @@ import { projectsApi } from '@/services/api';
 import { useSettingsData } from '../SettingsDataContext';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 type ProjectAuditLogEntry = {
   id: number;
@@ -17,12 +18,12 @@ export const PROJECT_AUDIT_LOG_SECTION_ID = 'project-audit-log';
 
 const ProjectAuditLogSection: React.FC = () => {
   const { auth } = useSettingsData();
-  const isAdmin = !!auth.user?.is_staff;
+  const canAccess = isAdminOrManager(auth.user);
   const [audit, setAudit] = useState<ProjectAuditLogEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
   const loadAudit = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canAccess) return;
     try {
       setAuditLoading(true);
       const logs = await projectsApi.listProjectAudit(100);
@@ -32,14 +33,14 @@ const ProjectAuditLogSection: React.FC = () => {
     } finally {
       setAuditLoading(false);
     }
-  }, [isAdmin]);
+  }, [canAccess]);
 
   useAuthenticatedEffect(() => {
-    if (!auth.accessToken || !isAdmin) return;
+    if (!auth.accessToken || !canAccess) return;
     void loadAudit();
-  }, [auth.accessToken, isAdmin, loadAudit]);
+  }, [auth.accessToken, canAccess, loadAudit]);
 
-  if (!isAdmin) return null;
+  if (!canAccess) return null;
 
   const renderAction = (action: string) => {
     switch (action) {
