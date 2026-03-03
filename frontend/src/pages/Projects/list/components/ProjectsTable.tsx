@@ -374,10 +374,10 @@ const ProjectsTable: React.FC<Props> = ({
         STATUS<SortIcon column="status" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('lastDue')}>
-        LAST DELIVERABLE<SortIcon column="lastDue" sortBy={sortBy} sortDirection={sortDirection} />
+        LAST MILESTONE<SortIcon column="lastDue" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
       <div className="col-span-2 cursor-pointer hover:text-[var(--text)] transition-colors flex items-center" onClick={() => onSort('nextDue')}>
-        NEXT DELIVERABLE<SortIcon column="nextDue" sortBy={sortBy} sortDirection={sortDirection} />
+        NEXT MILESTONE<SortIcon column="nextDue" sortBy={sortBy} sortDirection={sortDirection} />
       </div>
       <div className="col-span-2 flex items-center">
         NOTES
@@ -995,8 +995,14 @@ const ProjectsTable: React.FC<Props> = ({
         const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
         const nextDate = nextDeliverable?.date ? parseLocal(nextDeliverable.date) : null;
         const nextBottom = nextDate ? nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const projectStartDate = project.startDate ? parseLocal(project.startDate) : null;
         const soonLimit = new Date(); soonLimit.setHours(0,0,0,0); const soonEnd = new Date(soonLimit.getTime() + 13*24*60*60*1000);
         const isSoonNext = !!(nextDate && nextDate >= soonLimit && nextDate <= soonEnd);
+        const isFutureStartDate = !!(projectStartDate && projectStartDate > soonLimit);
+        const showStartDateAsNext = isFutureStartDate && (!nextDate || (projectStartDate && projectStartDate < nextDate));
+        const futureStartBottom = projectStartDate
+          ? projectStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : '';
         const nextTopClass = isSoonNext ? 'text-[#b22222] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
         const nextBottomClass = isSoonNext ? 'text-[#b22222] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
@@ -1121,7 +1127,7 @@ const ProjectsTable: React.FC<Props> = ({
               )}
             </div>
             <div className="col-span-2">
-              {nextDeliverable ? (
+              {nextDeliverable && !showStartDateAsNext ? (
                 <>
                   <div className={`${nextTopClass} flex items-baseline gap-1`}>
                     {isEditingNextPercent ? (
@@ -1244,7 +1250,14 @@ const ProjectsTable: React.FC<Props> = ({
                   </div>
                 </>
               ) : (
-                <div className="text-[var(--muted)] text-xs">-</div>
+                showStartDateAsNext ? (
+                  <>
+                    <div className="text-blue-400 font-semibold leading-tight">Start Date</div>
+                    <div className="text-blue-400 text-xs leading-tight">{futureStartBottom}</div>
+                  </>
+                ) : (
+                  <div className="text-[var(--muted)] text-xs">-</div>
+                )
               )}
             </div>
             <div
@@ -1354,8 +1367,14 @@ const ProjectsTable: React.FC<Props> = ({
           const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
           const nextDate2 = nextDeliverable?.date ? parseLocal(nextDeliverable.date) : null;
           const nextBottom = nextDate2 ? nextDate2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          const projectStartDate2 = project.startDate ? parseLocal(project.startDate) : null;
           const soonLimit2 = new Date(); soonLimit2.setHours(0,0,0,0); const soonEnd2 = new Date(soonLimit2.getTime() + 13*24*60*60*1000);
           const isSoonNext2 = !!(nextDate2 && nextDate2 >= soonLimit2 && nextDate2 <= soonEnd2);
+          const isFutureStartDate2 = !!(projectStartDate2 && projectStartDate2 > soonLimit2);
+          const showStartDateAsNext2 = isFutureStartDate2 && (!nextDate2 || (projectStartDate2 && projectStartDate2 < nextDate2));
+          const futureStartBottom2 = projectStartDate2
+            ? projectStartDate2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '';
           const nextTopClass2 = isSoonNext2 ? 'text-[#b22222] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
           const nextBottomClass2 = isSoonNext2 ? 'text-[#b22222] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
@@ -1478,7 +1497,7 @@ const ProjectsTable: React.FC<Props> = ({
                 )}
               </div>
               <div className="col-span-2">
-                {nextDeliverable ? (
+                {nextDeliverable && !showStartDateAsNext2 ? (
                   <>
                     <div className={`${nextTopClass2} flex items-baseline gap-1`}>
                       {isEditingNextPercent2 ? (
@@ -1601,7 +1620,14 @@ const ProjectsTable: React.FC<Props> = ({
                     </div>
                   </>
                 ) : (
-                  <div className="text-[var(--muted)] text-xs">-</div>
+                  showStartDateAsNext2 ? (
+                    <>
+                      <div className="text-blue-400 font-semibold leading-tight">Start Date</div>
+                      <div className="text-blue-400 text-xs leading-tight">{futureStartBottom2}</div>
+                    </>
+                  ) : (
+                    <div className="text-[var(--muted)] text-xs">-</div>
+                  )
                 )}
               </div>
               <div
@@ -1691,6 +1717,16 @@ const ProjectsTable: React.FC<Props> = ({
     const prevDeliverable = mergeDeliverable(prevDeliverableRaw);
     const formatDate = (dateStr?: string | null) =>
       dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const parseLocal = (s: string) => new Date((s || '').slice(0,10) + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextDate = nextDeliverable?.date ? parseLocal(nextDeliverable.date) : null;
+    const futureStartDate = project.startDate ? parseLocal(project.startDate) : null;
+    const showFutureStartAsNext = !!(
+      futureStartDate
+      && futureStartDate > today
+      && (!nextDate || futureStartDate < nextDate)
+    );
     const isExpanded = project.id != null && expandedCards.has(project.id);
     return (
       <div
@@ -1729,12 +1765,16 @@ const ProjectsTable: React.FC<Props> = ({
         {isExpanded && (
           <div className="mt-3 space-y-2 text-xs text-[var(--muted)]">
             <div>
-              <div className="font-semibold text-[var(--text)]">Next Deliverable</div>
-              <div>{nextDeliverable?.description || '—'}</div>
-              <div>{formatDate(nextDeliverable?.date)}</div>
+              <div className="font-semibold text-[var(--text)]">Next Milestone</div>
+              <div className={showFutureStartAsNext ? 'text-blue-400' : ''}>
+                {nextDeliverable?.description || (showFutureStartAsNext ? 'Start Date' : '—')}
+              </div>
+              <div className={showFutureStartAsNext ? 'text-blue-400' : ''}>
+                {showFutureStartAsNext ? formatDate(project.startDate) : formatDate(nextDeliverable?.date)}
+              </div>
             </div>
             <div>
-              <div className="font-semibold text-[var(--text)]">Last Deliverable</div>
+              <div className="font-semibold text-[var(--text)]">Last Milestone</div>
               <div>{prevDeliverable?.description || '—'}</div>
               <div>{formatDate(prevDeliverable?.date)}</div>
             </div>
