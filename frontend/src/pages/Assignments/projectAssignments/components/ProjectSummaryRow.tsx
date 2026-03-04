@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router';
 import type { Project } from '@/types/models';
 import type { WeekHeader } from '@/pages/Assignments/grid/utils';
 import StatusBadge from '@/components/projects/StatusBadge';
@@ -51,6 +52,8 @@ export type ProjectSummaryRowProps = {
   isUpdating: boolean;
   onToggleExpanded: (project: ProjectWithAssignments) => void;
   onAddPersonClick: (projectId: number) => void;
+  allowAddAssignment?: boolean;
+  showProjectActionButtons?: boolean;
 };
 
 const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
@@ -68,6 +71,8 @@ const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
   isUpdating,
   onToggleExpanded,
   onAddPersonClick,
+  allowAddAssignment = true,
+  showProjectActionButtons = false,
 }) => {
   const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
   return (
@@ -105,39 +110,70 @@ const ProjectSummaryRow: React.FC<ProjectSummaryRowProps> = React.memo(({
             <span className="truncate">{project.name}</span>
           )}
         </div>
-        <div className="relative ml-auto" data-dropdown onClick={(e) => e.stopPropagation()}>
-          <StatusBadge
-            status={(project.status as any) || 'active'}
-            variant="editable"
-            definitionMap={definitionMap}
-            onClick={() => project.id && onToggleStatusDropdown(project.id)}
-            isUpdating={isUpdating}
-          />
-          {project.id && (
-            <StatusDropdown
-              currentStatus={(project.status as any) || 'active'}
-              isOpen={isStatusDropdownOpen}
-              onSelect={(newStatus) => onStatusSelect(project.id!, newStatus)}
-              onClose={onCloseStatusDropdown}
-              projectId={project.id}
-              disabled={isUpdating}
-              closeOnSelect={false}
-              statusOptions={statusOptionKeys}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="relative" data-dropdown onClick={(e) => e.stopPropagation()}>
+            <StatusBadge
+              status={(project.status as any) || 'active'}
+              variant="editable"
               definitionMap={definitionMap}
+              onClick={() => project.id && onToggleStatusDropdown(project.id)}
+              isUpdating={isUpdating}
             />
-          )}
+            {project.id && (
+              <StatusDropdown
+                currentStatus={(project.status as any) || 'active'}
+                isOpen={isStatusDropdownOpen}
+                onSelect={(newStatus) => onStatusSelect(project.id!, newStatus)}
+                onClose={onCloseStatusDropdown}
+                projectId={project.id}
+                disabled={isUpdating}
+                closeOnSelect={false}
+                statusOptions={statusOptionKeys}
+                definitionMap={definitionMap}
+              />
+            )}
+          </div>
+          {showProjectActionButtons && project.id ? (
+            <>
+              <ProjectNameQuickViewButton
+                projectId={project.id}
+                className="shrink-0 inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+                title="Open project details"
+                ariaLabel="Open project details"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
+                </svg>
+              </ProjectNameQuickViewButton>
+              <Link
+                to={`/projects/${project.id}/dashboard`}
+                className="shrink-0 inline-flex items-center justify-center w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)]"
+                aria-label="Open project dashboard"
+                title="Open project dashboard"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+                  <rect x="3" y="4" width="7" height="7" rx="1.2" />
+                  <rect x="14" y="4" width="7" height="7" rx="1.2" />
+                  <rect x="3" y="15" width="18" height="5" rx="1.2" />
+                </svg>
+              </Link>
+            </>
+          ) : null}
         </div>
       </div>
       <div className="py-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-        <button
-          className="w-7 h-7 flex items-center justify-center text-[var(--text)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] rounded"
-          onClick={() => { if (project.id) onAddPersonClick(project.id); }}
-          title="Add assignment"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
+        {allowAddAssignment ? (
+          <button
+            className="w-7 h-7 flex items-center justify-center text-[var(--text)] hover:text-[var(--text)] hover:bg-[var(--cardHover)] rounded"
+            onClick={() => { if (project.id) onAddPersonClick(project.id); }}
+            title="Add assignment"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       {weeks.map((w) => {
         const hours = hoursByWeek[w.date] || 0;

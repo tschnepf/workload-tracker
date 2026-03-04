@@ -13,6 +13,35 @@ vi.mock('@/api/client', () => ({
   authHeaders: vi.fn(() => ({})),
 }));
 
+vi.mock('@/hooks/usePersonalLeadProjectGrid', () => ({
+  usePersonalLeadProjectGrid: vi.fn(() => ({
+    data: {
+      weekKeys: ['2025-01-05'],
+      projects: [
+        { id: 1, name: 'Apollo', client: 'ACME', status: 'active', leadRoleNames: ['Electrical Lead'], scopedDepartmentIds: [3] },
+      ],
+      assignmentsByProject: {
+        '1': [
+          {
+            id: 900,
+            project: 1,
+            person: 1,
+            personName: 'P1',
+            personDepartmentId: 3,
+            roleOnProjectId: 22,
+            roleName: 'Electrical Lead',
+            weeklyHours: { '2025-01-05': 10 },
+          },
+        ],
+      },
+    },
+    loading: false,
+    isFetching: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
 // Mock calendar widget to avoid deep calendar data dependencies in this test
 vi.mock('@/components/personal/PersonalCalendarWidget', () => ({
   default: () => (<div data-testid="personal-calendar-widget" />)
@@ -50,6 +79,7 @@ describe('PersonalDashboard integration', () => {
     renderWithProviders(<div />, { routes: [{ path: '/', element: <PersonalDashboard /> }], route: '/' });
     expect(await screen.findByText('My Summary')).toBeTruthy();
     expect((await screen.findAllByText('My Projects')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Lead Project Assignments')).length).toBeGreaterThan(0);
     expect((await screen.findAllByText('My Deliverables')).length).toBeGreaterThan(0);
     expect((await screen.findAllByText('My Schedule')).length).toBeGreaterThan(0);
   });

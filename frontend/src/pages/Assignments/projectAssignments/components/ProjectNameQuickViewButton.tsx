@@ -3,7 +3,21 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { projectsApi } from '@/services/api';
 
-const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.ReactNode }> = ({ projectId, children }) => {
+type Props = {
+  projectId: number;
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+};
+
+const ProjectNameQuickViewButton: React.FC<Props> = ({
+  projectId,
+  children,
+  className,
+  title,
+  ariaLabel,
+}) => {
   const { open } = useProjectDetailsDrawer();
   const queryClient = useQueryClient();
   const prefetchTimerRef = React.useRef<number | null>(null);
@@ -11,7 +25,9 @@ const ProjectNameQuickViewButton: React.FC<{ projectId: number; children: React.
   return (
     <button
       type="button"
-      className="truncate cursor-pointer hover:underline"
+      className={className || 'truncate cursor-pointer hover:underline'}
+      title={title}
+      aria-label={ariaLabel}
       onClick={(e) => { e.stopPropagation(); open(projectId); }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

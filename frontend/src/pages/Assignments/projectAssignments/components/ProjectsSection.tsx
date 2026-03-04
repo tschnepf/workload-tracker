@@ -81,6 +81,9 @@ export type ProjectsSectionProps = {
   ) => void;
   onCloseRole: () => void;
   onSwapPlaceholder: (projectId: number, assignmentId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
+  allowAddAssignment?: boolean;
+  allowRemoveAssignment?: boolean;
+  showProjectActionButtons?: boolean;
 };
 
 const EMPTY_WEEK_HOURS: Record<string, number> = {};
@@ -156,6 +159,9 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
   onSelectRole,
   onCloseRole,
   onSwapPlaceholder,
+  allowAddAssignment = true,
+  allowRemoveAssignment = true,
+  showProjectActionButtons = false,
   } = props;
 
   const listRef = React.useRef<HTMLDivElement | null>(null);
@@ -290,6 +296,9 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
               onSelectRole={onSelectRole}
               onCloseRole={onCloseRole}
               onSwapPlaceholder={onSwapPlaceholder}
+              allowAddAssignment={allowAddAssignment}
+              allowRemoveAssignment={allowRemoveAssignment}
+              showProjectActionButtons={showProjectActionButtons}
             />
           </div>
         );

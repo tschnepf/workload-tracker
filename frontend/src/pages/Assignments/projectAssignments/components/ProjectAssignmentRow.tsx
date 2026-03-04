@@ -47,6 +47,7 @@ export type ProjectAssignmentRowProps = {
   ) => void;
   onCloseRole: () => void;
   onSwapPlaceholder: (projectId: number, assignmentId: number, person: Pick<Person, 'id' | 'name' | 'department'>) => Promise<void> | void;
+  allowRemoveAssignment?: boolean;
 };
 
 const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
@@ -78,6 +79,7 @@ const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
   onSelectRole,
   onCloseRole,
   onSwapPlaceholder,
+  allowRemoveAssignment = true,
 }) => {
   const rowKey = String(assignment.id);
   const deptId = (assignment as any).personDepartmentId as number | null | undefined;
@@ -139,15 +141,17 @@ const ProjectAssignmentRow: React.FC<ProjectAssignmentRowProps> = React.memo(({
         )}
       </div>
       <div className="py-2 flex items-center justify-center">
-        <button
-          className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded"
-          title="Remove assignment"
-          onClick={() => onRemoveAssignment(projectId, assignment.id!, (assignment as any).person ?? null)}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        {allowRemoveAssignment ? (
+          <button
+            className="w-5 h-5 flex items-center justify-center text-[var(--muted)] hover:text-red-400 hover:bg-red-500/20 rounded"
+            title="Remove assignment"
+            onClick={() => onRemoveAssignment(projectId, assignment.id!, (assignment as any).person ?? null)}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       {selectionStyle && (
         <div

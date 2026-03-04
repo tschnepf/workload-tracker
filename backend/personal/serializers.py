@@ -48,3 +48,29 @@ class PersonalWorkSerializer(serializers.Serializer):
     deliverables = PersonalDeliverableItemSerializer(many=True)
     preItems = PreDeliverableItemSerializer(many=True)
     schedule = PersonalScheduleSerializer()
+
+
+class PersonalLeadProjectItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField(allow_null=True)
+    client = serializers.CharField(allow_null=True, required=False)
+    status = serializers.CharField(allow_null=True, required=False)
+    leadRoleNames = serializers.ListField(child=serializers.CharField(), required=False)
+    scopedDepartmentIds = serializers.ListField(child=serializers.IntegerField(), required=False)
+
+
+class PersonalLeadProjectAssignmentItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    project = serializers.IntegerField()
+    person = serializers.IntegerField(allow_null=True, required=False)
+    personName = serializers.CharField(allow_null=True, required=False)
+    personDepartmentId = serializers.IntegerField(allow_null=True, required=False)
+    roleOnProjectId = serializers.IntegerField(allow_null=True, required=False)
+    roleName = serializers.CharField(allow_null=True, required=False)
+    weeklyHours = serializers.DictField(child=serializers.FloatField())
+
+
+class PersonalLeadProjectGridSerializer(serializers.Serializer):
+    weekKeys = serializers.ListField(child=serializers.CharField())
+    projects = PersonalLeadProjectItemSerializer(many=True)
+    assignmentsByProject = serializers.DictField()

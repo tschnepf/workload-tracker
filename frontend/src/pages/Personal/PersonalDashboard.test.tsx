@@ -51,6 +51,35 @@ vi.mock('@/hooks/usePersonalWork', () => ({
   })),
 }));
 
+vi.mock('@/hooks/usePersonalLeadProjectGrid', () => ({
+  usePersonalLeadProjectGrid: vi.fn(() => ({
+    data: {
+      weekKeys: ['2025-11-17', '2025-11-24'],
+      projects: [
+        { id: 1, name: 'Apollo', client: 'ACME', status: 'active', leadRoleNames: ['Electrical Lead'], scopedDepartmentIds: [3] },
+      ],
+      assignmentsByProject: {
+        '1': [
+          {
+            id: 21,
+            project: 1,
+            person: 42,
+            personName: 'P1',
+            personDepartmentId: 3,
+            roleOnProjectId: 7,
+            roleName: 'Electrical Lead',
+            weeklyHours: { '2025-11-17': 8 },
+          },
+        ],
+      },
+    },
+    loading: false,
+    isFetching: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
 import { usePersonalWork } from '@/hooks/usePersonalWork';
 
 const mockedPersonalWork = vi.mocked(usePersonalWork);
@@ -91,6 +120,7 @@ describe('PersonalDashboard responsive layout', () => {
     expect(swipeRegion).toBeVisible();
     const stack = within(swipeRegion);
     expect(stack.getByRole('heading', { name: /My Projects/i })).toBeVisible();
+    expect(stack.getByRole('heading', { name: /Lead Project Assignments/i })).toBeVisible();
     expect(stack.getByRole('heading', { name: /My Schedule/i })).toBeVisible();
     expect(stack.getByText(/My Calendar/i)).toBeVisible();
     expect(stack.getByLabelText(/Upcoming weeks utilization/i)).toBeVisible();

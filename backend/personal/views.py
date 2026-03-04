@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 import hashlib
+from collections import defaultdict
 from typing import Dict, List
 
 from django.conf import settings
@@ -11,16 +12,22 @@ from django.utils.http import http_date
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from accounts.models import UserProfile
 from assignments.models import Assignment
+from assignments.lead_utils import (
+    is_lead_role_name,
+    resolve_assignment_department_id,
+    resolve_assignment_role_name,
+)
 from deliverables.models import Deliverable
 from deliverables.services import PreDeliverableService
 from people.models import Person
+from projects.models import Project
 from core.week_utils import sunday_of_week
 
-from .serializers import PersonalWorkSerializer
+from .serializers import PersonalWorkSerializer, PersonalLeadProjectGridSerializer
 
 
 class PersonalWorkView(APIView):
@@ -202,3 +209,150 @@ class PersonalWorkView(APIView):
                 pass
 
         return resp
+
+
+class PersonalLeadProjectGridView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses=PersonalLeadProjectGridSerializer,
+        parameters=[
+            OpenApiParameter(
+                name='weeks',
+                required=False,
+                type=int,
+                description='Weeks horizon (default 12, clamp 1..52)',
+            ),
+        ],
+    )
+    def get(self, request):
+        # Resolve person for authenticated user
+        try:
+            prof = UserProfile.objects.select_related('person').get(user=request.user)
+            person: Person | None = prof.person
+        except UserProfile.DoesNotExist:
+            person = None
+        if not person:
+            return Response({"detail": "No linked Person for authenticated user"}, status=404)
+
+        try:
+            weeks = int(request.query_params.get('weeks', 12))
+        except Exception:
+            weeks = 12
+        weeks = max(1, min(52, weeks))
+
+        today = date.today()
+        current_sunday = sunday_of_week(today)
+        week_keys: List[str] = [(current_sunday + timedelta(weeks=w)).isoformat() for w in range(weeks)]
+
+        lead_assignments = list(
+            Assignment.objects.filter(
+                person_id=person.id,
+                is_active=True,
+                project_id__isnull=False,
+            )
+            .select_related('person', 'department', 'role_on_project_ref', 'project')
+        )
+
+        scoped_departments_by_project: dict[int, set[int]] = defaultdict(set)
+        lead_roles_by_project: dict[int, set[str]] = defaultdict(set)
+        for assignment in lead_assignments:
+            role_name = resolve_assignment_role_name(assignment)
+            if not is_lead_role_name(role_name):
+                continue
+            dept_id = resolve_assignment_department_id(assignment)
+            if dept_id is None or assignment.project_id is None:
+                continue
+            scoped_departments_by_project[int(assignment.project_id)].add(int(dept_id))
+            if role_name:
+                lead_roles_by_project[int(assignment.project_id)].add(role_name)
+
+        if not scoped_departments_by_project:
+            return Response({
+                'weekKeys': week_keys,
+                'projects': [],
+                'assignmentsByProject': {},
+            })
+
+        project_ids = sorted(scoped_departments_by_project.keys())
+
+        scoped_assignments = list(
+            Assignment.objects.filter(
+                is_active=True,
+                project_id__in=project_ids,
+            )
+            .filter(Q(person__is_active=True) | Q(person__isnull=True))
+            .select_related('project', 'person', 'department', 'role_on_project_ref')
+        )
+
+        assignments_by_project: dict[str, list[dict]] = defaultdict(list)
+        for assignment in scoped_assignments:
+            project_id = getattr(assignment, 'project_id', None)
+            if project_id is None:
+                continue
+            scoped_depts = scoped_departments_by_project.get(int(project_id)) or set()
+            dept_id = resolve_assignment_department_id(assignment)
+            if dept_id is None or dept_id not in scoped_depts:
+                continue
+
+            weekly_hours = assignment.weekly_hours or {}
+            compact_hours: dict[str, float] = {}
+            for wk in week_keys:
+                try:
+                    val = float(weekly_hours.get(wk) or 0.0)
+                except Exception:
+                    val = 0.0
+                if val:
+                    compact_hours[wk] = round(val, 2)
+
+            assignments_by_project[str(project_id)].append({
+                'id': int(assignment.id),
+                'project': int(project_id),
+                'person': int(assignment.person_id) if assignment.person_id else None,
+                'personName': getattr(getattr(assignment, 'person', None), 'name', None),
+                'personDepartmentId': int(dept_id) if dept_id is not None else None,
+                'roleOnProjectId': int(assignment.role_on_project_ref_id) if assignment.role_on_project_ref_id else None,
+                'roleName': resolve_assignment_role_name(assignment),
+                'weeklyHours': compact_hours,
+            })
+
+        for rows in assignments_by_project.values():
+            rows.sort(
+                key=lambda row: (
+                    1 if row.get('person') is None else 0,
+                    (row.get('personName') or '').lower(),
+                    (row.get('roleName') or '').lower(),
+                    int(row.get('id') or 0),
+                )
+            )
+
+        projects_qs = Project.objects.filter(id__in=project_ids).values('id', 'name', 'client', 'status')
+        project_rows = list(projects_qs)
+        project_rows.sort(
+            key=lambda row: (
+                1 if not row.get('client') else 0,
+                (row.get('client') or '').lower(),
+                (row.get('name') or '').lower(),
+                int(row.get('id') or 0),
+            )
+        )
+
+        projects_payload: list[dict] = []
+        for row in project_rows:
+            pid = int(row['id'])
+            projects_payload.append({
+                'id': pid,
+                'name': row.get('name'),
+                'client': row.get('client'),
+                'status': row.get('status'),
+                'leadRoleNames': sorted(lead_roles_by_project.get(pid) or []),
+                'scopedDepartmentIds': sorted(scoped_departments_by_project.get(pid) or []),
+            })
+            assignments_by_project.setdefault(str(pid), [])
+
+        payload = {
+            'weekKeys': week_keys,
+            'projects': projects_payload,
+            'assignmentsByProject': assignments_by_project,
+        }
+        return Response(payload)

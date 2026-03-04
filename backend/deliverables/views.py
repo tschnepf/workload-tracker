@@ -29,6 +29,7 @@ from .serializers import (
     DeliverableQATaskSerializer,
 )
 from assignments.models import Assignment
+from assignments.lead_utils import is_lead_role_name, resolve_assignment_role_name
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
 from django.conf import settings
@@ -754,15 +755,8 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     .select_related('person', 'person__department', 'department', 'role_on_project_ref')
                 )
                 for assignment in assignments_qs:
-                    role_name = None
-                    try:
-                        if assignment.role_on_project_ref and assignment.role_on_project_ref.name:
-                            role_name = assignment.role_on_project_ref.name
-                        elif assignment.role_on_project:
-                            role_name = assignment.role_on_project
-                    except Exception:  # nosec B110
-                        role_name = assignment.role_on_project
-                    if not role_name or 'lead' not in role_name.lower():
+                    role_name = resolve_assignment_role_name(assignment)
+                    if not is_lead_role_name(role_name):
                         continue
                     person_name = None
                     try:

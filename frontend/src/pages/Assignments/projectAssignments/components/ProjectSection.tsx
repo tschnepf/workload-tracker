@@ -77,6 +77,9 @@ export type ProjectSectionProps = {
   ) => void;
   onCloseRole: () => void;
   onSwapPlaceholder: (projectId: number, assignmentId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
+  allowAddAssignment?: boolean;
+  allowRemoveAssignment?: boolean;
+  showProjectActionButtons?: boolean;
 };
 
 const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
@@ -136,6 +139,9 @@ const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
   onSelectRole,
   onCloseRole,
   onSwapPlaceholder,
+  allowAddAssignment = true,
+  allowRemoveAssignment = true,
+  showProjectActionButtons = false,
 }) => {
   return (
     <div className="border-b border-[var(--border)] last:border-b-0">
@@ -154,11 +160,13 @@ const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
         isUpdating={isUpdating}
         onToggleExpanded={onToggleExpanded}
         onAddPersonClick={onAddPersonClick}
+        allowAddAssignment={allowAddAssignment}
+        showProjectActionButtons={showProjectActionButtons}
       />
 
       {project.isExpanded && (
         <div className="p-2">
-          {isAddingForProject && (
+          {allowAddAssignment && isAddingForProject && (
             <>
               <div className="pl-8 pr-2 py-1 space-y-2">
                 <div className="flex items-center gap-1 text-[10px]">
@@ -318,6 +326,7 @@ const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
                 onSelectRole={onSelectRole}
                 onCloseRole={onCloseRole}
                 onSwapPlaceholder={onSwapPlaceholder}
+                allowRemoveAssignment={allowRemoveAssignment}
               />
             );
           })}

@@ -64,6 +64,19 @@ const personalWorkReturn = {
 };
 vi.mock('@/hooks/usePersonalWork', () => ({ usePersonalWork: () => personalWorkReturn }));
 
+const personalLeadGridReturn = {
+  data: {
+    weekKeys: ['2025-11-24', '2025-12-01'],
+    projects: [],
+    assignmentsByProject: {},
+  },
+  loading: false,
+  isFetching: false,
+  error: null as string | null,
+  refresh: vi.fn(),
+};
+vi.mock('@/hooks/usePersonalLeadProjectGrid', () => ({ usePersonalLeadProjectGrid: () => personalLeadGridReturn }));
+
 const sampleDeliverables = [
   {
     id: 501,
@@ -158,6 +171,10 @@ beforeEach(() => {
   personalWorkReturn.data = defaultPersonalPayload;
   personalWorkReturn.loading = false;
   personalWorkReturn.error = null;
+  personalLeadGridReturn.refresh = vi.fn();
+  personalLeadGridReturn.loading = false;
+  personalLeadGridReturn.isFetching = false;
+  personalLeadGridReturn.error = null;
   deliverablesHookReturn.data = sampleDeliverables;
   deliverablesHookReturn.isLoading = false;
   deliverablesHookReturn.error = null;

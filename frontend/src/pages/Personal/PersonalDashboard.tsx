@@ -3,17 +3,21 @@ import Layout from '@/components/layout/Layout';
 import UpcomingPreDeliverablesWidget from '@/components/dashboard/UpcomingPreDeliverablesWidget';
 import MySummaryCard from '@/components/personal/MySummaryCard';
 import MyProjectsCard from '@/components/personal/MyProjectsCard';
+import MyLeadProjectsGridCard from '@/components/personal/MyLeadProjectsGridCard';
 import MyDeliverablesCard from '@/components/personal/MyDeliverablesCard';
 import MyScheduleStrip from '@/components/personal/MyScheduleStrip';
 import PersonalCalendarWidget from '@/components/personal/PersonalCalendarWidget';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersonalWork } from '@/hooks/usePersonalWork';
+import { usePersonalLeadProjectGrid } from '@/hooks/usePersonalLeadProjectGrid';
 import { emitGridRefresh } from '@/lib/gridRefreshBus';
 
 const PersonalDashboard: React.FC = () => {
   const auth = useAuth();
   const personId = auth?.person?.id;
   const { data, loading, isFetching, error, refresh } = usePersonalWork();
+  const [leadWeeks, setLeadWeeks] = React.useState(12);
+  const leadProjectGrid = usePersonalLeadProjectGrid(leadWeeks);
   const headingRef = React.useRef<HTMLHeadingElement | null>(null);
   const summary = data?.summary ?? null;
   const alerts = data?.alerts ?? null;
@@ -61,9 +65,12 @@ const PersonalDashboard: React.FC = () => {
   );
 
   const handleRefresh = React.useCallback(async () => {
-    await refresh({ force: true });
+    await Promise.all([
+      refresh({ force: true }),
+      leadProjectGrid.refresh({ force: true }),
+    ]);
     emitGridRefresh({ reason: 'personal-calendar-refresh' });
-  }, [refresh]);
+  }, [refresh, leadProjectGrid.refresh]);
 
   return (
     <Layout>
@@ -83,12 +90,12 @@ const PersonalDashboard: React.FC = () => {
           <div className="flex items-center gap-2 sm:mt-0">
             <button
               type="button"
-              onClick={() => refresh({ force: true })}
-              disabled={isFetching}
+              onClick={() => { void handleRefresh(); }}
+              disabled={isFetching || leadProjectGrid.isFetching}
               className="px-3 py-1.5 rounded-full border border-[var(--border)] text-sm text-[var(--text)] hover:bg-[var(--surface)] disabled:opacity-60"
               aria-label="Refresh my work data"
             >
-              {isFetching ? 'Refreshing…' : 'Refresh'}
+              {(isFetching || leadProjectGrid.isFetching) ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
         </header>
@@ -126,6 +133,17 @@ const PersonalDashboard: React.FC = () => {
             <MyProjectsCard className="min-h-[220px]" projects={projects} />
           </div>
           <div>
+            <MyLeadProjectsGridCard
+              className="min-h-[220px]"
+              payload={leadProjectGrid.data}
+              loading={leadProjectGrid.loading}
+              error={leadProjectGrid.error}
+              weeks={leadWeeks}
+              onWeeksChange={setLeadWeeks}
+              onRetry={() => { void leadProjectGrid.refresh({ force: true }); }}
+            />
+          </div>
+          <div>
             <MyDeliverablesCard className="min-h-[220px]" deliverables={deliverables} />
           </div>
           {schedule ? (
@@ -156,6 +174,17 @@ const PersonalDashboard: React.FC = () => {
           </div>
           <div className="xl:col-span-1">
             <UpcomingPreDeliverablesWidget className="h-full" />
+          </div>
+          <div className="md:col-span-2 xl:col-span-3">
+            <MyLeadProjectsGridCard
+              className="h-full"
+              payload={leadProjectGrid.data}
+              loading={leadProjectGrid.loading}
+              error={leadProjectGrid.error}
+              weeks={leadWeeks}
+              onWeeksChange={setLeadWeeks}
+              onRetry={() => { void leadProjectGrid.refresh({ force: true }); }}
+            />
           </div>
           <div className="md:col-span-2 xl:col-span-2">
             <PersonalCalendarWidget className="h-full" />
