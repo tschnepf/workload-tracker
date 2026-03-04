@@ -12,6 +12,7 @@ from .views import (
     CalendarFeedsView,
     DeliverablePhaseMappingSettingsView,
     QATaskSettingsView,
+    NetworkGraphSettingsView,
 )
 
 urlpatterns = [
@@ -27,4 +28,5 @@ urlpatterns = [
     path('calendar_feeds/', CalendarFeedsView.as_view(), name='calendar_feeds'),
     path('deliverable_phase_mapping/', DeliverablePhaseMappingSettingsView.as_view(), name='deliverable_phase_mapping'),
     path('qa_task_settings/', QATaskSettingsView.as_view(), name='qa_task_settings'),
+    path('network_graph_settings/', NetworkGraphSettingsView.as_view(), name='network_graph_settings'),
 ]

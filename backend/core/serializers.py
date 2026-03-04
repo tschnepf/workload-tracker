@@ -5,7 +5,8 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
-from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings, QATaskSettings
+from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings, QATaskSettings, NetworkGraphSettings
+from projects.models import Project
 
 
 class PreDeliverableGlobalSettingsItemSerializer(serializers.Serializer):
@@ -173,3 +174,87 @@ class QATaskSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = QATaskSettings
         fields = ['defaultDaysBefore', 'updatedAt']
+
+
+class NetworkGraphSettingsSerializer(serializers.ModelSerializer):
+    defaultWindowMonths = serializers.IntegerField(source='default_window_months', min_value=1, max_value=120)
+    coworkerProjectWeight = serializers.FloatField(source='coworker_project_weight')
+    coworkerWeekWeight = serializers.FloatField(source='coworker_week_weight')
+    coworkerMinScore = serializers.FloatField(source='coworker_min_score')
+    clientProjectWeight = serializers.FloatField(source='client_project_weight')
+    clientWeekWeight = serializers.FloatField(source='client_week_weight')
+    clientMinScore = serializers.FloatField(source='client_min_score')
+    includeInactiveDefault = serializers.BooleanField(source='include_inactive_default')
+    maxEdgesDefault = serializers.IntegerField(source='max_edges_default', min_value=100, max_value=10000)
+    snapshotSchedulerEnabled = serializers.BooleanField(source='snapshot_scheduler_enabled')
+    snapshotSchedulerDay = serializers.IntegerField(source='snapshot_scheduler_day', min_value=0, max_value=6)
+    snapshotSchedulerHour = serializers.IntegerField(source='snapshot_scheduler_hour', min_value=0, max_value=23)
+    snapshotSchedulerMinute = serializers.IntegerField(source='snapshot_scheduler_minute', min_value=0, max_value=59)
+    snapshotSchedulerTimezone = serializers.CharField(source='snapshot_scheduler_timezone')
+    omittedProjectIds = serializers.ListField(
+        source='omitted_project_ids',
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+    )
+    omittedProjects = serializers.SerializerMethodField(read_only=True)
+    lastSnapshotWeekStart = serializers.DateField(source='last_snapshot_week_start', allow_null=True, required=False)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    def validate_omitted_project_ids(self, value):
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('omittedProjectIds must be a list of project IDs.')
+        cleaned: list[int] = []
+        seen: set[int] = set()
+        for raw in value:
+            try:
+                project_id = int(raw)
+            except Exception:
+                continue
+            if project_id <= 0 or project_id in seen:
+                continue
+            seen.add(project_id)
+            cleaned.append(project_id)
+        if len(cleaned) > 500:
+            raise serializers.ValidationError('A maximum of 500 omitted projects is allowed.')
+        existing_ids = set(Project.objects.filter(id__in=cleaned).values_list('id', flat=True))
+        missing = [pid for pid in cleaned if pid not in existing_ids]
+        if missing:
+            raise serializers.ValidationError(f'Unknown project IDs: {missing[:10]}')
+        return cleaned
+
+    def get_omittedProjects(self, obj):
+        ids = [int(v) for v in (getattr(obj, 'omitted_project_ids', None) or []) if str(v).isdigit()]
+        if not ids:
+            return []
+        rows = Project.objects.filter(id__in=ids).values('id', 'name')
+        name_by_id = {int(r['id']): (r.get('name') or f"Project {r['id']}") for r in rows}
+        payload: list[dict[str, object]] = []
+        for pid in ids:
+            if pid in name_by_id:
+                payload.append({'id': pid, 'name': name_by_id[pid]})
+        return payload
+
+    class Meta:
+        model = NetworkGraphSettings
+        fields = [
+            'defaultWindowMonths',
+            'coworkerProjectWeight',
+            'coworkerWeekWeight',
+            'coworkerMinScore',
+            'clientProjectWeight',
+            'clientWeekWeight',
+            'clientMinScore',
+            'includeInactiveDefault',
+            'maxEdgesDefault',
+            'snapshotSchedulerEnabled',
+            'snapshotSchedulerDay',
+            'snapshotSchedulerHour',
+            'snapshotSchedulerMinute',
+            'snapshotSchedulerTimezone',
+            'omittedProjectIds',
+            'omittedProjects',
+            'lastSnapshotWeekStart',
+            'updatedAt',
+        ]

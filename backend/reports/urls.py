@@ -13,6 +13,10 @@ from .views import (
     PreDeliverableTeamPerformanceView,
     RoleCapacityBootstrapView,
 )
+from .network_views import (
+    NetworkBootstrapView,
+    NetworkGraphView,
+)
 
 urlpatterns = [
     path('departments/overview/', DepartmentsOverviewView.as_view(), name='departments_overview'),
@@ -25,4 +29,6 @@ urlpatterns = [
     path('forecast/scenarios/shared/<str:token>/', ForecastScenarioSharedView.as_view(), name='forecast_scenario_shared'),
     path('pre-deliverable-completion/', PreDeliverableCompletionView.as_view(), name='pre_deliverable_completion'),
     path('pre-deliverable-team-performance/', PreDeliverableTeamPerformanceView.as_view(), name='pre_deliverable_team_performance'),
+    path('network/bootstrap/', NetworkBootstrapView.as_view(), name='network_bootstrap'),
+    path('network/graph/', NetworkGraphView.as_view(), name='network_graph'),
 ]

@@ -108,6 +108,8 @@ export function usePeopleSearch(
     },
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
+    // Keep previous results visible while query key changes (e.g. typing in search box).
+    placeholderData: (previousData) => previousData,
     enabled: queryOptions?.enabled ?? true,
   });
 

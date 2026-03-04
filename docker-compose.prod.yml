@@ -3,7 +3,9 @@ services:
   # One-shot migrator ensures DB schema is up to date before app/worker start
   migrator:
     image: workload-tracker-backend
-    command: python manage.py migrate --noinput
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py ensure_network_snapshot_backfill --weeks ${NETWORK_GRAPH_INITIAL_BACKFILL_WEEKS:-104} --emit-events ${NETWORK_GRAPH_INITIAL_BACKFILL_EMIT_EVENTS:-0}"
     depends_on:
       db:
         condition: service_healthy

@@ -15,6 +15,7 @@ import ProjectAuditLogSection, { PROJECT_AUDIT_LOG_SECTION_ID } from './ProjectA
 import IntegrationsSection, { INTEGRATIONS_SECTION_ID } from './IntegrationsSection';
 import DeliverablePhaseMappingSection, { DELIVERABLE_PHASE_MAPPING_SECTION_ID } from './DeliverablePhaseMappingSection';
 import DeliverableTaskTemplatesSection, { DELIVERABLE_TASK_TEMPLATES_SECTION_ID } from './DeliverableTaskTemplatesSection';
+import NetworkGraphSection, { NETWORK_GRAPH_SECTION_ID } from './NetworkGraphSection';
 
 export type SettingsSectionDefinition = {
   id: string;
@@ -93,6 +94,13 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Utilization Hours and Color Scheme',
     requiresAdmin: true,
     component: UtilizationSection,
+  },
+  {
+    id: NETWORK_GRAPH_SECTION_ID,
+    title: 'Network Graph Analytics',
+    requiresAdmin: true,
+    allowManager: true,
+    component: NetworkGraphSection,
   },
   {
     id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,

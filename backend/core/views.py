@@ -23,6 +23,7 @@ from .serializers import (
     CalendarFeedSettingsSerializer,
     DeliverablePhaseMappingSettingsSerializer,
     QATaskSettingsSerializer,
+    NetworkGraphSettingsSerializer,
 )
 from .models import (
     PreDeliverableGlobalSettings,
@@ -32,6 +33,7 @@ from .models import (
     DeliverablePhaseMappingSettings,
     DeliverablePhaseDefinition,
     QATaskSettings,
+    NetworkGraphSettings,
     AutoHoursRoleSetting,
     AutoHoursGlobalSettings,
     AutoHoursTemplate,
@@ -897,6 +899,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
         {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'utilization-scheme', 'title': 'Utilization Hours and Color Scheme', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'network-graph-settings', 'title': 'Network Graph Analytics', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'deliverable-phase-mapping', 'title': 'Deliverable Phase Mapping', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'backup-restore', 'title': 'Backup & Restore', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'integrations', 'title': 'Integrations Hub', 'requires_admin': True, 'allow_manager': False, 'integrations_only': True},
@@ -937,6 +940,11 @@ class SettingsPageSnapshotView(APIView):
                 return {'utilizationScheme': UtilizationSchemeSerializer(UtilizationScheme.get_active()).data}
             except Exception:
                 return {'utilizationScheme': None}
+        if section_id == 'network-graph-settings':
+            try:
+                return {'networkGraphSettings': NetworkGraphSettingsSerializer(NetworkGraphSettings.get_active()).data}
+            except Exception:
+                return {'networkGraphSettings': None}
         if section_id == 'integrations':
             return {'integrations': {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}}
         return {}
@@ -2660,6 +2668,25 @@ class QATaskSettingsView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(QATaskSettingsSerializer(obj).data)
+
+
+class NetworkGraphSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    @extend_schema(responses=NetworkGraphSettingsSerializer)
+    def get(self, request):
+        obj = NetworkGraphSettings.get_active()
+        return Response(NetworkGraphSettingsSerializer(obj).data)
+
+    @extend_schema(request=NetworkGraphSettingsSerializer, responses=NetworkGraphSettingsSerializer)
+    def put(self, request):
+        if not is_admin_user(getattr(request, 'user', None)):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        obj = NetworkGraphSettings.get_active()
+        ser = NetworkGraphSettingsSerializer(instance=obj, data=request.data, partial=False)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(NetworkGraphSettingsSerializer(obj).data)
 
 
 class CalendarFeedsView(APIView):

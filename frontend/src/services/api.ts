@@ -38,6 +38,12 @@ import {
   JobStatus,
   ProjectRisk,
   Vertical,
+  NetworkGraphMode,
+  NetworkGraphNode,
+  NetworkGraphEdge,
+  NetworkGraphResponse,
+  NetworkGraphBootstrapResponse,
+  NetworkGraphDefaults,
 } from '@/types/models';
 import type { BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
@@ -641,6 +647,27 @@ export const qaTaskSettingsApi = {
   },
 };
 
+export type NetworkGraphSettings = NetworkGraphDefaults;
+
+export const networkGraphSettingsApi = {
+  get: async (): Promise<NetworkGraphSettings> => {
+    const res = await apiClient.GET('/core/network_graph_settings/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as NetworkGraphSettings;
+  },
+  update: async (payload: NetworkGraphSettings): Promise<NetworkGraphSettings> => {
+    const res = await apiClient.PUT('/core/network_graph_settings/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as NetworkGraphSettings;
+  },
+};
+
 export type AutoHoursRoleSetting = {
   roleId: number;
   roleName: string;
@@ -845,6 +872,21 @@ export const projectsApi = {
       headers: authHeaders(),
       body: JSON.stringify(payload || {}),
     });
+  },
+
+  // Lightweight project name autocomplete for settings/typeahead controls.
+  autocomplete: async (search?: string, limit = 15): Promise<Array<{ id: number; name: string }>> => {
+    const term = (search || '').trim();
+    if (!term) return [];
+    const page = await projectsApi.search({
+      page: 1,
+      page_size: Math.max(1, Math.min(50, limit)),
+      ordering: 'name',
+      search_tokens: [{ term, op: 'and' }],
+    });
+    return (page.results || [])
+      .map((p) => ({ id: Number(p.id), name: String(p.name || `Project ${p.id}`) }))
+      .filter((p) => Number.isFinite(p.id) && p.id > 0);
   },
 
   // Get single project
@@ -1786,6 +1828,40 @@ export const reportsApi = {
     if (params?.search) queryParams.set('search', params.search);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApiCached<DepartmentsOverviewResponse>(`/reports/departments/overview/${queryString}`);
+  },
+
+  getNetworkBootstrap: async (params?: { vertical?: number; department?: number; include_children?: 0 | 1 }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.department != null) queryParams.set('department', String(params.department));
+    if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApiCached<NetworkGraphBootstrapResponse>(`/reports/network/bootstrap/${queryString}`);
+  },
+
+  getNetworkGraph: async (params: {
+    mode: NetworkGraphMode;
+    start?: string;
+    end?: string;
+    vertical?: number;
+    department?: number;
+    include_children?: 0 | 1;
+    include_inactive?: 0 | 1;
+    client?: string;
+    max_edges?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    queryParams.set('mode', params.mode);
+    if (params.start) queryParams.set('start', params.start);
+    if (params.end) queryParams.set('end', params.end);
+    if (params.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params.department != null) queryParams.set('department', String(params.department));
+    if (params.include_children != null) queryParams.set('include_children', String(params.include_children));
+    if (params.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
+    if (params.client) queryParams.set('client', params.client);
+    if (params.max_edges != null) queryParams.set('max_edges', String(params.max_edges));
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return fetchApi<NetworkGraphResponse>(`/reports/network/graph/${queryString}`);
   },
 };
 

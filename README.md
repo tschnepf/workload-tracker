@@ -604,6 +604,12 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml logs -f migrator backend
 ```
 
+The `migrator` service now also runs a one-time Network Graph snapshot backfill after migrations.
+It is idempotent and records completion in `NetworkGraphSettings`, so later deploys skip it automatically.
+Tune with:
+- `NETWORK_GRAPH_INITIAL_BACKFILL_WEEKS` (default `104`)
+- `NETWORK_GRAPH_INITIAL_BACKFILL_EMIT_EVENTS` (`0|1`, default `0`)
+
 Health checks:
 - Internal: `docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.no-host-db-ports.yml exec backend curl -fsS http://localhost:8000/api/health/`
 - External: `curl -i https://smc-projects.com/api/health/`

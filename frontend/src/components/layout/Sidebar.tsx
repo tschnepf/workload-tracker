@@ -117,6 +117,21 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
         </svg>
       );
+    case 'network-graph':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="6" y1="6" x2="12" y2="12" />
+          <line x1="12" y1="12" x2="18" y2="6" />
+          <line x1="12" y1="12" x2="18" y2="18" />
+          <line x1="12" y1="12" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="6" />
+          <circle cx="6" cy="6" r="2" fill={iconColor} stroke="none" />
+          <circle cx="18" cy="6" r="2" fill={iconColor} stroke="none" />
+          <circle cx="6" cy="18" r="2" fill={iconColor} stroke="none" />
+          <circle cx="18" cy="18" r="2" fill={iconColor} stroke="none" />
+          <circle cx="12" cy="12" r="2.2" fill={iconColor} stroke="none" />
+        </svg>
+      );
     case 'skills':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -277,6 +292,12 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       icon: 'reports',
       label: 'Forecast Planner',
       description: 'Executive go/no-go planning'
+    },
+    {
+      path: '/reports/network',
+      icon: 'network-graph',
+      label: 'Network Graph',
+      description: 'People-project-client relationship graph'
     },
     ...(isAdmin ? [{
       path: '/reports/person-experience',

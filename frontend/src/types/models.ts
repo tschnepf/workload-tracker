@@ -690,6 +690,96 @@ export interface ProjectFilterMetadataResponse {
   };
 }
 
+export type NetworkGraphMode = 'project_people' | 'coworker' | 'client_experience';
+
+export interface NetworkGraphNode {
+  id: string;
+  label: string;
+  type: 'person' | 'project' | 'client';
+  entityId?: number | null;
+  isActive?: boolean;
+  metrics?: Record<string, string | number | boolean | null>;
+}
+
+export interface NetworkGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: 'assignment' | 'coworker' | 'client_experience';
+  score: number;
+  metrics: {
+    sharedWeeksCount?: number;
+    sharedProjectsCount?: number;
+    distinctWeeksCount?: number;
+    distinctProjectsCount?: number;
+    totalHours?: number;
+  };
+}
+
+export interface NetworkGraphDefaults {
+  defaultWindowMonths: number;
+  coworkerProjectWeight: number;
+  coworkerWeekWeight: number;
+  coworkerMinScore: number;
+  clientProjectWeight: number;
+  clientWeekWeight: number;
+  clientMinScore: number;
+  includeInactiveDefault: boolean;
+  maxEdgesDefault: number;
+  snapshotSchedulerEnabled: boolean;
+  snapshotSchedulerDay: number;
+  snapshotSchedulerHour: number;
+  snapshotSchedulerMinute: number;
+  snapshotSchedulerTimezone: string;
+  omittedProjectIds: number[];
+  omittedProjects?: Array<{ id: number; name: string }>;
+  lastSnapshotWeekStart?: string | null;
+  updatedAt?: string;
+}
+
+export interface NetworkGraphBootstrapResponse {
+  defaults: NetworkGraphDefaults;
+  snapshotBounds: {
+    minWeekStart: string | null;
+    maxWeekStart: string | null;
+    totalWeeks: number;
+  };
+  clients: string[];
+  maxEdgesLimit: number;
+}
+
+export interface NetworkGraphResponse {
+  mode: NetworkGraphMode;
+  start: string;
+  end: string;
+  appliedSettings: {
+    includeInactive: boolean;
+    maxEdges: number;
+    coworkerProjectWeight: number;
+    coworkerWeekWeight: number;
+    coworkerMinScore: number;
+    clientProjectWeight: number;
+    clientWeekWeight: number;
+    clientMinScore: number;
+    defaultWindowMonths: number;
+  };
+  nodes: NetworkGraphNode[];
+  edges: NetworkGraphEdge[];
+  stats: {
+    peopleCount: number;
+    projectsCount: number;
+    clientsCount: number;
+    nodesCount: number;
+    edgesCount: number;
+  };
+  snapshotBounds: {
+    minWeekStart: string | null;
+    maxWeekStart: string | null;
+  };
+  truncated: boolean;
+  warnings: string[];
+}
+
 // Async jobs (Phase 9)
 export type JobState = 'PENDING' | 'STARTED' | 'PROGRESS' | 'SUCCESS' | 'FAILURE' | string;
 

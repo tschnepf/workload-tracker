@@ -700,6 +700,10 @@ CELERY_BEAT_SCHEDULE['azure-daily-reconcile'] = {
     'task': 'integrations.tasks.azure_daily_reconcile',
     'schedule': timedelta(hours=int(os.getenv('AZURE_GRAPH_RECONCILE_HOURS', '24'))),
 }
+CELERY_BEAT_SCHEDULE['network-graph-weekly-snapshot-scheduler'] = {
+    'task': 'assignments.tasks.network_graph_weekly_snapshot_scheduler_task',
+    'schedule': timedelta(minutes=int(os.getenv('NETWORK_GRAPH_SNAPSHOT_SCHEDULER_INTERVAL_MINUTES', '15'))),
+}
 
 # CSP rollout configuration
 CSP_ENABLED = os.getenv('CSP_ENABLED', 'true').lower() == 'true'

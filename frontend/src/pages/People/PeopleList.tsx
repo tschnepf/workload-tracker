@@ -1,4 +1,4 @@
-﻿/**
+/**
  * People List - Split-panel layout following ProjectsList.tsx pattern
  * Left panel: People list with filtering
  * Right panel: Person details with skills management
@@ -705,7 +705,7 @@ const PeopleList: React.FC = () => {
 
   return (
     <Layout>
-      {effectiveListLoading && !isMobileLayout ? loadingContent : isMobileLayout ? mobileView : desktopView}
+      {isMobileLayout ? mobileView : desktopView}
       {/* Mobile slide-over for person details */}
       <MobilePersonDetailsDrawer
         open={isMobileLayout && mobileDetailOpen && !!selectedPerson}

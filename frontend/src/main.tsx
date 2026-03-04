@@ -55,6 +55,7 @@ const DeliverablesDashboard = React.lazy(() => import('./pages/Deliverables/Deli
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'))
 const ForecastPlannerPage = React.lazy(() => import('./pages/Reports/ForecastPlanner'))
 const PersonExperiencePage = React.lazy(() => import('./pages/Reports/PersonExperience'))
+const NetworkGraphPage = React.lazy(() => import('./pages/Reports/NetworkGraph'))
 const Login = React.lazy(() => import('./pages/Auth/Login'))
 const ResetPassword = React.lazy(() => import('./pages/Auth/ResetPassword'))
 const SetPassword = React.lazy(() => import('./pages/Auth/SetPassword'))
@@ -108,6 +109,7 @@ const router = createBrowserRouter([
       { path: 'deliverables/dashboard', element: <RequireAuth><DeliverablesDashboard /></RequireAuth> },
       { path: 'reports/forecast', element: <RequireAdminOrManager>{getFlag('FORECAST_PLANNER_V2', true) ? <ForecastPlannerPage /> : <TeamForecastPage />}</RequireAdminOrManager> },
       { path: 'reports/person-experience', element: <RequireAdmin><PersonExperiencePage /></RequireAdmin> },
+      { path: 'reports/network', element: <RequireAdminOrManager><NetworkGraphPage /></RequireAdminOrManager> },
       { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
       { path: 'my-work', element: (getFlag('PERSONAL_DASHBOARD', true) ? (
         <RequireAuth><PersonalDashboard /></RequireAuth>

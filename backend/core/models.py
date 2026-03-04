@@ -222,6 +222,48 @@ class QATaskSettings(models.Model):
         return obj
 
 
+class NetworkGraphSettings(models.Model):
+    """Singleton defaults for network graph analytics and snapshot scheduling."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+
+    # Graph defaults
+    default_window_months = models.PositiveIntegerField(default=24, validators=[MinValueValidator(1), MaxValueValidator(120)])
+    coworker_project_weight = models.DecimalField(max_digits=8, decimal_places=2, default=3.0)
+    coworker_week_weight = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
+    coworker_min_score = models.DecimalField(max_digits=8, decimal_places=2, default=6.0)
+    client_project_weight = models.DecimalField(max_digits=8, decimal_places=2, default=4.0)
+    client_week_weight = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
+    client_min_score = models.DecimalField(max_digits=8, decimal_places=2, default=8.0)
+    include_inactive_default = models.BooleanField(default=False)
+    max_edges_default = models.PositiveIntegerField(default=4000, validators=[MinValueValidator(100), MaxValueValidator(10000)])
+
+    # Weekly snapshot scheduler
+    snapshot_scheduler_enabled = models.BooleanField(default=True)
+    # Python weekday index: Monday=0 ... Sunday=6 (default Sunday)
+    snapshot_scheduler_day = models.IntegerField(default=6, validators=[MinValueValidator(0), MaxValueValidator(6)])
+    snapshot_scheduler_hour = models.IntegerField(default=23, validators=[MinValueValidator(0), MaxValueValidator(23)])
+    snapshot_scheduler_minute = models.IntegerField(default=55, validators=[MinValueValidator(0), MaxValueValidator(59)])
+    snapshot_scheduler_timezone = models.CharField(max_length=64, default='America/Phoenix')
+    last_snapshot_week_start = models.DateField(null=True, blank=True)
+    omitted_project_ids = models.JSONField(default=list, blank=True)
+    initial_backfill_completed_at = models.DateTimeField(null=True, blank=True)
+    initial_backfill_weeks = models.PositiveIntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Network Graph Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"NetworkGraphSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(key='default')
+        return obj
+
+
 class AutoHoursRoleSetting(models.Model):
     """Global auto-hours defaults per project role."""
 
