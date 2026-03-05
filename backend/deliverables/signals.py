@@ -10,9 +10,10 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from projects.models import Project, ProjectPreDeliverableSettings
+from projects.task_tracking import ensure_deliverable_scope_tasks
 from core.models import PreDeliverableGlobalSettings
 from .models import Deliverable
-from .services import PreDeliverableService, DeliverableTaskService, DeliverableQATaskService
+from .services import PreDeliverableService
 
 
 @receiver(post_save, sender=Project)
@@ -46,30 +47,19 @@ def handle_deliverable_change(sender, instance: Deliverable, created, **kwargs):
     """Generate or update pre-deliverables when deliverable is created/updated."""
     old_date = getattr(instance, '_old_date', None)
     new_date = instance.date
-    today = timezone.now().date()
 
     def _do():
         if created:
             if new_date:
                 PreDeliverableService.generate_pre_deliverables(instance)
             try:
-                DeliverableTaskService.generate_for_deliverable(instance)
-            except Exception:  # nosec B110
-                pass
-            try:
-                if new_date and new_date >= today:
-                    DeliverableQATaskService.ensure_for_deliverable(instance)
+                ensure_deliverable_scope_tasks(instance)
             except Exception:  # nosec B110
                 pass
             return
         # Updated
         if old_date != new_date:
             PreDeliverableService.update_pre_deliverables(instance, old_date, new_date)
-        if new_date and new_date >= today:
-            try:
-                DeliverableQATaskService.ensure_for_deliverable(instance)
-            except Exception:  # nosec B110
-                pass
 
     transaction.on_commit(_do)
 

@@ -9,6 +9,7 @@ from django.utils.text import slugify
 
 from .models import Project, ProjectRisk
 from core.cache_scopes import bump_snapshot_scopes
+from .task_tracking import ensure_project_scope_tasks, sync_project_tasks, project_task_tracking_enabled
 
 
 def _marker_filename(project) -> str:
@@ -53,6 +54,18 @@ def cleanup_replaced_attachment(sender, instance: ProjectRisk, **kwargs):
             pass
 
 
+@receiver(pre_save, sender=Project)
+def capture_task_tracking_state(sender, instance: Project, **kwargs):
+    if not instance.pk:
+        instance._old_task_tracking_enabled = False  # type: ignore[attr-defined]
+        return
+    try:
+        prev = Project.objects.select_related('vertical').get(pk=instance.pk)
+        instance._old_task_tracking_enabled = project_task_tracking_enabled(prev)  # type: ignore[attr-defined]
+    except Exception:
+        instance._old_task_tracking_enabled = False  # type: ignore[attr-defined]
+
+
 @receiver(post_delete, sender=ProjectRisk)
 def cleanup_deleted_attachment(sender, instance: ProjectRisk, **kwargs):
     name = getattr(instance.attachment, 'name', '') or ''
@@ -88,3 +101,22 @@ def sync_overhead_assignments_on_project_save(sender, instance: Project, **kwarg
     except Exception:  # nosec B110
         return
     transaction.on_commit(lambda: sync_overhead_assignments_for_projects([instance.id]))
+
+
+@receiver(post_save, sender=Project)
+def sync_task_tracking_on_project_save(sender, instance: Project, created: bool, **kwargs):
+    old_enabled = bool(getattr(instance, '_old_task_tracking_enabled', False))
+    new_enabled = project_task_tracking_enabled(instance)
+    if not new_enabled:
+        return
+
+    def _run():
+        if created:
+            ensure_project_scope_tasks(instance)
+            return
+        if not old_enabled:
+            sync_project_tasks(instance)
+            return
+        ensure_project_scope_tasks(instance)
+
+    transaction.on_commit(_run)

@@ -60,6 +60,12 @@ const ProjectDetailsPanel: React.FC<ProjectDetailsPanelProps> = ({
   setCandidatesOnly,
   availabilityMap,
   deliverablesSlot,
+  taskTracking,
+  taskTrackingLoading,
+  canManageTaskTracking,
+  taskProjectMembers,
+  onTaskUpdate,
+  onTaskSync,
 }) => {
   void warnings;
   void candidatesOnly;
@@ -242,6 +248,12 @@ const ProjectDetailsPanel: React.FC<ProjectDetailsPanelProps> = ({
             onEditValueChangeCell={onEditValueChangeCell}
             optimisticHours={optimisticHours}
             onSwapPlaceholder={onSwapPlaceholder}
+            taskTracking={taskTracking}
+            taskTrackingLoading={taskTrackingLoading}
+            canManageTaskTracking={canManageTaskTracking}
+            taskProjectMembers={taskProjectMembers}
+            onTaskUpdate={onTaskUpdate}
+            onTaskSync={onTaskSync}
           />
 
           <div className="min-w-0" style={{ gridArea: 'notes' }}>

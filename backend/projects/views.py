@@ -12,7 +12,7 @@ from django.db.models.functions import Coalesce
 from django.http import HttpResponseNotModified, StreamingHttpResponse
 from django.utils.http import http_date, parse_http_date
 from django.conf import settings
-from accounts.permissions import is_admin_or_manager, is_admin_user
+from accounts.permissions import IsAdminOrManager, is_admin_or_manager, is_admin_user
 from accounts.serializers import AdminAuditLogSerializer
 from django.core.cache import cache
 from django.utils import timezone
@@ -24,6 +24,8 @@ from .serializers import (
     ProjectAvailabilityItemSerializer,
     ProjectChangeLogSerializer,
     ProjectStatusDefinitionSerializer,
+    ProjectTaskTemplateSerializer,
+    ProjectTaskSerializer,
 )
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers
@@ -33,8 +35,8 @@ import time
 from django.conf import settings as django_settings
 from .utils.excel_handler import export_projects_to_excel, import_projects_from_file
 from core.utils.xlsx_limits import enforce_xlsx_limits
-from deliverables.models import Deliverable, DeliverableTask, DeliverableQATask
-from deliverables.serializers import DeliverableTaskSerializer, DeliverableQATaskSerializer
+from deliverables.models import Deliverable
+from .models import ProjectTaskTemplate, ProjectTask, ProjectTaskScope
 from assignments.utils.project_membership import is_current_project_assignee
 from assignments.models import Assignment
 from people.models import Person
@@ -53,6 +55,7 @@ from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from core.perf import endpoint_timing
 from django.shortcuts import get_object_or_404
 from .auto_hours_seed import seed_project_auto_hours_placeholders, reseed_project_assignment_hours
+from .task_tracking import sync_project_tasks, project_task_tracking_enabled
 import hashlib
 import json
 import time
@@ -159,6 +162,53 @@ class ProjectStatusDefinitionViewSet(viewsets.ViewSet):
         obj.delete()
         clear_status_definitions_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ProjectTaskTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = ProjectTaskTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrManager]
+
+    def get_queryset(self):
+        qs = ProjectTaskTemplate.objects.select_related('vertical', 'department').order_by(
+            'vertical_id',
+            'scope',
+            'sort_order',
+            'id',
+        )
+        vertical_id = self.request.query_params.get('vertical')
+        if vertical_id:
+            try:
+                qs = qs.filter(vertical_id=int(vertical_id))
+            except Exception:
+                pass
+        scope = (self.request.query_params.get('scope') or '').strip().lower()
+        if scope in {ProjectTaskScope.PROJECT, ProjectTaskScope.DELIVERABLE}:
+            qs = qs.filter(scope=scope)
+        include_inactive = str(self.request.query_params.get('include_inactive') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+        if not include_inactive:
+            qs = qs.filter(is_active=True)
+        return qs
+
+
+class ProjectTaskDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(request=ProjectTaskSerializer, responses=ProjectTaskSerializer)
+    def patch(self, request, task_id: int):
+        if not is_admin_or_manager(getattr(request, 'user', None)):
+            return Response({'detail': 'Manager or admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        task = get_object_or_404(ProjectTask.objects.select_related('project'), pk=task_id)
+        payload = {}
+        if 'completionPercent' in request.data:
+            payload['completionPercent'] = request.data.get('completionPercent')
+        if 'assigneeIds' in request.data:
+            payload['assigneeIds'] = request.data.get('assigneeIds')
+        if not payload:
+            return Response({'error': 'No writable fields provided'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ProjectTaskSerializer(task, data=payload, partial=True, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(ProjectTaskSerializer(task, context={'request': request}).data)
 
 
 class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
@@ -1017,11 +1067,21 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Return updated view
         return self.pre_deliverable_settings(request._request, pk=pk)  # type: ignore
 
-    @extend_schema(responses=DeliverableTaskSerializer(many=True))
-    @action(detail=True, methods=['get'], url_path='deliverable_tasks')
-    def deliverable_tasks(self, request, pk=None):
+    @extend_schema(
+        responses=inline_serializer(
+            name='ProjectTasksResponse',
+            fields={
+                'enabled': serializers.BooleanField(),
+                'projectId': serializers.IntegerField(),
+                'projectTasks': serializers.ListField(child=serializers.DictField()),
+                'deliverableTasks': serializers.ListField(child=serializers.DictField()),
+            },
+        )
+    )
+    @action(detail=True, methods=['get'], url_path='tasks')
+    def tasks(self, request, pk=None):
         try:
-            project = Project.objects.get(pk=pk)
+            project = Project.objects.select_related('vertical').get(pk=pk)
         except Project.DoesNotExist:
             return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1034,34 +1094,75 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             if not person_id or not is_current_project_assignee(person_id, project.id):
                 return Response({'detail': 'Project access required'}, status=status.HTTP_403_FORBIDDEN)
 
-        qs = DeliverableTask.objects.filter(deliverable__project_id=project.id).select_related(
-            'deliverable', 'department', 'assigned_to', 'completed_by', 'template'
-        )
-        serializer = DeliverableTaskSerializer(qs, many=True)
-        return Response(serializer.data)
+        enabled = project_task_tracking_enabled(project)
+        if not enabled:
+            return Response({
+                'enabled': False,
+                'projectId': project.id,
+                'projectTasks': [],
+                'deliverableTasks': [],
+            })
 
-    @extend_schema(responses=DeliverableQATaskSerializer(many=True))
-    @action(detail=True, methods=['get'], url_path='qa_tasks')
-    def qa_tasks(self, request, pk=None):
+        qs = (
+            ProjectTask.objects
+            .filter(project_id=project.id)
+            .select_related('deliverable', 'department', 'template')
+            .prefetch_related('assignees')
+            .order_by('scope', 'deliverable_id', 'department_id', 'id')
+        )
+        payload = ProjectTaskSerializer(qs, many=True, context={'request': request}).data
+        project_tasks = []
+        deliverable_tasks = []
+        for row in payload:
+            if row.get('scope') == ProjectTaskScope.DELIVERABLE:
+                deliverable_tasks.append(row)
+            else:
+                project_tasks.append(row)
+        return Response({
+            'enabled': True,
+            'projectId': project.id,
+            'projectTasks': project_tasks,
+            'deliverableTasks': deliverable_tasks,
+        })
+
+    @extend_schema(
+        responses=inline_serializer(
+            name='ProjectTaskSyncResponse',
+            fields={
+                'enabled': serializers.BooleanField(),
+                'projectId': serializers.IntegerField(),
+                'projectCreated': serializers.IntegerField(),
+                'deliverableCreated': serializers.IntegerField(),
+                'processedDeliverables': serializers.IntegerField(),
+            },
+        )
+    )
+    @action(detail=True, methods=['post'], url_path='tasks/sync')
+    def sync_tasks(self, request, pk=None):
         try:
-            project = Project.objects.get(pk=pk)
+            project = Project.objects.select_related('vertical').get(pk=pk)
         except Project.DoesNotExist:
             return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        user = getattr(request, 'user', None)
-        if not is_admin_or_manager(user):
-            try:
-                person_id = getattr(getattr(user, 'profile', None), 'person_id', None)
-            except Exception:
-                person_id = None
-            if not person_id or not is_current_project_assignee(person_id, project.id):
-                return Response({'detail': 'Project access required'}, status=status.HTTP_403_FORBIDDEN)
+        if not is_admin_or_manager(getattr(request, 'user', None)):
+            return Response({'detail': 'Manager or admin access required'}, status=status.HTTP_403_FORBIDDEN)
 
-        qs = DeliverableQATask.objects.filter(deliverable__project_id=project.id).select_related(
-            'deliverable', 'department', 'qa_assigned_to'
-        )
-        serializer = DeliverableQATaskSerializer(qs, many=True)
-        return Response(serializer.data)
+        enabled = project_task_tracking_enabled(project)
+        if not enabled:
+            return Response({
+                'enabled': False,
+                'projectId': project.id,
+                'projectCreated': 0,
+                'deliverableCreated': 0,
+                'processedDeliverables': 0,
+            })
+
+        summary = sync_project_tasks(project)
+        return Response({
+            'enabled': True,
+            'projectId': project.id,
+            **summary,
+        })
 
     @extend_schema(
         parameters=[

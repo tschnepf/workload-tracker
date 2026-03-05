@@ -8,9 +8,8 @@ from assignments.models import Assignment
 from assignments.rollup_service import queue_project_rollup_refresh
 from assignments.week_hours_service import sync_assignment_week_hours
 from projects.assigned_names import enqueue_assigned_names_rebuild_on_commit
-from deliverables.models import DeliverableAssignment, DeliverableTask
-from deliverables.services import DeliverableQATaskService
-from core.choices import DeliverableTaskCompletionStatus
+from deliverables.models import DeliverableAssignment
+from projects.models import ProjectTask
 from core.cache_scopes import bump_snapshot_scopes
 from assignments.utils.project_membership import is_current_project_assignee
 
@@ -91,23 +90,9 @@ def unassign_tasks_on_assignment_change(sender, instance, **kwargs):
     # If assignment still current, keep tasks assigned
     if is_current_project_assignee(instance.person_id, instance.project_id):
         return
-    DeliverableTask.objects.filter(
-        deliverable__project_id=instance.project_id,
-        assigned_to_id=instance.person_id,
-    ).exclude(
-        completion_status=DeliverableTaskCompletionStatus.COMPLETE
-    ).update(
-        assigned_to=None,
-        updated_at=timezone.now(),
-    )
-
-
-@receiver([post_save, post_delete], sender=Assignment)
-def ensure_qa_tasks_on_assignment(sender, instance, **kwargs):
-    """Ensure QA checklist tasks exist for future deliverables when assignments change."""
-    if not instance.project_id:
-        return
-    try:
-        DeliverableQATaskService.ensure_for_project_future_deliverables(instance.project_id)
-    except Exception:  # nosec B110
-        pass
+    for task in ProjectTask.objects.filter(project_id=instance.project_id, assignees__id=instance.person_id).distinct():
+        if task.completion_percent >= 100:
+            continue
+        task.assignees.remove(instance.person_id)
+        task.updated_at = timezone.now()
+        task.save(update_fields=['updated_at'])

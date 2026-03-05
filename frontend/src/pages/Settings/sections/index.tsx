@@ -70,7 +70,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
   },
   {
     id: DELIVERABLE_TASK_TEMPLATES_SECTION_ID,
-    title: 'Deliverable Task Templates',
+    title: 'Project Task Templates',
     requiresAdmin: true,
     allowManager: true,
     component: DeliverableTaskTemplatesSection,

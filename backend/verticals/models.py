@@ -11,6 +11,7 @@ class Vertical(models.Model):
     name = models.CharField(max_length=100, unique=True)
     short_name = models.CharField(max_length=32, blank=True, default='')
     description = models.TextField(blank=True)
+    task_tracking_enabled = models.BooleanField(default=True)
 
     # System fields
     is_active = models.BooleanField(default=True)

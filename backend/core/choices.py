@@ -28,24 +28,6 @@ class DeliverablePhase(models.TextChoices):
     OTHER = "other", "Other"
 
 
-class DeliverableTaskCompletionStatus(models.TextChoices):
-    NOT_STARTED = "not_started", "Not Started"
-    IN_PROGRESS = "in_progress", "In Progress"
-    COMPLETE = "complete", "Complete"
-
-
-class DeliverableTaskQaStatus(models.TextChoices):
-    NOT_REVIEWED = "not_reviewed", "Not Reviewed"
-    IN_REVIEW = "in_review", "In Review"
-    APPROVED = "approved", "Approved"
-    CHANGES_REQUIRED = "changes_required", "Changes Required"
-
-
-class DeliverableQAReviewStatus(models.TextChoices):
-    NOT_REVIEWED = "not_reviewed", "Not Reviewed"
-    REVIEWED = "reviewed", "Reviewed"
-
-
 class SnapshotSource(models.TextChoices):
     ASSIGNED = "assigned", "Assigned"
     ASSIGNED_BACKFILL = "assigned_backfill", "Assigned Backfill"

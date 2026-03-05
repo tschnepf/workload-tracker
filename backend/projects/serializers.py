@@ -4,10 +4,21 @@ from django.http import QueryDict
 from django.urls import reverse
 import json
 import re
-from .models import Project, ProjectRisk, ProjectRiskEdit, ProjectChangeLog, ProjectStatusDefinition
+from .models import (
+    Project,
+    ProjectRisk,
+    ProjectRiskEdit,
+    ProjectChangeLog,
+    ProjectStatusDefinition,
+    ProjectTaskTemplate,
+    ProjectTask,
+    ProjectTaskScope,
+)
 from .status_definitions import normalize_status_key, status_exists
 from verticals.models import Vertical
 from departments.models import Department
+from people.models import Person
+from assignments.utils.project_membership import is_current_project_assignee
 
 
 class ProjectFilterEntrySerializer(serializers.Serializer):
@@ -152,6 +163,152 @@ class ProjectAvailabilityItemSerializer(serializers.Serializer):
     capacity = serializers.FloatField()
     availableHours = serializers.FloatField()
     utilizationPercent = serializers.FloatField()
+
+
+class ProjectTaskTemplateSerializer(serializers.ModelSerializer):
+    verticalId = serializers.PrimaryKeyRelatedField(source='vertical', queryset=Vertical.objects.all())
+    verticalName = serializers.CharField(source='vertical.name', read_only=True)
+    departmentId = serializers.PrimaryKeyRelatedField(source='department', queryset=Department.objects.all())
+    departmentName = serializers.CharField(source='department.name', read_only=True)
+    sortOrder = serializers.IntegerField(source='sort_order', required=False)
+    isActive = serializers.BooleanField(source='is_active', required=False)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = ProjectTaskTemplate
+        fields = [
+            'id',
+            'verticalId',
+            'verticalName',
+            'scope',
+            'departmentId',
+            'departmentName',
+            'name',
+            'description',
+            'sortOrder',
+            'isActive',
+            'createdAt',
+            'updatedAt',
+        ]
+
+    def validate_scope(self, value):
+        if value not in {ProjectTaskScope.PROJECT, ProjectTaskScope.DELIVERABLE}:
+            raise serializers.ValidationError('scope must be project or deliverable')
+        return value
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        # If a manager/admin creates templates for a vertical, default that
+        # vertical to enabled so templates are immediately usable on projects.
+        vertical = getattr(instance, 'vertical', None)
+        if vertical and not getattr(vertical, 'task_tracking_enabled', False):
+            try:
+                vertical.task_tracking_enabled = True
+                vertical.save(update_fields=['task_tracking_enabled', 'updated_at'])
+            except Exception:
+                pass
+        return instance
+
+
+class ProjectTaskSerializer(serializers.ModelSerializer):
+    templateId = serializers.PrimaryKeyRelatedField(
+        source='template',
+        queryset=ProjectTaskTemplate.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+    departmentId = serializers.PrimaryKeyRelatedField(source='department', queryset=Department.objects.all())
+    departmentName = serializers.CharField(source='department.name', read_only=True)
+    completionPercent = serializers.IntegerField(source='completion_percent')
+    assigneeIds = serializers.PrimaryKeyRelatedField(
+        source='assignees',
+        many=True,
+        queryset=Person.objects.all(),
+        required=False,
+    )
+    assigneeNames = serializers.SerializerMethodField()
+    deliverableInfo = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = ProjectTask
+        fields = [
+            'id',
+            'project',
+            'deliverable',
+            'deliverableInfo',
+            'templateId',
+            'scope',
+            'departmentId',
+            'departmentName',
+            'name',
+            'description',
+            'completionPercent',
+            'assigneeIds',
+            'assigneeNames',
+            'createdAt',
+            'updatedAt',
+        ]
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_assigneeNames(self, obj):
+        names = []
+        try:
+            for person in obj.assignees.all():
+                names.append(person.name)
+        except Exception:
+            return []
+        return names
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_deliverableInfo(self, obj):
+        d = getattr(obj, 'deliverable', None)
+        if not d:
+            return None
+        return {
+            'id': d.id,
+            'projectId': d.project_id,
+            'description': d.description,
+            'date': d.date.isoformat() if d.date else None,
+            'percentage': d.percentage,
+        }
+
+    def validate_completionPercent(self, value):
+        try:
+            percent = int(value)
+        except Exception:
+            raise serializers.ValidationError('completionPercent must be an integer')
+        if percent < 0 or percent > 100:
+            raise serializers.ValidationError('completionPercent must be between 0 and 100')
+        if percent % 5 != 0:
+            raise serializers.ValidationError('completionPercent must be in 5% increments')
+        return percent
+
+    def validate(self, attrs):
+        project = attrs.get('project') or getattr(self.instance, 'project', None)
+        if not project:
+            raise serializers.ValidationError({'project': 'project is required'})
+        deliverable = attrs.get('deliverable', getattr(self.instance, 'deliverable', None))
+        scope = attrs.get('scope', getattr(self.instance, 'scope', None))
+        if scope == ProjectTaskScope.PROJECT and deliverable is not None:
+            raise serializers.ValidationError({'deliverable': 'project-scope tasks cannot target a deliverable'})
+        if scope == ProjectTaskScope.DELIVERABLE:
+            if deliverable is None:
+                raise serializers.ValidationError({'deliverable': 'deliverable is required for deliverable scope'})
+            if deliverable.project_id != project.id:
+                raise serializers.ValidationError({'deliverable': 'deliverable must belong to project'})
+
+        assignees = attrs.get('assignees', None)
+        if assignees is not None:
+            invalid = []
+            for person in assignees:
+                if not is_current_project_assignee(person.id, project.id):
+                    invalid.append(person.id)
+            if invalid:
+                raise serializers.ValidationError({'assigneeIds': f'assignees must be current project members: {invalid}'})
+        return attrs
 
 
 class ProjectRiskEditSerializer(serializers.ModelSerializer):

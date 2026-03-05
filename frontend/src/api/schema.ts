@@ -618,6 +618,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/push-subscriptions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_push_subscriptions_list"];
+        put?: never;
+        post: operations["auth_push_subscriptions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/push-subscriptions/{subscription_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["auth_push_subscriptions_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/push/test/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth_push_test_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/set_password/": {
         parameters: {
             query?: never;
@@ -650,6 +698,70 @@ export interface paths {
         head?: never;
         /** @description Update settings for the current user's profile (partial). */
         patch: operations["auth_settings_partial_update"];
+        trace?: never;
+    };
+    "/api/auth/sso/azure/callback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_sso_azure_callback_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/azure/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth_sso_azure_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth_sso_complete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sso/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_sso_status_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/auth/users/": {
@@ -849,10 +961,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+         * @description Endpoint to view/update tokens for calendar feeds (read-only ICS).
          *
-         *     - GET: returns current token values
-         *     - PATCH: set a specific token or regenerate with {regenerate: true}
+         *     - GET: all authenticated users can view current token values
+         *     - PATCH: admin-only update or regenerate with {regenerate: true}
          */
         get: operations["core_calendar_feeds_retrieve"];
         put?: never;
@@ -861,10 +973,10 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * @description Admin endpoint to view/update tokens for calendar feeds (read-only ICS).
+         * @description Endpoint to view/update tokens for calendar feeds (read-only ICS).
          *
-         *     - GET: returns current token values
-         *     - PATCH: set a specific token or regenerate with {regenerate: true}
+         *     - GET: all authenticated users can view current token values
+         *     - PATCH: admin-only update or regenerate with {regenerate: true}
          */
         patch: operations["core_calendar_feeds_partial_update"];
         trace?: never;
@@ -889,6 +1001,22 @@ export interface paths {
          *     - If a catalog ProjectRole exists for that normalized name, it is deleted.
          */
         delete: operations["core_deliverable_phase_mapping_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/network_graph_settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_network_graph_settings_retrieve"];
+        put: operations["core_network_graph_settings_update"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1476,7 +1604,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Staff-only: backfill or regenerate pre-items for a project/date window.
+         * @description Manager/admin: backfill or regenerate pre-items for a project/date window.
          *
          *     If ASYNC_JOBS is enabled and Celery task is available, enqueues background job and
          *     returns 202 with job metadata. Otherwise, runs synchronously and returns a summary.
@@ -1511,38 +1639,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/deliverables/qa_tasks/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["deliverables_qa_tasks_list"];
-        put?: never;
-        post: operations["deliverables_qa_tasks_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/deliverables/qa_tasks/{id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["deliverables_qa_tasks_retrieve"];
-        put: operations["deliverables_qa_tasks_update"];
-        post?: never;
-        delete: operations["deliverables_qa_tasks_destroy"];
-        options?: never;
-        head?: never;
-        patch: operations["deliverables_qa_tasks_partial_update"];
-        trace?: never;
-    };
     "/api/deliverables/reorder/": {
         parameters: {
             query?: never;
@@ -1564,70 +1660,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/deliverables/task_templates/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["deliverables_task_templates_list"];
-        put?: never;
-        post: operations["deliverables_task_templates_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/deliverables/task_templates/{id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["deliverables_task_templates_retrieve"];
-        put: operations["deliverables_task_templates_update"];
-        post?: never;
-        delete: operations["deliverables_task_templates_destroy"];
-        options?: never;
-        head?: never;
-        patch: operations["deliverables_task_templates_partial_update"];
-        trace?: never;
-    };
-    "/api/deliverables/tasks/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["deliverables_tasks_list"];
-        put?: never;
-        post: operations["deliverables_tasks_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/deliverables/tasks/{id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["deliverables_tasks_retrieve"];
-        put: operations["deliverables_tasks_update"];
-        post?: never;
-        delete: operations["deliverables_tasks_destroy"];
-        options?: never;
-        head?: never;
-        patch: operations["deliverables_tasks_partial_update"];
         trace?: never;
     };
     "/api/departments/": {
@@ -1961,6 +1993,406 @@ export interface paths {
         get: operations["integrations_providers_projects_matching_suggestions_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/directory/departments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_directory_departments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/directory/groups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_directory_groups_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/mappings/departments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_mappings_departments_retrieve"];
+        put?: never;
+        post: operations["integrations_providers_azure_mappings_departments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/mappings/roles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_mappings_roles_retrieve"];
+        put?: never;
+        post: operations["integrations_providers_azure_mappings_roles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/migration/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_migration_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/migration/reconciliation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_migration_reconciliation_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/migration/reconciliation/{id}/confirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_migration_reconciliation_confirm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/migration/reconciliation/{id}/override/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_migration_reconciliation_override_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/migration/reconciliation/{id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_migration_reconciliation_reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/migration/reconciliation/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_migration_reconciliation_refresh_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/provisioning/reconcile-now/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_provisioning_reconcile_now_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/provisioning/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_provisioning_status_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/provisioning/validate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_provisioning_validate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/token/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["integrations_providers_azure_scim_token_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/ResourceTypes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_ResourceTypes_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/ResourceTypes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_ResourceTypes_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/Schemas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_Schemas_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/Schemas/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_Schemas_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/ServiceProviderConfig": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_ServiceProviderConfig_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/ServiceProviderConfig/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_ServiceProviderConfig_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/Users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_Users_retrieve"];
+        put?: never;
+        post: operations["integrations_providers_azure_scim_v2_Users_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/Users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_Users_retrieve_2"];
+        put?: never;
+        post: operations["integrations_providers_azure_scim_v2_Users_create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/Users/{principal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_Users_retrieve_3"];
+        put?: never;
+        post?: never;
+        delete: operations["integrations_providers_azure_scim_v2_Users_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["integrations_providers_azure_scim_v2_Users_partial_update"];
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/scim/v2/Users/{principal_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_scim_v2_Users_retrieve_4"];
+        put?: never;
+        post?: never;
+        delete: operations["integrations_providers_azure_scim_v2_Users_destroy_2"];
+        options?: never;
+        head?: never;
+        patch: operations["integrations_providers_azure_scim_v2_Users_partial_update_2"];
+        trace?: never;
+    };
+    "/api/integrations/providers/azure/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integrations_providers_azure_status_retrieve"];
+        put?: never;
+        post: operations["integrations_providers_azure_status_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2367,6 +2799,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/personal/lead_project_grid/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["personal_lead_project_grid_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/personal/work/": {
         parameters: {
             query?: never;
@@ -2473,29 +2921,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/projects/{id}/deliverable_tasks/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-         *
-         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-         */
-        get: operations["projects_deliverable_tasks_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/projects/{id}/pre-deliverable-settings/": {
         parameters: {
             query?: never;
@@ -2526,29 +2951,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/projects/{id}/qa_tasks/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
-         *
-         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
-         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
-         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
-         */
-        get: operations["projects_qa_tasks_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/projects/{id}/reseed-auto-hours/": {
         parameters: {
             query?: never;
@@ -2566,6 +2968,52 @@ export interface paths {
          *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
          */
         post: operations["projects_reseed_auto_hours_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/tasks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        get: operations["projects_tasks_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/tasks/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Adds ETag on detail GET and optional If-Match handling on mutations.
+         *
+         *     - Detail GET (retrieve): returns ETag (and Last-Modified if available). Honors If-None-Match with 304.
+         *     - Mutations (update/partial_update/destroy): when If-Match is present and does not match current ETag, returns 412.
+         *       When If-Match is absent, proceeds (frontend can adopt conditionals progressively).
+         */
+        post: operations["projects_tasks_sync_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2644,7 +3092,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Read-only endpoint for recent project create/delete audit logs (admin only). */
+        /** @description Read-only endpoint for recent project create/delete audit logs (manager/admin only). */
         get: operations["projects_audit_list"];
         put?: never;
         post?: never;
@@ -2896,6 +3344,54 @@ export interface paths {
         patch: operations["projects_status_definitions_partial_update"];
         trace?: never;
     };
+    "/api/projects/task-templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_task_templates_list"];
+        put?: never;
+        post: operations["projects_task_templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/task-templates/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_task_templates_retrieve"];
+        put: operations["projects_task_templates_update"];
+        post?: never;
+        delete: operations["projects_task_templates_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["projects_task_templates_partial_update"];
+        trace?: never;
+    };
+    "/api/projects/tasks/{task_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["projects_tasks_partial_update"];
+        trace?: never;
+    };
     "/api/reports/departments/overview/": {
         parameters: {
             query?: never;
@@ -2920,6 +3416,118 @@ export interface paths {
             cookie?: never;
         };
         get: operations["reports_forecast_bootstrap_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/forecast/evaluate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reports_forecast_evaluate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/forecast/planner-bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_forecast_planner_bootstrap_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/forecast/scenarios/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_forecast_scenarios_retrieve"];
+        put?: never;
+        post: operations["reports_forecast_scenarios_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/forecast/scenarios/{scenario_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_forecast_scenarios_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete: operations["reports_forecast_scenarios_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["reports_forecast_scenarios_partial_update"];
+        trace?: never;
+    };
+    "/api/reports/forecast/scenarios/shared/{token}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_forecast_scenarios_shared_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/network/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_network_bootstrap_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/network/graph/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reports_network_graph_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3755,6 +4363,47 @@ export interface components {
             /** Format: double */
             utilization_percent: number;
         };
+        AzurePolicyUpdateRequestRequest: {
+            azureSsoEnabled?: boolean;
+            azureSsoEnforced?: boolean;
+            passwordLoginEnabledNonBreakGlass?: boolean;
+            breakGlassUserId?: number | null;
+        };
+        AzureProviderStatus: {
+            connected: boolean;
+            connectionId: number | null;
+            environment: string | null;
+            hasScimToken: boolean;
+            policy: {
+                [key: string]: unknown;
+            };
+            lastReconcileAt: string | null;
+            graphPermissionReady: boolean;
+            graphPermissionReason?: string | null;
+            graphPermissionCheckedAt?: string | null;
+            tenantEnforced: boolean;
+            tenantId?: string | null;
+        };
+        AzureScimTokenRequestRequest: {
+            token: string;
+        };
+        AzureSsoCompleteRequestRequest: {
+            code: string;
+        };
+        AzureSsoCompleteResponse: {
+            access: string;
+            refresh?: string;
+        };
+        AzureSsoStartResponse: {
+            authorizeUrl: string;
+            state: string;
+        };
+        AzureSsoStatus: {
+            enabled: boolean;
+            enforced: boolean;
+            passwordLoginEnabledNonBreakGlass: boolean;
+            breakGlassConfigured: boolean;
+        };
         BackupCreateRequestRequest: {
             description?: string;
         };
@@ -3832,6 +4481,12 @@ export interface components {
         CapabilitiesIntegrations: {
             enabled: boolean;
         };
+        CapabilitiesPwa: {
+            enabled: boolean;
+            pushEnabled: boolean;
+            vapidPublicKey?: string | null;
+            offlineMode: string;
+        };
         CapabilitiesResponse: {
             asyncJobs: boolean;
             aggregates: components["schemas"]["CapabilitiesAggregates"];
@@ -3839,6 +4494,7 @@ export interface components {
             personalDashboard: boolean;
             projectRolesByDepartment: boolean;
             integrations: components["schemas"]["CapabilitiesIntegrations"];
+            pwa: components["schemas"]["CapabilitiesPwa"];
         };
         ChangePasswordRequestRequest: {
             currentPassword: string;
@@ -3849,13 +4505,6 @@ export interface components {
             /** Format: double */
             hours: number;
         };
-        /**
-         * @description * `not_started` - Not Started
-         *     * `in_progress` - In Progress
-         *     * `complete` - Complete
-         * @enum {string}
-         */
-        CompletionStatusEnum: "not_started" | "in_progress" | "complete";
         CoverageBlock: {
             roleId: number;
             start: string;
@@ -3888,21 +4537,6 @@ export interface components {
             total_assignments: number;
             overallocated_count: number;
         };
-        /**
-         * @description * `not_started` - Not Started
-         *     * `in_progress` - In Progress
-         *     * `complete` - Complete
-         * @enum {string}
-         */
-        DefaultCompletionStatusEnum: "not_started" | "in_progress" | "complete";
-        /**
-         * @description * `not_reviewed` - Not Reviewed
-         *     * `in_review` - In Review
-         *     * `approved` - Approved
-         *     * `changes_required` - Changes Required
-         * @enum {string}
-         */
-        DefaultQaStatusEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
         /** @description Deliverable serializer with snake_case -> camelCase field mapping */
         Deliverable: {
             readonly id: number;
@@ -3997,37 +4631,6 @@ export interface components {
             useDescriptionMatch: boolean;
             phases: components["schemas"]["DeliverablePhaseDefinitionRequest"][];
         };
-        DeliverableQATask: {
-            readonly id: number;
-            deliverable: number;
-            readonly deliverableInfo: {
-                [key: string]: unknown;
-            };
-            departmentId: number;
-            readonly departmentName: string;
-            qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
-            qaAssignedTo?: number | null;
-            readonly qaAssignedToName: string;
-            /** Format: date-time */
-            readonly reviewedAt: string | null;
-            readonly dueDate: string;
-            /** Format: date-time */
-            readonly createdAt: string;
-            /** Format: date-time */
-            readonly updatedAt: string;
-        };
-        /**
-         * @description * `not_reviewed` - Not Reviewed
-         *     * `reviewed` - Reviewed
-         * @enum {string}
-         */
-        DeliverableQATaskQaStatusEnum: "not_reviewed" | "reviewed";
-        DeliverableQATaskRequest: {
-            deliverable: number;
-            departmentId: number;
-            qaStatus: components["schemas"]["DeliverableQATaskQaStatusEnum"];
-            qaAssignedTo?: number | null;
-        };
         DeliverableReorderRequestRequest: {
             project: number;
             deliverable_ids: number[];
@@ -4071,73 +4674,6 @@ export interface components {
             weekBreakdown: {
                 [key: string]: unknown;
             };
-        };
-        DeliverableTask: {
-            readonly id: number;
-            deliverable: number;
-            readonly deliverableInfo: {
-                [key: string]: unknown;
-            };
-            templateId?: number | null;
-            departmentId: number;
-            readonly departmentName: string;
-            sheetNumber?: string | null;
-            sheetName?: string | null;
-            scopeDescription?: string;
-            completionStatus: components["schemas"]["CompletionStatusEnum"];
-            qaStatus: components["schemas"]["QaStatus7bcEnum"];
-            qaAssignedTo?: number | null;
-            readonly qaAssignedToName: string;
-            assignedTo?: number | null;
-            readonly assignedToName: string;
-            readonly completedBy: number | null;
-            readonly completedByName: string;
-            /** Format: date-time */
-            readonly completedAt: string | null;
-            /** Format: date-time */
-            readonly createdAt: string;
-            /** Format: date-time */
-            readonly updatedAt: string;
-        };
-        DeliverableTaskRequest: {
-            deliverable: number;
-            templateId?: number | null;
-            departmentId: number;
-            sheetNumber?: string | null;
-            sheetName?: string | null;
-            scopeDescription?: string;
-            completionStatus: components["schemas"]["CompletionStatusEnum"];
-            qaStatus: components["schemas"]["QaStatus7bcEnum"];
-            qaAssignedTo?: number | null;
-            assignedTo?: number | null;
-        };
-        DeliverableTaskTemplate: {
-            readonly id: number;
-            phase: string;
-            departmentId: number;
-            readonly departmentName: string;
-            sheetNumber?: string | null;
-            sheetName?: string | null;
-            scopeDescription?: string;
-            defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
-            defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
-            sortOrder?: number;
-            isActive?: boolean;
-            /** Format: date-time */
-            readonly createdAt: string;
-            /** Format: date-time */
-            readonly updatedAt: string;
-        };
-        DeliverableTaskTemplateRequest: {
-            phase: string;
-            departmentId: number;
-            sheetNumber?: string | null;
-            sheetName?: string | null;
-            scopeDescription?: string;
-            defaultCompletionStatus: components["schemas"]["DefaultCompletionStatusEnum"];
-            defaultQaStatus: components["schemas"]["DefaultQaStatusEnum"];
-            sortOrder?: number;
-            isActive?: boolean;
         };
         /** @description Department serializer with explicit camelCase field mapping */
         Department: {
@@ -4218,6 +4754,79 @@ export interface components {
             label: string;
             values: number[];
         };
+        ForecastPlannerBootstrapResponse: {
+            departments: {
+                [key: string]: unknown;
+            }[];
+            roles: {
+                [key: string]: unknown;
+            }[];
+            statusDefinitions: {
+                [key: string]: unknown;
+            }[];
+            defaultIncludedStatusKeys: string[];
+            templates: {
+                [key: string]: unknown;
+            }[];
+            baselineEvaluation: {
+                [key: string]: unknown;
+            };
+        };
+        ForecastPlannerEvaluateRequestRequest: {
+            weeks?: number;
+            department?: number | null;
+            include_children?: boolean;
+            vertical?: number | null;
+            statusKeys?: string[];
+            projects?: {
+                [key: string]: unknown;
+            }[];
+            thresholds?: {
+                [key: string]: unknown;
+            };
+            useProbabilityWeighting?: boolean;
+        };
+        ForecastPlannerEvaluateResponse: {
+            result: {
+                [key: string]: unknown;
+            };
+        };
+        ForecastScenarioCreateRequestRequest: {
+            name: string;
+            description?: string;
+            scenarioConfig?: {
+                [key: string]: unknown;
+            };
+            lastResult?: {
+                [key: string]: unknown;
+            };
+            isShared?: boolean;
+        };
+        ForecastScenarioCreateResponse: {
+            scenario: {
+                [key: string]: unknown;
+            };
+        };
+        ForecastScenarioDetailResponse: {
+            scenario: {
+                [key: string]: unknown;
+            };
+        };
+        ForecastScenarioListResponse: {
+            results: {
+                [key: string]: unknown;
+            }[];
+        };
+        ForecastScenarioPatchResponse: {
+            scenario: {
+                [key: string]: unknown;
+            };
+        };
+        ForecastScenarioSharedResponse: {
+            scenario: {
+                [key: string]: unknown;
+            };
+        };
         GlobalSettingsUpdateRequest: {
             settings: components["schemas"]["PreDeliverableGlobalSettingsUpdateRequest"][];
         };
@@ -4229,6 +4838,7 @@ export interface components {
             name: string;
             weeklyCapacity: number;
             department: number | null;
+            firstEligibleWeek?: string | null;
         };
         GridSnapshotResponse: {
             weekKeys: string[];
@@ -4414,15 +5024,119 @@ export interface components {
          * @enum {string}
          */
         ModeEnum: "absolute_hours" | "percent";
+        NetworkBootstrapResponse: {
+            defaults: {
+                [key: string]: unknown;
+            };
+            snapshotBounds: components["schemas"]["NetworkSnapshotBounds"];
+            clients: string[];
+            maxEdgesLimit: number;
+        };
+        NetworkGraphResponse: {
+            mode: string;
+            start: string;
+            end: string;
+            appliedSettings: {
+                [key: string]: unknown;
+            };
+            nodes: {
+                [key: string]: unknown;
+            }[];
+            edges: {
+                [key: string]: unknown;
+            }[];
+            stats: {
+                [key: string]: unknown;
+            };
+            snapshotBounds: {
+                [key: string]: unknown;
+            };
+            truncated: boolean;
+            warnings: string[];
+        };
+        NetworkGraphSettings: {
+            defaultWindowMonths: number;
+            /** Format: double */
+            coworkerProjectWeight: number;
+            /** Format: double */
+            coworkerWeekWeight: number;
+            /** Format: double */
+            coworkerMinScore: number;
+            /** Format: double */
+            clientProjectWeight: number;
+            /** Format: double */
+            clientWeekWeight: number;
+            /** Format: double */
+            clientMinScore: number;
+            includeInactiveDefault: boolean;
+            maxEdgesDefault: number;
+            snapshotSchedulerEnabled: boolean;
+            snapshotSchedulerDay: number;
+            snapshotSchedulerHour: number;
+            snapshotSchedulerMinute: number;
+            snapshotSchedulerTimezone: string;
+            omittedProjectIds?: number[];
+            readonly omittedProjects: string;
+            /** Format: date */
+            lastSnapshotWeekStart?: string | null;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        NetworkGraphSettingsRequest: {
+            defaultWindowMonths: number;
+            /** Format: double */
+            coworkerProjectWeight: number;
+            /** Format: double */
+            coworkerWeekWeight: number;
+            /** Format: double */
+            coworkerMinScore: number;
+            /** Format: double */
+            clientProjectWeight: number;
+            /** Format: double */
+            clientWeekWeight: number;
+            /** Format: double */
+            clientMinScore: number;
+            includeInactiveDefault: boolean;
+            maxEdgesDefault: number;
+            snapshotSchedulerEnabled: boolean;
+            snapshotSchedulerDay: number;
+            snapshotSchedulerHour: number;
+            snapshotSchedulerMinute: number;
+            snapshotSchedulerTimezone: string;
+            omittedProjectIds?: number[];
+            /** Format: date */
+            lastSnapshotWeekStart?: string | null;
+        };
+        NetworkSnapshotBounds: {
+            minWeekStart: string | null;
+            maxWeekStart: string | null;
+            totalWeeks: number;
+        };
         NotificationPreferences: {
             emailPreDeliverableReminders: boolean;
             reminderDaysBefore: number;
             dailyDigest: boolean;
+            /** @default false */
+            webPushEnabled: boolean;
+            /** @default true */
+            pushPreDeliverableReminders: boolean;
+            /** @default false */
+            pushDailyDigest: boolean;
+            /** @default true */
+            pushAssignmentChanges: boolean;
         };
         NotificationPreferencesRequest: {
             emailPreDeliverableReminders: boolean;
             reminderDaysBefore: number;
             dailyDigest: boolean;
+            /** @default false */
+            webPushEnabled: boolean;
+            /** @default true */
+            pushPreDeliverableReminders: boolean;
+            /** @default false */
+            pushDailyDigest: boolean;
+            /** @default true */
+            pushAssignmentChanges: boolean;
         };
         /**
          * @description * `or` - or
@@ -4567,51 +5281,6 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Deliverable"][];
-        };
-        PaginatedDeliverableQATaskList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["DeliverableQATask"][];
-        };
-        PaginatedDeliverableTaskList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["DeliverableTask"][];
-        };
-        PaginatedDeliverableTaskTemplateList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["DeliverableTaskTemplate"][];
         };
         PaginatedDepartmentList: {
             /** @example 123 */
@@ -4763,6 +5432,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["ProjectRisk"][];
         };
+        PaginatedProjectTaskTemplateList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["ProjectTaskTemplate"][];
+        };
         PaginatedRoleList: {
             /** @example 123 */
             count: number;
@@ -4869,12 +5553,6 @@ export interface components {
             roleOnMilestone?: string | null;
             is_active?: boolean;
         };
-        PatchedDeliverableQATaskRequest: {
-            deliverable?: number;
-            departmentId?: number;
-            qaStatus?: components["schemas"]["DeliverableQATaskQaStatusEnum"];
-            qaAssignedTo?: number | null;
-        };
         /** @description Deliverable serializer with snake_case -> camelCase field mapping */
         PatchedDeliverableRequest: {
             project?: number;
@@ -4891,29 +5569,6 @@ export interface components {
             /** Format: date */
             completedDate?: string | null;
         };
-        PatchedDeliverableTaskRequest: {
-            deliverable?: number;
-            templateId?: number | null;
-            departmentId?: number;
-            sheetNumber?: string | null;
-            sheetName?: string | null;
-            scopeDescription?: string;
-            completionStatus?: components["schemas"]["CompletionStatusEnum"];
-            qaStatus?: components["schemas"]["QaStatus7bcEnum"];
-            qaAssignedTo?: number | null;
-            assignedTo?: number | null;
-        };
-        PatchedDeliverableTaskTemplateRequest: {
-            phase?: string;
-            departmentId?: number;
-            sheetNumber?: string | null;
-            sheetName?: string | null;
-            scopeDescription?: string;
-            defaultCompletionStatus?: components["schemas"]["DefaultCompletionStatusEnum"];
-            defaultQaStatus?: components["schemas"]["DefaultQaStatusEnum"];
-            sortOrder?: number;
-            isActive?: boolean;
-        };
         /** @description Department serializer with explicit camelCase field mapping */
         PatchedDepartmentRequest: {
             name?: string;
@@ -4924,6 +5579,17 @@ export interface components {
             secondaryManagers?: number[];
             description?: string;
             isActive?: boolean;
+        };
+        PatchedForecastScenarioPatchRequestRequest: {
+            name?: string;
+            description?: string;
+            scenarioConfig?: {
+                [key: string]: unknown;
+            };
+            lastResult?: {
+                [key: string]: unknown;
+            };
+            isShared?: boolean;
         };
         PatchedIntegrationConnectionRequest: {
             providerKey?: string;
@@ -5016,6 +5682,26 @@ export interface components {
             isActive?: boolean;
             sortOrder?: number;
         };
+        PatchedProjectTaskRequest: {
+            project?: number;
+            deliverable?: number | null;
+            templateId?: number | null;
+            scope?: components["schemas"]["ScopeEnum"];
+            departmentId?: number;
+            name?: string;
+            description?: string;
+            completionPercent?: number;
+            assigneeIds?: number[];
+        };
+        PatchedProjectTaskTemplateRequest: {
+            verticalId?: number;
+            scope?: components["schemas"]["ScopeEnum"];
+            departmentId?: number;
+            name?: string;
+            description?: string;
+            sortOrder?: number;
+            isActive?: boolean;
+        };
         /** @description Role serializer with camelCase field transformation */
         PatchedRoleRequest: {
             /** @description Role name (e.g., Senior Engineer, Product Manager) */
@@ -5048,6 +5734,7 @@ export interface components {
             shortName?: string;
             description?: string;
             isActive?: boolean;
+            taskTrackingEnabled?: boolean;
         };
         PeopleAutocompleteItem: {
             id: number;
@@ -5215,6 +5902,21 @@ export interface components {
             /** Format: date */
             date: string | null;
             isCompleted: boolean;
+        };
+        PersonalLeadProjectGrid: {
+            weekKeys: string[];
+            projects: components["schemas"]["PersonalLeadProjectItem"][];
+            assignmentsByProject: {
+                [key: string]: unknown;
+            };
+        };
+        PersonalLeadProjectItem: {
+            id: number;
+            name: string | null;
+            client?: string | null;
+            status?: string | null;
+            leadRoleNames?: string[];
+            scopedDepartmentIds?: number[];
         };
         PersonalProjectItem: {
             id: number;
@@ -5680,6 +6382,69 @@ export interface components {
             isActive?: boolean;
             sortOrder?: number;
         };
+        ProjectTask: {
+            readonly id: number;
+            project: number;
+            deliverable?: number | null;
+            readonly deliverableInfo: {
+                [key: string]: unknown;
+            } | null;
+            templateId?: number | null;
+            scope: components["schemas"]["ScopeEnum"];
+            departmentId: number;
+            readonly departmentName: string;
+            name: string;
+            description?: string;
+            completionPercent: number;
+            assigneeIds?: number[];
+            readonly assigneeNames: string[];
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        ProjectTaskSyncResponse: {
+            enabled: boolean;
+            projectId: number;
+            projectCreated: number;
+            deliverableCreated: number;
+            processedDeliverables: number;
+        };
+        ProjectTaskTemplate: {
+            readonly id: number;
+            verticalId: number;
+            readonly verticalName: string;
+            scope: components["schemas"]["ScopeEnum"];
+            departmentId: number;
+            readonly departmentName: string;
+            name: string;
+            description?: string;
+            sortOrder?: number;
+            isActive?: boolean;
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        ProjectTaskTemplateRequest: {
+            verticalId: number;
+            scope: components["schemas"]["ScopeEnum"];
+            departmentId: number;
+            name: string;
+            description?: string;
+            sortOrder?: number;
+            isActive?: boolean;
+        };
+        ProjectTasksResponse: {
+            enabled: boolean;
+            projectId: number;
+            projectTasks: {
+                [key: string]: unknown;
+            }[];
+            deliverableTasks: {
+                [key: string]: unknown;
+            }[];
+        };
         ProjectTotal: {
             id: number;
             name: string;
@@ -5744,6 +6509,31 @@ export interface components {
         ProviderResetResponse: {
             reset: boolean;
         };
+        PushSubscriptionItem: {
+            id: number;
+            endpoint: string;
+            isActive: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            /** Format: date-time */
+            lastSuccessAt: string | null;
+            lastError: string;
+        };
+        PushSubscriptionUpsertRequest: {
+            endpoint: string;
+            expirationTime?: number | null;
+            keys: {
+                [key: string]: string;
+            };
+        };
+        PushTestResponse: {
+            queued: boolean;
+            detail: string;
+        };
         QATaskSettings: {
             defaultDaysBefore: number;
             /** Format: date-time */
@@ -5752,14 +6542,6 @@ export interface components {
         QATaskSettingsRequest: {
             defaultDaysBefore: number;
         };
-        /**
-         * @description * `not_reviewed` - Not Reviewed
-         *     * `in_review` - In Review
-         *     * `approved` - Approved
-         *     * `changes_required` - Changes Required
-         * @enum {string}
-         */
-        QaStatus7bcEnum: "not_reviewed" | "in_review" | "approved" | "changes_required";
         RecentAssignment: {
             person: string;
             project: string;
@@ -5846,6 +6628,12 @@ export interface components {
             events_inserted?: number;
             skipped_due_to_lock?: boolean;
         };
+        /**
+         * @description * `project` - Project
+         *     * `deliverable` - Deliverable
+         * @enum {string}
+         */
+        ScopeEnum: "project" | "deliverable";
         SearchTokenPeopleRequest: {
             term: string;
             op: components["schemas"]["OpEnum"];
@@ -6018,6 +6806,7 @@ export interface components {
             shortName?: string;
             description?: string;
             isActive?: boolean;
+            taskTrackingEnabled?: boolean;
             /** Format: date-time */
             readonly createdAt: string;
             /** Format: date-time */
@@ -6029,6 +6818,7 @@ export interface components {
             shortName?: string;
             description?: string;
             isActive?: boolean;
+            taskTrackingEnabled?: boolean;
         };
         WeeksSummary: {
             weeks: number;
@@ -6300,7 +7090,7 @@ export interface operations {
                 role_ids?: string;
                 /** @description Filter by vertical id */
                 vertical?: number;
-                /** @description Number of future weeks (4,8,12,16,20). Default 12 */
+                /** @description Number of future weeks (4,8,12,16,20,26,52). Default 12 */
                 weeks?: number;
             };
             header?: never;
@@ -6980,6 +7770,89 @@ export interface operations {
             };
         };
     };
+    auth_push_subscriptions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionItem"][];
+                };
+            };
+        };
+    };
+    auth_push_subscriptions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionUpsertRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushSubscriptionUpsertRequest"];
+                "multipart/form-data": components["schemas"]["PushSubscriptionUpsertRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionItem"];
+                };
+            };
+        };
+    };
+    auth_push_subscriptions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_push_test_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushTestResponse"];
+                };
+            };
+        };
+    };
     auth_set_password_create: {
         parameters: {
             query?: never;
@@ -7025,6 +7898,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserProfile"];
+                };
+            };
+        };
+    };
+    auth_sso_azure_callback_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirects browser to frontend SSO completion route. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+        };
+    };
+    auth_sso_azure_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AzureSsoStartResponse"];
+                };
+            };
+        };
+    };
+    auth_sso_complete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AzureSsoCompleteRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AzureSsoCompleteRequestRequest"];
+                "multipart/form-data": components["schemas"]["AzureSsoCompleteRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AzureSsoCompleteResponse"];
+                };
+            };
+        };
+    };
+    auth_sso_status_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AzureSsoStatus"];
                 };
             };
         };
@@ -7426,6 +8382,50 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    core_network_graph_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkGraphSettings"];
+                };
+            };
+        };
+    };
+    core_network_graph_settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkGraphSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["NetworkGraphSettingsRequest"];
+                "multipart/form-data": components["schemas"]["NetworkGraphSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkGraphSettings"];
+                };
             };
         };
     };
@@ -8665,152 +9665,6 @@ export interface operations {
             };
         };
     };
-    deliverables_qa_tasks_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
-                };
-            };
-        };
-    };
-    deliverables_qa_tasks_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeliverableQATaskRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
-                "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableQATask"];
-                };
-            };
-        };
-    };
-    deliverables_qa_tasks_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable QA Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableQATask"];
-                };
-            };
-        };
-    };
-    deliverables_qa_tasks_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable QA Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeliverableQATaskRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeliverableQATaskRequest"];
-                "multipart/form-data": components["schemas"]["DeliverableQATaskRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableQATask"];
-                };
-            };
-        };
-    };
-    deliverables_qa_tasks_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable QA Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    deliverables_qa_tasks_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable QA Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedDeliverableQATaskRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableQATaskRequest"];
-                "multipart/form-data": components["schemas"]["PatchedDeliverableQATaskRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableQATask"];
-                };
-            };
-        };
-    };
     deliverables_reorder_create: {
         parameters: {
             query?: never;
@@ -8832,298 +9686,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeliverableReorderResponse"];
-                };
-            };
-        };
-    };
-    deliverables_task_templates_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedDeliverableTaskTemplateList"];
-                };
-            };
-        };
-    };
-    deliverables_task_templates_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
-                "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
-                };
-            };
-        };
-    };
-    deliverables_task_templates_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task Template. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
-                };
-            };
-        };
-    };
-    deliverables_task_templates_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task Template. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeliverableTaskTemplateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskTemplateRequest"];
-                "multipart/form-data": components["schemas"]["DeliverableTaskTemplateRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
-                };
-            };
-        };
-    };
-    deliverables_task_templates_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task Template. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    deliverables_task_templates_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task Template. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
-                "multipart/form-data": components["schemas"]["PatchedDeliverableTaskTemplateRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTaskTemplate"];
-                };
-            };
-        };
-    };
-    deliverables_tasks_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
-                };
-            };
-        };
-    };
-    deliverables_tasks_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeliverableTaskRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
-                "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTask"];
-                };
-            };
-        };
-    };
-    deliverables_tasks_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTask"];
-                };
-            };
-        };
-    };
-    deliverables_tasks_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeliverableTaskRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeliverableTaskRequest"];
-                "multipart/form-data": components["schemas"]["DeliverableTaskRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTask"];
-                };
-            };
-        };
-    };
-    deliverables_tasks_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    deliverables_tasks_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this Deliverable Task. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedDeliverableTaskRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedDeliverableTaskRequest"];
-                "multipart/form-data": components["schemas"]["PatchedDeliverableTaskRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliverableTask"];
                 };
             };
         };
@@ -9850,6 +10412,874 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_directory_departments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_directory_groups_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_mappings_departments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_mappings_departments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_mappings_roles_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_mappings_roles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_migration_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_migration_reconciliation_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_migration_reconciliation_confirm_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_migration_reconciliation_override_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_migration_reconciliation_reject_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_migration_reconciliation_refresh_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_provisioning_reconcile_now_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_provisioning_status_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_provisioning_validate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_token_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AzureScimTokenRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AzureScimTokenRequestRequest"];
+                "multipart/form-data": components["schemas"]["AzureScimTokenRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_ResourceTypes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_ResourceTypes_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Schemas_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Schemas_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_ServiceProviderConfig_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_ServiceProviderConfig_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_retrieve_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_retrieve_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_destroy_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    integrations_providers_azure_scim_v2_Users_partial_update_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                principal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    integrations_providers_azure_status_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AzureProviderStatus"];
+                };
+            };
+        };
+    };
+    integrations_providers_azure_status_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AzurePolicyUpdateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AzurePolicyUpdateRequestRequest"];
+                "multipart/form-data": components["schemas"]["AzurePolicyUpdateRequestRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -10667,6 +12097,28 @@ export interface operations {
             };
         };
     };
+    personal_lead_project_grid_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Weeks horizon (default 12, clamp 1..52) */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalLeadProjectGrid"];
+                };
+            };
+        };
+    };
     personal_work_retrieve: {
         parameters: {
             query?: never;
@@ -10866,32 +12318,6 @@ export interface operations {
             };
         };
     };
-    projects_deliverable_tasks_list: {
-        parameters: {
-            query?: {
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedDeliverableTaskList"];
-                };
-            };
-        };
-    };
     projects_pre_deliverable_settings_retrieve: {
         parameters: {
             query?: never;
@@ -10940,32 +12366,6 @@ export interface operations {
             };
         };
     };
-    projects_qa_tasks_list: {
-        parameters: {
-            query?: {
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedDeliverableQATaskList"];
-                };
-            };
-        };
-    };
     projects_reseed_auto_hours_create: {
         parameters: {
             query?: never;
@@ -10989,6 +12389,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectReseedAutoHoursResponse"];
+                };
+            };
+        };
+    };
+    projects_tasks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTasksResponse"];
+                };
+            };
+        };
+    };
+    projects_tasks_sync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRequest"];
+                "multipart/form-data": components["schemas"]["ProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTaskSyncResponse"];
                 };
             };
         };
@@ -11636,6 +13084,179 @@ export interface operations {
             };
         };
     };
+    projects_task_templates_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedProjectTaskTemplateList"];
+                };
+            };
+        };
+    };
+    projects_task_templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTaskTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectTaskTemplateRequest"];
+                "multipart/form-data": components["schemas"]["ProjectTaskTemplateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTaskTemplate"];
+                };
+            };
+        };
+    };
+    projects_task_templates_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project task template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTaskTemplate"];
+                };
+            };
+        };
+    };
+    projects_task_templates_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project task template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTaskTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectTaskTemplateRequest"];
+                "multipart/form-data": components["schemas"]["ProjectTaskTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTaskTemplate"];
+                };
+            };
+        };
+    };
+    projects_task_templates_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project task template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_task_templates_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this project task template. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectTaskTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectTaskTemplateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectTaskTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTaskTemplate"];
+                };
+            };
+        };
+    };
+    projects_tasks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProjectTaskRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProjectTaskRequest"];
+                "multipart/form-data": components["schemas"]["PatchedProjectTaskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTask"];
+                };
+            };
+        };
+    };
     reports_departments_overview_retrieve: {
         parameters: {
             query?: {
@@ -11696,6 +13317,248 @@ export interface operations {
             };
         };
     };
+    reports_forecast_evaluate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ForecastPlannerEvaluateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ForecastPlannerEvaluateRequestRequest"];
+                "multipart/form-data": components["schemas"]["ForecastPlannerEvaluateRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastPlannerEvaluateResponse"];
+                };
+            };
+        };
+    };
+    reports_forecast_planner_bootstrap_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description Include descendant departments */
+                include_children?: boolean;
+                vertical?: number;
+                /** @description Weeks horizon (1-52), default 26 */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastPlannerBootstrapResponse"];
+                };
+            };
+        };
+    };
+    reports_forecast_scenarios_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastScenarioListResponse"];
+                };
+            };
+        };
+    };
+    reports_forecast_scenarios_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForecastScenarioCreateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ForecastScenarioCreateRequestRequest"];
+                "multipart/form-data": components["schemas"]["ForecastScenarioCreateRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastScenarioCreateResponse"];
+                };
+            };
+        };
+    };
+    reports_forecast_scenarios_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastScenarioDetailResponse"];
+                };
+            };
+        };
+    };
+    reports_forecast_scenarios_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reports_forecast_scenarios_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedForecastScenarioPatchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedForecastScenarioPatchRequestRequest"];
+                "multipart/form-data": components["schemas"]["PatchedForecastScenarioPatchRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastScenarioPatchResponse"];
+                };
+            };
+        };
+    };
+    reports_forecast_scenarios_shared_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastScenarioSharedResponse"];
+                };
+            };
+        };
+    };
+    reports_network_bootstrap_retrieve: {
+        parameters: {
+            query?: {
+                department?: number;
+                /** @description 0|1 */
+                include_children?: number;
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkBootstrapResponse"];
+                };
+            };
+        };
+    };
+    reports_network_graph_retrieve: {
+        parameters: {
+            query?: {
+                client?: string;
+                department?: number;
+                /** @description YYYY-MM-DD week date */
+                end?: string;
+                /** @description 0|1 */
+                include_children?: number;
+                /** @description 0|1 */
+                include_inactive?: number;
+                max_edges?: number;
+                /** @description project_people|coworker|client_experience */
+                mode?: string;
+                /** @description YYYY-MM-DD week date */
+                start?: string;
+                vertical?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkGraphResponse"];
+                };
+            };
+        };
+    };
     reports_pre_deliverable_completion_retrieve: {
         parameters: {
             query?: never;
@@ -11747,7 +13610,7 @@ export interface operations {
                 role_ids?: string;
                 /** @description Optional vertical id filter. */
                 vertical?: number;
-                /** @description Number of future weeks (4,8,12,16,20). Default 12. */
+                /** @description Number of future weeks (4,8,12,16,20,26,52). Default 12. */
                 weeks?: number;
             };
             header?: never;

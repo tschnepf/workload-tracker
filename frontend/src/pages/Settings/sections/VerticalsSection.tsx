@@ -15,6 +15,7 @@ type VerticalFormState = {
   shortName: string;
   description: string;
   isActive: boolean;
+  taskTrackingEnabled: boolean;
 };
 
 const blankForm: VerticalFormState = {
@@ -22,6 +23,7 @@ const blankForm: VerticalFormState = {
   shortName: '',
   description: '',
   isActive: true,
+  taskTrackingEnabled: true,
 };
 
 const VerticalsSection: React.FC = () => {
@@ -69,6 +71,7 @@ const VerticalsSection: React.FC = () => {
       shortName: vertical.shortName || '',
       description: vertical.description || '',
       isActive: vertical.isActive !== false,
+      taskTrackingEnabled: vertical.taskTrackingEnabled === true,
     });
     setFormOpen(true);
   };
@@ -91,6 +94,7 @@ const VerticalsSection: React.FC = () => {
         shortName: formState.shortName.trim(),
         description: formState.description.trim(),
         isActive: formState.isActive,
+        taskTrackingEnabled: formState.taskTrackingEnabled,
       };
       if (editingVertical?.id) {
         await verticalsApi.update(editingVertical.id, payload);
@@ -115,6 +119,16 @@ const VerticalsSection: React.FC = () => {
       await loadVerticals();
     } catch (err: any) {
       showToast(err?.message || 'Failed to update vertical', 'error');
+    }
+  };
+
+  const toggleTaskTracking = async (vertical: Vertical) => {
+    if (!vertical?.id) return;
+    try {
+      await verticalsApi.update(vertical.id, { taskTrackingEnabled: !(vertical.taskTrackingEnabled === true) });
+      await loadVerticals();
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update task tracking', 'error');
     }
   };
 
@@ -168,6 +182,14 @@ const VerticalsSection: React.FC = () => {
               />
               Active
             </label>
+            <label className="inline-flex items-center gap-2 text-sm text-[var(--text)]">
+              <input
+                type="checkbox"
+                checked={formState.taskTrackingEnabled}
+                onChange={(e) => setFormState(prev => ({ ...prev, taskTrackingEnabled: e.target.checked }))}
+              />
+              Task Tracking Enabled
+            </label>
             <div className="flex items-center gap-2">
               <Button type="button" onClick={handleSave} disabled={saving}>
                 {saving ? 'Saving…' : 'Save'}
@@ -191,6 +213,7 @@ const VerticalsSection: React.FC = () => {
                 <th className="py-2">Short</th>
                 <th className="py-2">Description</th>
                 <th className="py-2">Status</th>
+                <th className="py-2">Task Tracking</th>
                 <th className="py-2 text-right">Actions</th>
               </tr>
             </thead>
@@ -203,6 +226,11 @@ const VerticalsSection: React.FC = () => {
                   <td className="py-2">
                     <span className={`text-xs px-2 py-1 rounded ${v.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'}`}>
                       {v.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="py-2">
+                    <span className={`text-xs px-2 py-1 rounded ${v.taskTrackingEnabled ? 'bg-blue-500/15 text-blue-300' : 'bg-slate-500/15 text-slate-400'}`}>
+                      {v.taskTrackingEnabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </td>
                   <td className="py-2 text-right space-x-2">
@@ -220,12 +248,19 @@ const VerticalsSection: React.FC = () => {
                     >
                       {v.isActive ? 'Deactivate' : 'Activate'}
                     </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                      onClick={() => toggleTaskTracking(v)}
+                    >
+                      {v.taskTrackingEnabled ? 'Disable Tasks' : 'Enable Tasks'}
+                    </button>
                   </td>
                 </tr>
               ))}
               {sortedVerticals.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
+                  <td colSpan={6} className="py-6 text-center text-[var(--muted)]">
                     No verticals found.
                   </td>
                 </tr>

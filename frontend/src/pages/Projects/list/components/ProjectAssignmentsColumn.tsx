@@ -1,7 +1,16 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import AssignmentRow from './AssignmentRow';
 import AddAssignmentCard from './AddAssignmentCard';
 import type { ProjectAssignmentsColumnProps } from '@/pages/Projects/list/components/projectDetailsPanel.types';
+import { taskProgressColorsApi } from '@/services/api';
+import type { ProjectTask, TaskProgressColorRange } from '@/types/models';
+
+const DEFAULT_TASK_PROGRESS_COLORS: TaskProgressColorRange[] = [
+  { minPercent: 0, maxPercent: 25, colorHex: '#F59E0B', label: '0-25%' },
+  { minPercent: 26, maxPercent: 75, colorHex: '#3B82F6', label: '26-75%' },
+  { minPercent: 76, maxPercent: 100, colorHex: '#EF4444', label: '76-100%' },
+];
 
 const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
   isNarrowLayout,
@@ -50,7 +59,46 @@ const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
   onEditValueChangeCell,
   optimisticHours,
   onSwapPlaceholder,
+  taskTracking,
+  taskTrackingLoading,
+  canManageTaskTracking,
+  onTaskUpdate,
 }) => {
+  const taskProgressColorsQuery = useQuery({
+    queryKey: ['task-progress-colors'],
+    queryFn: () => taskProgressColorsApi.get(),
+    staleTime: 5 * 60_000,
+  });
+  const taskProgressRanges = React.useMemo(() => {
+    const raw = taskProgressColorsQuery.data?.ranges || DEFAULT_TASK_PROGRESS_COLORS;
+    return [...raw]
+      .map((range) => ({
+        minPercent: Number(range.minPercent ?? 0),
+        maxPercent: Number(range.maxPercent ?? 100),
+        colorHex: String(range.colorHex || '#3B82F6'),
+        label: range.label || '',
+      }))
+      .sort((a, b) => (a.minPercent - b.minPercent) || (a.maxPercent - b.maxPercent));
+  }, [taskProgressColorsQuery.data?.ranges]);
+  const getTaskProgressColor = React.useCallback((percent: number): string => {
+    const value = Math.max(0, Math.min(100, Number(percent ?? 0)));
+    const matched = taskProgressRanges.find((range) => value >= range.minPercent && value <= range.maxPercent);
+    return matched?.colorHex || 'var(--primary)';
+  }, [taskProgressRanges]);
+  const allTasks = React.useMemo<ProjectTask[]>(() => {
+    if (!taskTracking?.enabled) return [];
+    const merged = [...(taskTracking.projectTasks || []), ...(taskTracking.deliverableTasks || [])];
+    return merged
+      .filter((task): task is ProjectTask & { id: number } => task.id != null)
+      .sort((a, b) => {
+        const deptCompare = (a.departmentName || '').localeCompare(b.departmentName || '');
+        if (deptCompare !== 0) return deptCompare;
+        const scopeCompare = (a.scope || '').localeCompare(b.scope || '');
+        if (scopeCompare !== 0) return scopeCompare;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+  }, [taskTracking]);
+
   const addAssignmentButton = (
     <button
       onClick={onAddAssignment}
@@ -96,7 +144,7 @@ const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
         departmentEntries.map(([deptName, items]) => (
           <div
             key={deptName}
-            className={`bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-hidden min-w-0 ${isNarrowLayout ? 'order-3' : ''}`}
+            className={`bg-[var(--card)] border border-[var(--border)] rounded shadow-sm overflow-visible min-w-0 ${isNarrowLayout ? 'order-3' : ''}`}
             data-testid="assignment-department-card"
           >
             <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between">
@@ -136,6 +184,12 @@ const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
                     onEditValueChangeCell={onEditValueChangeCell}
                     optimisticHours={optimisticHours}
                     onSwapPlaceholder={onSwapPlaceholder}
+                    taskTrackingEnabled={Boolean(taskTracking?.enabled)}
+                    taskTrackingLoading={Boolean(taskTracking?.enabled && taskTrackingLoading)}
+                    assignmentTasks={allTasks}
+                    canManageTaskTracking={Boolean(canManageTaskTracking)}
+                    onTaskUpdate={onTaskUpdate}
+                    getTaskProgressColor={getTaskProgressColor}
                   />
                 </div>
               ))}

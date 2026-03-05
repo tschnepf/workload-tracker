@@ -24,6 +24,7 @@ from .serializers import (
     DeliverablePhaseMappingSettingsSerializer,
     QATaskSettingsSerializer,
     NetworkGraphSettingsSerializer,
+    TaskProgressColorSettingsSerializer,
 )
 from .models import (
     PreDeliverableGlobalSettings,
@@ -33,6 +34,7 @@ from .models import (
     DeliverablePhaseMappingSettings,
     DeliverablePhaseDefinition,
     QATaskSettings,
+    TaskProgressColorSettings,
     NetworkGraphSettings,
     AutoHoursRoleSetting,
     AutoHoursGlobalSettings,
@@ -895,7 +897,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'project-statuses', 'title': 'Project Status and Colors', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'project-templates', 'title': 'Project Manloader Template', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
-        {'id': 'deliverable-task-templates', 'title': 'Deliverable Task Templates', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'project-task-templates', 'title': 'Project Task Templates', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
         {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'utilization-scheme', 'title': 'Utilization Hours and Color Scheme', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
@@ -2521,11 +2523,6 @@ class DeliverablePhaseMappingSettingsView(APIView):
 
         existing_keys = set(DeliverablePhaseDefinition.objects.values_list('key', flat=True))
         remove_keys = [k for k in existing_keys if k not in set(incoming_keys)]
-        if remove_keys:
-            from deliverables.models import DeliverableTaskTemplate
-            used = set(DeliverableTaskTemplate.objects.filter(phase__in=remove_keys).values_list('phase', flat=True))
-            if used:
-                return Response({'error': f'Cannot remove phases with existing task templates: {sorted(used)}'}, status=400)
 
         with transaction.atomic():
             obj.use_description_match = use_desc
@@ -2687,6 +2684,23 @@ class NetworkGraphSettingsView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(NetworkGraphSettingsSerializer(obj).data)
+
+
+class TaskProgressColorSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    @extend_schema(responses=TaskProgressColorSettingsSerializer)
+    def get(self, request):
+        obj = TaskProgressColorSettings.get_active()
+        return Response(TaskProgressColorSettingsSerializer(obj).data)
+
+    @extend_schema(request=TaskProgressColorSettingsSerializer, responses=TaskProgressColorSettingsSerializer)
+    def put(self, request):
+        obj = TaskProgressColorSettings.get_active()
+        ser = TaskProgressColorSettingsSerializer(instance=obj, data=request.data, partial=False)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(TaskProgressColorSettingsSerializer(obj).data)
 
 
 class CalendarFeedsView(APIView):

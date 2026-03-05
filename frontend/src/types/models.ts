@@ -135,6 +135,7 @@ export interface Vertical {
   shortName?: string;
   description?: string;
   isActive?: boolean;
+  taskTrackingEnabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -153,78 +154,61 @@ export interface Deliverable {
   updatedAt?: string;
 }
 
-export type DeliverableTaskCompletionStatus = 'not_started' | 'in_progress' | 'complete';
-export type DeliverableTaskQaStatus = 'not_reviewed' | 'in_review' | 'approved' | 'changes_required';
-export type DeliverableQAReviewStatus = 'not_reviewed' | 'reviewed';
+export type ProjectTaskScope = 'project' | 'deliverable';
 
-export interface DeliverableTaskTemplate {
+export interface ProjectTaskTemplate {
   id?: number;
-  phase: string;
+  verticalId: number;
+  verticalName?: string;
+  scope: ProjectTaskScope;
   departmentId: number;
   departmentName?: string;
-  sheetNumber?: string | null;
-  sheetName?: string | null;
-  scopeDescription?: string;
-  defaultCompletionStatus: DeliverableTaskCompletionStatus;
-  defaultQaStatus: DeliverableTaskQaStatus;
+  name: string;
+  description?: string;
   sortOrder?: number;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface DeliverableTask {
+export interface ProjectTask {
   id?: number;
-  deliverable: number;
+  project: number;
+  deliverable?: number | null;
   deliverableInfo?: {
     id: number;
     projectId: number;
     description?: string | null;
     date?: string | null;
     percentage?: number | null;
-  };
+  } | null;
   templateId?: number | null;
+  scope: ProjectTaskScope;
   departmentId: number;
   departmentName?: string;
-  sheetNumber?: string | null;
-  sheetName?: string | null;
-  scopeDescription?: string;
-  completionStatus: DeliverableTaskCompletionStatus;
-  qaStatus: DeliverableTaskQaStatus;
-  qaAssignedTo?: number | null;
-  qaAssignedToName?: string | null;
-  assignedTo?: number | null;
-  assignedToName?: string | null;
-  completedBy?: number | null;
-  completedByName?: string | null;
-  completedAt?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface DeliverableQATask {
-  id?: number;
-  deliverable: number;
-  deliverableInfo?: {
-    id: number;
-    projectId: number;
-    description?: string | null;
-    date?: string | null;
-    percentage?: number | null;
-  };
-  departmentId: number;
-  departmentName?: string;
-  qaStatus: DeliverableQAReviewStatus;
-  qaAssignedTo?: number | null;
-  qaAssignedToName?: string | null;
-  reviewedAt?: string | null;
-  dueDate?: string | null;
+  name: string;
+  description?: string;
+  completionPercent: number;
+  assigneeIds?: number[];
+  assigneeNames?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface QATaskSettings {
   defaultDaysBefore: number;
+  updatedAt?: string;
+}
+
+export interface TaskProgressColorRange {
+  minPercent: number;
+  maxPercent: number;
+  colorHex: string;
+  label?: string;
+}
+
+export interface TaskProgressColorSettings {
+  ranges: TaskProgressColorRange[];
   updatedAt?: string;
 }
 

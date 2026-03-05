@@ -4,6 +4,7 @@ import NetworkGraphCanvas from '@/components/reports/network/NetworkGraphCanvas'
 import NetworkGraphControls, { type WindowPreset } from '@/components/reports/network/NetworkGraphControls';
 import NetworkLegend from '@/components/reports/network/NetworkLegend';
 import NetworkNodeDetailsPanel from '@/components/reports/network/NetworkNodeDetailsPanel';
+import NetworkModeInfoPanel from '@/components/reports/network/NetworkModeInfoPanel';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useNetworkGraph, useNetworkGraphBootstrap } from '@/hooks/useNetworkGraph';
@@ -457,6 +458,16 @@ const NetworkGraphPage: React.FC = () => {
                   {graphData ? `Nodes: ${filteredGraph.nodes.length} | Edges: ${filteredGraph.edges.length}` : null}
                 </div>
               </aside>
+              <NetworkModeInfoPanel
+                mode={mode}
+                coworkerProjectWeight={coworkerProjectWeight}
+                coworkerWeekWeight={coworkerWeekWeight}
+                coworkerThreshold={coworkerThreshold}
+                clientProjectWeight={clientProjectWeight}
+                clientWeekWeight={clientWeekWeight}
+                clientThreshold={clientThreshold}
+                selectedClient={selectedClient}
+              />
               <NetworkNodeDetailsPanel node={activeNode} connections={activeConnections} />
             </div>
           </div>

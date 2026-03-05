@@ -3,10 +3,72 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
 import secrets
+import re
 
 
 def default_auto_hours_phase_keys():
     return ['sd', 'dd', 'ifp', 'ifc']
+
+
+_TASK_PROGRESS_COLOR_HEX_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+
+
+def _normalize_task_progress_ranges(raw_ranges):
+    if not isinstance(raw_ranges, list) or len(raw_ranges) == 0:
+        raise ValidationError({'ranges': 'At least one color range is required'})
+
+    normalized = []
+    for idx, item in enumerate(raw_ranges):
+        if not isinstance(item, dict):
+            raise ValidationError({'ranges': f'Range #{idx + 1} must be an object'})
+
+        raw_min = item.get('minPercent', item.get('min_percent'))
+        raw_max = item.get('maxPercent', item.get('max_percent'))
+        raw_color = item.get('colorHex', item.get('color_hex'))
+        raw_label = item.get('label', None)
+
+        try:
+            min_percent = int(raw_min)
+            max_percent = int(raw_max)
+        except Exception:
+            raise ValidationError({'ranges': f'Range #{idx + 1} min/max must be integers'})
+
+        if min_percent < 0 or max_percent > 100:
+            raise ValidationError({'ranges': f'Range #{idx + 1} must be between 0 and 100'})
+        if min_percent > max_percent:
+            raise ValidationError({'ranges': f'Range #{idx + 1} minPercent must be <= maxPercent'})
+
+        color_hex = str(raw_color or '').strip()
+        if not _TASK_PROGRESS_COLOR_HEX_RE.match(color_hex):
+            raise ValidationError({'ranges': f'Range #{idx + 1} colorHex must be a valid hex color'})
+        if len(color_hex) == 4:
+            color_hex = '#' + ''.join(ch * 2 for ch in color_hex[1:])
+        color_hex = color_hex.upper()
+
+        label = str(raw_label or '').strip()
+        if not label:
+            label = f'{min_percent}-{max_percent}%'
+
+        normalized.append({
+            'minPercent': min_percent,
+            'maxPercent': max_percent,
+            'colorHex': color_hex,
+            'label': label,
+        })
+
+    normalized.sort(key=lambda r: (r['minPercent'], r['maxPercent']))
+
+    expected_min = 0
+    for idx, row in enumerate(normalized):
+        if row['minPercent'] != expected_min:
+            if row['minPercent'] < expected_min:
+                raise ValidationError({'ranges': f'Ranges overlap around {row["minPercent"]}% (range #{idx + 1})'})
+            raise ValidationError({'ranges': f'Ranges must cover 0-100 with no gaps (expected {expected_min}% at range #{idx + 1})'})
+        expected_min = row['maxPercent'] + 1
+    if expected_min != 101:
+        raise ValidationError({'ranges': 'Ranges must cover 0-100 with no gaps'})
+
+    return normalized
 
 
 class PreDeliverableGlobalSettings(models.Model):
@@ -219,6 +281,40 @@ class QATaskSettings(models.Model):
     @classmethod
     def get_active(cls):
         obj, _ = cls.objects.get_or_create(key='default', defaults={'default_days_before': 7})
+        return obj
+
+
+class TaskProgressColorSettings(models.Model):
+    """Singleton settings for task progress bar color ranges."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    ranges = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Task Progress Color Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"TaskProgressColorSettings({self.key})"
+
+    def clean(self):
+        self.ranges = _normalize_task_progress_ranges(self.ranges or [])
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_active(cls):
+        defaults = {
+            'ranges': [
+                {'minPercent': 0, 'maxPercent': 25, 'colorHex': '#F59E0B', 'label': '0-25%'},
+                {'minPercent': 26, 'maxPercent': 75, 'colorHex': '#3B82F6', 'label': '26-75%'},
+                {'minPercent': 76, 'maxPercent': 100, 'colorHex': '#EF4444', 'label': '76-100%'},
+            ]
+        }
+        obj, _ = cls.objects.get_or_create(key='default', defaults=defaults)
         return obj
 
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Assignment, Deliverable, Person } from '@/types/models';
+import type { Assignment, Deliverable, Person, ProjectTask } from '@/types/models';
 import { useProjectRoles } from '@/roles/hooks/useProjectRoles';
 import RoleDropdown from '@/roles/components/RoleDropdown';
 import WeekCell from '@/pages/Assignments/grid/components/WeekCell';
@@ -38,6 +38,12 @@ export interface AssignmentRowProps {
   optimisticHours?: Map<number, Record<string, number>>;
   showHours?: boolean;
   onSwapPlaceholder?: (assignmentId: number, person: Pick<Person, 'id' | 'name' | 'department'>) => Promise<void> | void;
+  taskTrackingEnabled?: boolean;
+  taskTrackingLoading?: boolean;
+  assignmentTasks?: ProjectTask[];
+  canManageTaskTracking?: boolean;
+  onTaskUpdate?: (taskId: number, patch: Pick<Partial<ProjectTask>, 'completionPercent' | 'assigneeIds'>) => Promise<void> | void;
+  getTaskProgressColor?: (percent: number) => string;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = ({
@@ -69,13 +75,87 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   optimisticHours,
   showHours,
   onSwapPlaceholder,
+  taskTrackingEnabled,
+  taskTrackingLoading,
+  assignmentTasks,
+  canManageTaskTracking,
+  onTaskUpdate,
+  getTaskProgressColor,
 }) => {
   const [openRole, setOpenRole] = React.useState(false);
+  const [openTaskPicker, setOpenTaskPicker] = React.useState(false);
+  const [draftCompletionByTask, setDraftCompletionByTask] = React.useState<Record<number, string>>({});
+  const [savingTaskIds, setSavingTaskIds] = React.useState<Record<number, boolean>>({});
   const roleBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const { data: roles = [] } = useProjectRoles(personDepartmentId ?? undefined);
   const personLabel = assignment.personName
     || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'));
   const canSwapPlaceholder = assignment.person == null && !!assignment.roleName && !!onSwapPlaceholder;
+  const personId = assignment.person ?? null;
+  const scopedTasks = assignmentTasks || [];
+
+  const assignedTasks = React.useMemo(
+    () => personId == null
+      ? []
+      : scopedTasks.filter((task) => (task.assigneeIds || []).includes(personId)),
+    [scopedTasks, personId]
+  );
+
+  const unassignedTasks = React.useMemo(
+    () => personId == null
+      ? []
+      : scopedTasks.filter((task) => !(task.assigneeIds || []).includes(personId)),
+    [scopedTasks, personId]
+  );
+
+  const normalizePercent = React.useCallback((value: number): number => {
+    const bounded = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+    return Math.round(bounded / 5) * 5;
+  }, []);
+
+  const formatTaskLabel = React.useCallback((task: ProjectTask): string => {
+    if (task.scope !== 'deliverable') return task.name;
+    const deliverableLabel = task.deliverableInfo?.description
+      || (task.deliverableInfo?.percentage != null ? `${task.deliverableInfo.percentage}%` : 'Deliverable');
+    return `${deliverableLabel}: ${task.name}`;
+  }, []);
+
+  const withSavingTask = React.useCallback(async (taskId: number, runner: () => Promise<void>) => {
+    setSavingTaskIds((prev) => ({ ...prev, [taskId]: true }));
+    try {
+      await runner();
+    } finally {
+      setSavingTaskIds((prev) => ({ ...prev, [taskId]: false }));
+    }
+  }, []);
+
+  const commitTaskPercent = React.useCallback(async (task: ProjectTask, rawValue: string) => {
+    if (!task.id || !onTaskUpdate) return;
+    const normalized = normalizePercent(Number(rawValue));
+    setDraftCompletionByTask((prev) => ({ ...prev, [task.id!]: String(normalized) }));
+    if (normalized === task.completionPercent) return;
+    await withSavingTask(task.id, async () => {
+      await Promise.resolve(onTaskUpdate(task.id!, { completionPercent: normalized }));
+    });
+  }, [normalizePercent, onTaskUpdate, withSavingTask]);
+
+  const assignTaskToPerson = React.useCallback(async (task: ProjectTask) => {
+    if (!task.id || !onTaskUpdate || personId == null) return;
+    const nextAssigneeIds = Array.from(new Set([...(task.assigneeIds || []), personId]));
+    await withSavingTask(task.id, async () => {
+      await Promise.resolve(onTaskUpdate(task.id!, { assigneeIds: nextAssigneeIds }));
+    });
+    setOpenTaskPicker(false);
+  }, [onTaskUpdate, personId, withSavingTask]);
+
+  const unassignTaskFromPerson = React.useCallback(async (task: ProjectTask) => {
+    if (!task.id || !onTaskUpdate || personId == null) return;
+    const nextAssigneeIds = (task.assigneeIds || []).filter((id) => id !== personId);
+    await withSavingTask(task.id, async () => {
+      await Promise.resolve(onTaskUpdate(task.id!, { assigneeIds: nextAssigneeIds }));
+    });
+  }, [onTaskUpdate, personId, withSavingTask]);
+
   // selection/editing handled by parent using WeekCell helpers
   if (isEditing) {
     return (
@@ -87,7 +167,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             <button
               type="button"
               className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-left text-[var(--text)] hover:bg-[var(--cardHover)]"
-              onClick={() => setOpenRole(v => !v)}
+              onClick={() => setOpenRole((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={openRole}
               ref={roleBtnRef}
@@ -139,7 +219,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
     );
   }
 
-  // Derive next 4 Monday week keys from provided currentWeekKey
+  // Derive next 6 Monday week keys from provided currentWeekKey
   const computedWeekKeys = React.useMemo(() => {
     if (!currentWeekKey) return [] as string[];
     const base = new Date(currentWeekKey + 'T00:00:00');
@@ -156,8 +236,8 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
   // Compact card-style row (no hours) vs. grid with hours
   if (!showHoursGrid) {
     return (
-      <div className="flex justify-between items-center p-2 pl-8 bg-[var(--card)] rounded">
-        <div className="min-w-0 pr-2">
+      <div className="flex justify-between items-start p-2 pl-8 bg-[var(--card)] rounded">
+        <div className="min-w-0 pr-2 flex-1">
           <div className="text-[var(--text)] font-medium leading-tight truncate">
             {canSwapPlaceholder ? (
               <PlaceholderPersonSwap
@@ -174,7 +254,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
             <button
               type="button"
               className="hover:text-[var(--text)] truncate"
-              onClick={() => setOpenRole(v => !v)}
+              onClick={() => setOpenRole((v) => !v)}
               title="Edit role on project"
               ref={roleBtnRef}
             >
@@ -192,6 +272,98 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               </div>
             )}
           </div>
+          {taskTrackingEnabled && personId != null ? (
+            <div className="mt-1 space-y-1">
+              <div className="relative">
+                {canManageTaskTracking && personId != null ? (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
+                    onClick={() => setOpenTaskPicker((prev) => !prev)}
+                  >
+                    Assign task
+                  </button>
+                ) : (
+                  <div className="text-[10px] text-[var(--muted)]">Tasks</div>
+                )}
+                {openTaskPicker && canManageTaskTracking && personId != null ? (
+                  <div className="absolute left-0 mt-1 z-40 w-72 max-h-44 overflow-auto rounded border border-[var(--border)] bg-[var(--card)] shadow-lg">
+                    {unassignedTasks.length === 0 ? (
+                      <div className="px-2 py-1 text-[10px] text-[var(--muted)]">No available tasks</div>
+                    ) : (
+                      unassignedTasks.map((task) => (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => { void assignTaskToPerson(task); }}
+                          className="w-full px-2 py-1 text-left text-[10px] text-[var(--text)] hover:bg-[var(--surfaceHover)] truncate"
+                        >
+                          {formatTaskLabel(task)}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              {taskTrackingLoading ? (
+                <div className="text-[10px] text-[var(--muted)]">Loading tasks...</div>
+              ) : assignedTasks.length > 0 ? (
+                assignedTasks.map((task) => {
+                  const taskId = task.id ?? 0;
+                  const taskColor = getTaskProgressColor?.(task.completionPercent ?? 0) || 'var(--muted)';
+                  const draftValue = draftCompletionByTask[taskId] ?? String(task.completionPercent ?? 0);
+                  const isSaving = Boolean(savingTaskIds[taskId]);
+                  return (
+                    <div key={task.id} className="flex items-center justify-between gap-2 rounded border border-[var(--border)] px-2 py-1">
+                      <div className="min-w-0 text-[10px] text-[var(--text)] truncate" title={formatTaskLabel(task)}>
+                        {formatTaskLabel(task)}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {canManageTaskTracking ? (
+                          <>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={5}
+                              disabled={isSaving}
+                              value={draftValue}
+                              onChange={(e) => {
+                                const nextValue = e.currentTarget.value;
+                                setDraftCompletionByTask((prev) => ({ ...prev, [taskId]: nextValue }));
+                              }}
+                              onBlur={() => { void commitTaskPercent(task, draftValue); }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur();
+                              }}
+                              style={{ color: taskColor }}
+                              className="w-14 px-1 py-0.5 text-[10px] text-right bg-[var(--surface)] border border-[var(--border)] rounded appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            />
+                            <span className="text-[10px] text-[var(--muted)]">%</span>
+                            <button
+                              type="button"
+                              onClick={() => { void unassignTaskFromPerson(task); }}
+                              disabled={isSaving}
+                              className="p-0.5 rounded text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                              title="Unassign task"
+                            >
+                              <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M4 4l8 8M12 4l-8 8" />
+                              </svg>
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-[10px]" style={{ color: taskColor }}>{task.completionPercent}%</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-[10px] text-[var(--muted)]">No tasks assigned</div>
+              )}
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center">
           <button
@@ -230,7 +402,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               <button
                 type="button"
                 className="hover:text-[var(--text)] truncate"
-                onClick={() => setOpenRole(v => !v)}
+                onClick={() => setOpenRole((v) => !v)}
                 title="Edit role on project"
                 ref={roleBtnRef}
               >

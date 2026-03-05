@@ -4,7 +4,7 @@ import { useSettingsData } from '../SettingsDataContext';
 import DeliverableTaskTemplatesEditor from '@/components/settings/DeliverableTaskTemplatesEditor';
 import { isAdminOrManager } from '@/utils/roleAccess';
 
-export const DELIVERABLE_TASK_TEMPLATES_SECTION_ID = 'deliverable-task-templates';
+export const DELIVERABLE_TASK_TEMPLATES_SECTION_ID = 'project-task-templates';
 
 const DeliverableTaskTemplatesSection: React.FC = () => {
   const { auth } = useSettingsData();
@@ -13,8 +13,8 @@ const DeliverableTaskTemplatesSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={DELIVERABLE_TASK_TEMPLATES_SECTION_ID}
-      title="Deliverable Task Templates"
-      description="Manage the spreadsheet of default tasks generated for SD/DD/IFP/IFC deliverables."
+      title="Project Task Templates"
+      description="Define per-vertical task templates for project and deliverable tracking."
       className="mt-6"
     >
       <DeliverableTaskTemplatesEditor />

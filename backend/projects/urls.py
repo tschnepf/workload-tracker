@@ -1,8 +1,16 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProjectViewSet, ProjectAuditLogsView, ProjectChangeLogView, ProjectStatusDefinitionViewSet
+from .views import (
+    ProjectViewSet,
+    ProjectAuditLogsView,
+    ProjectChangeLogView,
+    ProjectStatusDefinitionViewSet,
+    ProjectTaskTemplateViewSet,
+    ProjectTaskDetailView,
+)
 
 router = DefaultRouter()
+router.register(r'task-templates', ProjectTaskTemplateViewSet, basename='project-task-template')
 router.register(r'', ProjectViewSet)
 
 urlpatterns = [
@@ -22,5 +30,6 @@ urlpatterns = [
     path('', include('projects.urls_risks')),
     path('audit/', ProjectAuditLogsView.as_view(), name='project_audit'),
     path('<int:project_id>/change_log/', ProjectChangeLogView.as_view(), name='project_change_log'),
+    path('tasks/<int:task_id>/', ProjectTaskDetailView.as_view(), name='project_task_detail'),
     path('', include(router.urls)),
 ]

@@ -120,16 +120,17 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
     case 'network-graph':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="6" y1="6" x2="12" y2="12" />
-          <line x1="12" y1="12" x2="18" y2="6" />
-          <line x1="12" y1="12" x2="18" y2="18" />
-          <line x1="12" y1="12" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="6" />
-          <circle cx="6" cy="6" r="2" fill={iconColor} stroke="none" />
-          <circle cx="18" cy="6" r="2" fill={iconColor} stroke="none" />
-          <circle cx="6" cy="18" r="2" fill={iconColor} stroke="none" />
-          <circle cx="18" cy="18" r="2" fill={iconColor} stroke="none" />
-          <circle cx="12" cy="12" r="2.2" fill={iconColor} stroke="none" />
+          <line x1="12" y1="12" x2="12" y2="4.2" />
+          <line x1="12" y1="12" x2="18.3" y2="8.1" />
+          <line x1="12" y1="12" x2="16.4" y2="16.8" />
+          <line x1="12" y1="12" x2="7.6" y2="16.8" />
+          <line x1="12" y1="12" x2="5.7" y2="8.1" />
+          <circle cx="12" cy="4.2" r="1.6" fill={iconColor} stroke="none" />
+          <circle cx="18.3" cy="8.1" r="1.6" fill={iconColor} stroke="none" />
+          <circle cx="16.4" cy="16.8" r="1.6" fill={iconColor} stroke="none" />
+          <circle cx="7.6" cy="16.8" r="1.6" fill={iconColor} stroke="none" />
+          <circle cx="5.7" cy="8.1" r="1.6" fill={iconColor} stroke="none" />
+          <circle cx="12" cy="12" r="2.1" fill={iconColor} stroke="none" />
         </svg>
       );
     case 'skills':

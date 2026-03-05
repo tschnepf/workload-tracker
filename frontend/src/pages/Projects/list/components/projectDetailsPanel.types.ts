@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { Assignment, Person, Project, AutoHoursTemplate, Department } from '@/types/models';
+import type { Assignment, Person, Project, AutoHoursTemplate, Department, ProjectTask } from '@/types/models';
 import type { OnRoleSelect } from '@/roles/types';
 import type { ProjectRole } from '@/roles/api';
 
@@ -67,6 +67,17 @@ export interface ProjectDetailsPanelProps {
   availabilityMap: Record<number, { availableHours: number; utilizationPercent: number; totalHours: number; capacity: number }>;
 
   deliverablesSlot: React.ReactNode;
+  taskTracking?: {
+    enabled: boolean;
+    projectId: number;
+    projectTasks: ProjectTask[];
+    deliverableTasks: ProjectTask[];
+  };
+  taskTrackingLoading?: boolean;
+  canManageTaskTracking?: boolean;
+  taskProjectMembers?: Array<{ id: number; name: string }>;
+  onTaskUpdate?: (taskId: number, patch: Pick<Partial<ProjectTask>, 'completionPercent' | 'assigneeIds'>) => Promise<void> | void;
+  onTaskSync?: () => Promise<void> | void;
 }
 
 export interface ProjectDetailsHeaderCardProps {
@@ -179,4 +190,10 @@ export interface ProjectAssignmentsColumnProps {
   onEditValueChangeCell: (v: string) => void;
   optimisticHours: Map<number, Record<string, number>>;
   onSwapPlaceholder: (assignmentId: number, person: { id: number; name: string; department?: number | null }) => Promise<void> | void;
+  taskTracking?: ProjectDetailsPanelProps['taskTracking'];
+  taskTrackingLoading?: boolean;
+  canManageTaskTracking?: boolean;
+  taskProjectMembers?: Array<{ id: number; name: string }>;
+  onTaskUpdate?: ProjectDetailsPanelProps['onTaskUpdate'];
+  onTaskSync?: ProjectDetailsPanelProps['onTaskSync'];
 }

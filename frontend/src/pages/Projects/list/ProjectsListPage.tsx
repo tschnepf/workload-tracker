@@ -4,7 +4,7 @@ import { Project, Person, Assignment, Department } from '@/types/models';
 import { useProjects, useDeleteProject, useUpdateProject } from '@/hooks/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeople } from '@/hooks/usePeople';
-import { assignmentsApi, departmentsApi } from '@/services/api';
+import { assignmentsApi, departmentsApi, projectsApi, projectTasksApi } from '@/services/api';
 import { deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { showToast } from '@/lib/toastBus';
 import { useCapabilities } from '@/hooks/useCapabilities';
@@ -46,6 +46,8 @@ import { MobileDetailsDrawer, MobileFiltersSheet, ProjectCreateDrawer } from '@/
 import ProjectsListDesktopLayout from '@/pages/Projects/list/components/ProjectsListDesktopLayout';
 import ProjectsListMobileLayout from '@/pages/Projects/list/components/ProjectsListMobileLayout';
 import { useProjectsListController } from '@/pages/Projects/list/hooks/useProjectsListController';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 // Lazy load DeliverablesSection for better initial page performance
 const DeliverablesSection = React.lazy(() => import('@/components/deliverables/DeliverablesSection'));
@@ -63,6 +65,8 @@ const ProjectsList: React.FC = () => {
   const queryClient = useQueryClient();
   const { state: routeUiState, update: updateRouteUiState } = useRouteUiState('projects');
   const { state: verticalState } = useVerticalFilter();
+  const auth = useAuth();
+  const canManageTaskTracking = isAdminOrManager(auth?.user);
   const { people } = usePeople({ vertical: verticalState.selectedVerticalId ?? undefined });
   const deleteProjectMutation = useDeleteProject();
   const updateProjectMutation = useUpdateProject();
@@ -398,6 +402,54 @@ const ProjectsList: React.FC = () => {
 
   // Assignments + available roles
   const { assignments, availableRoles, reload: reloadAssignments } = useProjectAssignments({ projectId: selectedProject?.id, people });
+  const taskTrackingQuery = useQuery({
+    queryKey: ['projects', 'task-tracking', selectedProject?.id ?? null],
+    queryFn: () => projectsApi.tasks(selectedProject?.id as number),
+    enabled: !!selectedProject?.id && (detailsPaneOpen || mobileDetailOpen),
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+  const taskProjectMembers = useMemo(() => {
+    const map = new Map<number, string>();
+    const today = new Date().toISOString().slice(0, 10);
+    assignments.forEach((assignment) => {
+      const startOk = !assignment.startDate || assignment.startDate <= today;
+      const endOk = !assignment.endDate || assignment.endDate >= today;
+      if (!startOk || !endOk) return;
+      if (assignment.person && assignment.personName) {
+        map.set(assignment.person, assignment.personName);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [assignments]);
+  const handleTaskUpdate = useCallback(async (taskId: number, patch: { completionPercent?: number; assigneeIds?: number[] }) => {
+    await projectTasksApi.update(taskId, patch);
+    await taskTrackingQuery.refetch();
+  }, [taskTrackingQuery]);
+  const handleTaskSync = useCallback(async () => {
+    if (!selectedProject?.id) return;
+    await projectsApi.syncTasks(selectedProject.id);
+    await taskTrackingQuery.refetch();
+  }, [selectedProject?.id, taskTrackingQuery]);
+  const attemptedTaskSyncRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const projectId = selectedProject?.id;
+    const data = taskTrackingQuery.data;
+    if (!projectId || !data || !canManageTaskTracking) return;
+    if (!data.enabled) return;
+    if (attemptedTaskSyncRef.current.has(projectId)) return;
+    attemptedTaskSyncRef.current.add(projectId);
+    void (async () => {
+      try {
+        await projectsApi.syncTasks(projectId);
+        await taskTrackingQuery.refetch();
+      } catch {
+        // best-effort sync
+      }
+    })();
+  }, [selectedProject?.id, taskTrackingQuery.data, taskTrackingQuery, canManageTaskTracking]);
 
   const [showAddAssignment, setShowAddAssignment] = useState(false);
 
@@ -1282,6 +1334,12 @@ const ProjectsList: React.FC = () => {
               candidatesOnly={candidatesOnly}
               setCandidatesOnly={setCandidatesOnly}
               availabilityMap={availabilityMap}
+              taskTracking={taskTrackingQuery.data}
+              taskTrackingLoading={taskTrackingQuery.isLoading}
+              canManageTaskTracking={canManageTaskTracking}
+              taskProjectMembers={taskProjectMembers}
+              onTaskUpdate={handleTaskUpdate}
+              onTaskSync={handleTaskSync}
               deliverablesSlot={
                 <Suspense fallback={<DeliverablesSectionLoaderComp />}>
                   <DeliverablesSection
@@ -1290,6 +1348,7 @@ const ProjectsList: React.FC = () => {
                     refreshToken={deliverablesRefreshTick}
                     onDeliverablesChanged={() => {
                       try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
+                      void taskTrackingQuery.refetch();
                     }}
                   />
                 </Suspense>
@@ -1531,6 +1590,12 @@ const ProjectsList: React.FC = () => {
             candidatesOnly={candidatesOnly}
             setCandidatesOnly={setCandidatesOnly}
             availabilityMap={availabilityMap}
+            taskTracking={taskTrackingQuery.data}
+            taskTrackingLoading={taskTrackingQuery.isLoading}
+            canManageTaskTracking={canManageTaskTracking}
+            taskProjectMembers={taskProjectMembers}
+            onTaskUpdate={handleTaskUpdate}
+            onTaskSync={handleTaskSync}
             deliverablesSlot={
               <Suspense fallback={<DeliverablesSectionLoaderComp />}>
                 <DeliverablesSection
@@ -1538,6 +1603,7 @@ const ProjectsList: React.FC = () => {
                   variant="embedded"
                   onDeliverablesChanged={() => {
                     try { if (selectedProject?.id) refreshDeliverablesFor(selectedProject.id); } catch {}
+                    void taskTrackingQuery.refetch();
                   }}
                 />
               </Suspense>

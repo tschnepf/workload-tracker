@@ -6,6 +6,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
+from django.core.validators import MinValueValidator, MaxValueValidator
 import os
 
 from .storage import RiskAttachmentStorage
@@ -177,6 +178,110 @@ class ProjectPreDeliverableSettings(models.Model):
                 'type_name': setting.pre_deliverable_type.name,
             }
         return settings
+
+
+class ProjectTaskScope(models.TextChoices):
+    PROJECT = 'project', 'Project'
+    DELIVERABLE = 'deliverable', 'Deliverable'
+
+
+class ProjectTaskTemplate(models.Model):
+    vertical = models.ForeignKey(
+        'verticals.Vertical',
+        on_delete=models.CASCADE,
+        related_name='project_task_templates',
+    )
+    scope = models.CharField(max_length=20, choices=ProjectTaskScope.choices)
+    department = models.ForeignKey(
+        'departments.Department',
+        on_delete=models.PROTECT,
+        related_name='project_task_templates',
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['vertical_id', 'scope', 'sort_order', 'id']
+        indexes = [
+            models.Index(fields=['vertical', 'scope', 'is_active'], name='proj_task_tpl_vsi_idx'),
+            models.Index(fields=['department', 'scope'], name='proj_task_tpl_dept_scope_idx'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.vertical.name} · {self.scope} · {self.name}"
+
+
+class ProjectTask(models.Model):
+    project = models.ForeignKey(
+        'projects.Project',
+        on_delete=models.CASCADE,
+        related_name='project_tasks',
+    )
+    deliverable = models.ForeignKey(
+        'deliverables.Deliverable',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='project_tasks',
+    )
+    template = models.ForeignKey(
+        'projects.ProjectTaskTemplate',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_tasks',
+    )
+    scope = models.CharField(max_length=20, choices=ProjectTaskScope.choices)
+    department = models.ForeignKey(
+        'departments.Department',
+        on_delete=models.PROTECT,
+        related_name='project_tasks',
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    completion_percent = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    assignees = models.ManyToManyField(
+        'people.Person',
+        blank=True,
+        related_name='project_tasks',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['project_id', 'scope', 'deliverable_id', 'department_id', 'id']
+        indexes = [
+            models.Index(fields=['project', 'scope'], name='proj_task_project_scope_idx'),
+            models.Index(fields=['project', 'deliverable'], name='proj_task_project_deliv_idx'),
+            models.Index(fields=['department', 'scope'], name='proj_task_dept_scope_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(completion_percent__gte=0, completion_percent__lte=100),
+                name='proj_task_percent_range',
+            ),
+            models.CheckConstraint(
+                check=models.Q(completion_percent__in=tuple(range(0, 101, 5))),
+                name='proj_task_percent_step_5',
+            ),
+            models.CheckConstraint(
+                check=(
+                    (models.Q(scope=ProjectTaskScope.PROJECT) & models.Q(deliverable__isnull=True))
+                    | (models.Q(scope=ProjectTaskScope.DELIVERABLE) & models.Q(deliverable__isnull=False))
+                ),
+                name='proj_task_scope_deliverable_consistency',
+            ),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.project.name} · {self.name}"
 
 
 class ProjectRole(models.Model):

@@ -5,7 +5,15 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
-from .models import UtilizationScheme, ProjectRole, CalendarFeedSettings, QATaskSettings, NetworkGraphSettings
+from .models import (
+    UtilizationScheme,
+    ProjectRole,
+    CalendarFeedSettings,
+    QATaskSettings,
+    NetworkGraphSettings,
+    TaskProgressColorSettings,
+    _normalize_task_progress_ranges,
+)
 from projects.models import Project
 
 
@@ -258,3 +266,29 @@ class NetworkGraphSettingsSerializer(serializers.ModelSerializer):
             'lastSnapshotWeekStart',
             'updatedAt',
         ]
+
+
+class TaskProgressColorRangeSerializer(serializers.Serializer):
+    minPercent = serializers.IntegerField(min_value=0, max_value=100)
+    maxPercent = serializers.IntegerField(min_value=0, max_value=100)
+    colorHex = serializers.RegexField(regex=r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+    label = serializers.CharField(required=False, allow_blank=True)
+
+
+class TaskProgressColorSettingsSerializer(serializers.ModelSerializer):
+    ranges = TaskProgressColorRangeSerializer(many=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = TaskProgressColorSettings
+        fields = ['ranges', 'updatedAt']
+
+    def validate_ranges(self, value):
+        # Reuse model-level normalization and full coverage checks
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            return _normalize_task_progress_ranges(value)
+        except DjangoValidationError as exc:
+            if hasattr(exc, 'message_dict') and exc.message_dict.get('ranges'):
+                raise serializers.ValidationError(exc.message_dict['ranges'])
+            raise serializers.ValidationError(str(exc))

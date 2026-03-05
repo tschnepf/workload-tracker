@@ -12,11 +12,11 @@ import {
   DeliverableAssignment,
   DeliverableCalendarItem,
   DeliverableStaffingSummaryItem,
-  DeliverableTaskTemplate,
-  DeliverableTask,
-  DeliverableQATask,
+  ProjectTaskTemplate,
+  ProjectTask,
   DeliverablePhaseMappingSettings,
   QATaskSettings,
+  TaskProgressColorSettings,
   AutoHoursTemplate,
   PersonCapacityHeatmapItem,
   WorkloadForecastItem,
@@ -647,6 +647,25 @@ export const qaTaskSettingsApi = {
   },
 };
 
+export const taskProgressColorsApi = {
+  get: async (): Promise<TaskProgressColorSettings> => {
+    const res = await apiClient.GET('/core/task_progress_colors/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as TaskProgressColorSettings;
+  },
+  update: async (payload: Pick<TaskProgressColorSettings, 'ranges'>): Promise<TaskProgressColorSettings> => {
+    const res = await apiClient.PUT('/core/task_progress_colors/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as TaskProgressColorSettings;
+  },
+};
+
 export type NetworkGraphSettings = NetworkGraphDefaults;
 
 export const networkGraphSettingsApi = {
@@ -823,24 +842,24 @@ export const projectsApi = {
     return fetchApi<Array<{ personId: number; personName: string; totalHours: number; capacity: number; availableHours: number; utilizationPercent: number }>>(`/projects/${projectId}/availability/${qs}`);
   },
 
-  // Deliverable tasks for a project
-  deliverableTasks: async (projectId: number): Promise<DeliverableTask[]> => {
-    const res = await apiClient.GET('/projects/{id}/deliverable_tasks/' as any, { params: { path: { id: projectId } }, headers: authHeaders() });
+  // Task tracking payload for a project (project + deliverable scoped tasks)
+  tasks: async (projectId: number): Promise<{ enabled: boolean; projectId: number; projectTasks: ProjectTask[]; deliverableTasks: ProjectTask[] }> => {
+    const res = await apiClient.GET('/projects/{id}/tasks/' as any, { params: { path: { id: projectId } }, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as DeliverableTask[];
+    return res.data as unknown as { enabled: boolean; projectId: number; projectTasks: ProjectTask[]; deliverableTasks: ProjectTask[] };
   },
 
-  // QA checklist tasks for a project
-  qaTasks: async (projectId: number): Promise<DeliverableQATask[]> => {
-    const res = await apiClient.GET('/projects/{id}/qa_tasks/' as any, { params: { path: { id: projectId } }, headers: authHeaders() });
+  // Manual non-destructive sync (adds missing tasks from templates)
+  syncTasks: async (projectId: number): Promise<{ enabled: boolean; projectId: number; projectCreated: number; deliverableCreated: number; processedDeliverables: number }> => {
+    const res = await apiClient.POST('/projects/{id}/tasks/sync/' as any, { params: { path: { id: projectId } }, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as DeliverableQATask[];
+    return res.data as unknown as { enabled: boolean; projectId: number; projectCreated: number; deliverableCreated: number; processedDeliverables: number };
   },
 
   // Get all projects (bulk API - Phase 2 optimization)
@@ -1555,37 +1574,40 @@ export const deliverablesApi = {
   },
 };
 
-export const deliverableTaskTemplatesApi = {
-  list: async (params?: { page?: number; page_size?: number }) => {
+export const projectTaskTemplatesApi = {
+  list: async (params?: { page?: number; page_size?: number; vertical?: number; scope?: 'project' | 'deliverable'; include_inactive?: 0 | 1 }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+    if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.scope) queryParams.set('scope', params.scope);
+    if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const res = await apiClient.GET(`/deliverables/task_templates/${queryString}` as any, { headers: authHeaders() });
+    const res = await apiClient.GET(`/projects/task-templates/${queryString}` as any, { headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as PaginatedResponse<DeliverableTaskTemplate>;
+    return res.data as unknown as PaginatedResponse<ProjectTaskTemplate>;
   },
-  create: async (data: Omit<DeliverableTaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'departmentName'>) => {
-    const res = await apiClient.POST('/deliverables/task_templates/' as any, { body: data as any, headers: authHeaders() });
+  create: async (data: Omit<ProjectTaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'verticalName' | 'departmentName'>) => {
+    const res = await apiClient.POST('/projects/task-templates/' as any, { body: data as any, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as DeliverableTaskTemplate;
+    return res.data as unknown as ProjectTaskTemplate;
   },
-  update: async (id: number, data: Partial<DeliverableTaskTemplate>) => {
-    const res = await apiClient.PATCH('/deliverables/task_templates/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
+  update: async (id: number, data: Partial<ProjectTaskTemplate>) => {
+    const res = await apiClient.PATCH('/projects/task-templates/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as DeliverableTaskTemplate;
+    return res.data as unknown as ProjectTaskTemplate;
   },
   delete: async (id: number) => {
-    const res = await apiClient.DELETE('/deliverables/task_templates/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
+    const res = await apiClient.DELETE('/projects/task-templates/{id}/' as any, { params: { path: { id } }, headers: authHeaders() });
     if (res.error || (res.response && !res.response.ok)) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
@@ -1594,39 +1616,14 @@ export const deliverableTaskTemplatesApi = {
   },
 };
 
-export const deliverableTasksApi = {
-  list: async (params?: { project?: number; deliverable?: number; page?: number; page_size?: number }) => {
-    const queryParams = new URLSearchParams();
-    if (params?.project) queryParams.set('project', params.project.toString());
-    if (params?.deliverable) queryParams.set('deliverable', params.deliverable.toString());
-    if (params?.page) queryParams.set('page', params.page.toString());
-    if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
-    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const res = await apiClient.GET(`/deliverables/tasks/${queryString}` as any, { headers: authHeaders() });
+export const projectTasksApi = {
+  update: async (id: number, data: Pick<Partial<ProjectTask>, 'completionPercent' | 'assigneeIds'>) => {
+    const res = await apiClient.PATCH('/projects/tasks/{task_id}/' as any, { params: { path: { task_id: id } }, body: data as any, headers: authHeaders() });
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
-    return res.data as unknown as PaginatedResponse<DeliverableTask>;
-  },
-  update: async (id: number, data: Partial<DeliverableTask>) => {
-    const res = await apiClient.PATCH('/deliverables/tasks/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    return res.data as unknown as DeliverableTask;
-  },
-};
-
-export const deliverableQaTasksApi = {
-  update: async (id: number, data: Partial<DeliverableQATask>) => {
-    const res = await apiClient.PATCH('/deliverables/qa_tasks/{id}/' as any, { params: { path: { id } }, body: data as any, headers: authHeaders() });
-    if (!res.data) {
-      const status = res.response?.status ?? 500;
-      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
-    }
-    return res.data as unknown as DeliverableQATask;
+    return res.data as unknown as ProjectTask;
   },
 };
 

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import { useProject } from '@/hooks/useProjects';
-import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, deliverableTasksApi, deliverableQaTasksApi, peopleApi } from '@/services/api';
+import { assignmentsApi, departmentsApi, projectRisksApi, projectsApi, projectTasksApi, taskProgressColorsApi } from '@/services/api';
 import { fetchProjectStaffingTimeline } from '@/services/experienceApi';
 import { createAssignment, deleteAssignment, updateAssignment } from '@/lib/mutations/assignments';
 import { formatUtcToLocal } from '@/utils/dates';
@@ -21,10 +21,11 @@ import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import PlaceholderPersonSwap from '@/components/assignments/PlaceholderPersonSwap';
 import TooltipPortal from '@/components/ui/TooltipPortal';
-import type { Assignment, Department, Person, Project, ProjectRisk, DeliverableTask, DeliverableQATask, DeliverableTaskCompletionStatus, DeliverableTaskQaStatus } from '@/types/models';
+import type { Assignment, Department, Person, Project, ProjectRisk, ProjectTask, TaskProgressColorRange } from '@/types/models';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { confirmAction } from '@/lib/confirmAction';
 import { useProjectStatusDefinitions } from '@/hooks/useProjectStatusDefinitions';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 type AssignmentListItem = Assignment & { isHistorical?: boolean };
 type ProjectChangeLogEntry = {
@@ -35,6 +36,12 @@ type ProjectChangeLogEntry = {
   actor?: { id?: number; username?: string; email?: string } | null;
   actorName?: string | null;
 };
+
+const DEFAULT_TASK_PROGRESS_COLORS: TaskProgressColorRange[] = [
+  { minPercent: 0, maxPercent: 25, colorHex: '#F59E0B', label: '0-25%' },
+  { minPercent: 26, maxPercent: 75, colorHex: '#3B82F6', label: '26-75%' },
+  { minPercent: 76, maxPercent: 100, colorHex: '#EF4444', label: '76-100%' },
+];
 
 const ProjectDashboard: React.FC = () => {
   const params = useParams<{ id?: string }>();
@@ -70,22 +77,24 @@ const ProjectDashboard: React.FC = () => {
     enabled: hasValidId,
     staleTime: 5 * 60_000,
   });
-  const deliverableTasksQuery = useQuery({
-    queryKey: ['project-dashboard', 'deliverable-tasks', projectId],
-    queryFn: () => projectsApi.deliverableTasks(projectId),
+  const taskTrackingQuery = useQuery({
+    queryKey: ['project-dashboard', 'tasks', projectId],
+    queryFn: () => projectsApi.tasks(projectId),
     enabled: hasValidId,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
-  const qaTasksQuery = useQuery({
-    queryKey: ['project-dashboard', 'qa-tasks', projectId],
-    queryFn: () => projectsApi.qaTasks(projectId),
-    enabled: hasValidId,
-    staleTime: 30_000,
+  const taskProgressColorsQuery = useQuery({
+    queryKey: ['task-progress-colors'],
+    queryFn: () => taskProgressColorsApi.get(),
+    staleTime: 5 * 60_000,
   });
   const assignments = assignmentsQuery.data?.results ?? [];
   const staffingTimeline = staffingTimelineQuery.data;
-  const deliverableTasks = deliverableTasksQuery.data ?? [];
-  const qaTasks = qaTasksQuery.data ?? [];
+  const taskTracking = taskTrackingQuery.data;
+  const taskTrackingEnabled = taskTracking?.enabled === true;
+  const projectTasks = taskTracking?.projectTasks ?? [];
+  const deliverableTasks = taskTracking?.deliverableTasks ?? [];
   const assignmentsTotal = assignmentsQuery.data?.count ?? assignments.length;
   const hasMoreAssignments = !!assignmentsQuery.data?.next;
   const departmentsQuery = useQuery({
@@ -167,7 +176,10 @@ const ProjectDashboard: React.FC = () => {
   const [savingAssignment, setSavingAssignment] = React.useState(false);
   const [deletingAssignmentId, setDeletingAssignmentId] = React.useState<number | null>(null);
   const [updatingTaskId, setUpdatingTaskId] = React.useState<number | null>(null);
-  const [updatingQaTaskId, setUpdatingQaTaskId] = React.useState<number | null>(null);
+  const [taskDraftPercent, setTaskDraftPercent] = React.useState<Record<number, string>>({});
+  const [editingTaskPercentId, setEditingTaskPercentId] = React.useState<number | null>(null);
+  const [openTaskAssigneePickerId, setOpenTaskAssigneePickerId] = React.useState<number | null>(null);
+  const [taskAssigneeSearch, setTaskAssigneeSearch] = React.useState<Record<number, string>>({});
   const deliverablesRef = React.useRef<DeliverablesSectionHandle | null>(null);
   const [deliverablesRefreshToken, setDeliverablesRefreshToken] = React.useState(0);
   const dashboardRefreshQueueRef = React.useRef<{
@@ -200,8 +212,7 @@ const ProjectDashboard: React.FC = () => {
         const tasks: Array<Promise<unknown>> = [];
         if (refreshDeliverables) {
           setDeliverablesRefreshToken((t) => t + 1);
-          tasks.push(queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'deliverable-tasks', projectId] }));
-          tasks.push(queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'qa-tasks', projectId] }));
+          tasks.push(queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'tasks', projectId] }));
         }
         if (refreshProject) {
           tasks.push(queryClient.invalidateQueries({ queryKey: ['projects', projectId] }));
@@ -250,9 +261,6 @@ const ProjectDashboard: React.FC = () => {
   const [expandedRiskIds, setExpandedRiskIds] = React.useState<Set<number>>(new Set());
   const [openAttachmentMenuId, setOpenAttachmentMenuId] = React.useState<number | null>(null);
   const attachmentMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const [qaSearchByTaskId, setQaSearchByTaskId] = React.useState<Record<number, string>>({});
-  const [qaDropdownOpenId, setQaDropdownOpenId] = React.useState<number | null>(null);
-  const qaBoxRefs = React.useRef(new Map<number, HTMLDivElement | null>());
 
   React.useEffect(() => {
     if (!hasValidId) return;
@@ -296,22 +304,10 @@ const ProjectDashboard: React.FC = () => {
       if (openAttachmentMenuId && attachmentMenuRef.current && !attachmentMenuRef.current.contains(target)) {
         setOpenAttachmentMenuId(null);
       }
-      if (qaDropdownOpenId != null) {
-        const qaBox = qaBoxRefs.current.get(qaDropdownOpenId);
-        if (qaBox && !qaBox.contains(target)) {
-          setQaDropdownOpenId(null);
-          setQaSearchByTaskId((prev) => {
-            const next = { ...prev };
-            delete next[qaDropdownOpenId];
-            return next;
-          });
-          setQaSearchState({ taskId: null, value: '', departmentId: null });
-        }
-      }
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [openAttachmentMenuId, riskEditDeptOpen, qaDropdownOpenId]);
+  }, [openAttachmentMenuId, riskEditDeptOpen]);
   const assignmentsCountLabel = assignmentsQuery.isLoading ? '-' : String(assignmentsTotal);
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -445,73 +441,49 @@ const ProjectDashboard: React.FC = () => {
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [assignments]);
+  const memberNameById = useMemo(
+    () => new Map(projectMembers.map((member) => [member.id, member.name] as const)),
+    [projectMembers]
+  );
+  const taskProgressRanges = useMemo(() => {
+    const raw = taskProgressColorsQuery.data?.ranges || DEFAULT_TASK_PROGRESS_COLORS;
+    return [...raw]
+      .map((range) => ({
+        minPercent: Number(range.minPercent ?? 0),
+        maxPercent: Number(range.maxPercent ?? 100),
+        colorHex: String(range.colorHex || '#3B82F6'),
+        label: range.label || '',
+      }))
+      .sort((a, b) => (a.minPercent - b.minPercent) || (a.maxPercent - b.maxPercent));
+  }, [taskProgressColorsQuery.data?.ranges]);
+  const getTaskProgressColor = React.useCallback((percent?: number | null): string => {
+    const value = Math.max(0, Math.min(100, Number(percent ?? 0)));
+    const matched = taskProgressRanges.find((range) => value >= range.minPercent && value <= range.maxPercent);
+    return matched?.colorHex || 'var(--primary)';
+  }, [taskProgressRanges]);
 
-  const taskGroups = useMemo(() => {
-    const groups = new Map<number, { deliverable: DeliverableTask['deliverableInfo']; tasks: DeliverableTask[] }>();
-    deliverableTasks.forEach((task) => {
-      const info = task.deliverableInfo;
-      if (!info) return;
-      if (!groups.has(info.id)) {
-        groups.set(info.id, { deliverable: info, tasks: [] });
-      }
-      groups.get(info.id)!.tasks.push(task);
-    });
-    const entries = Array.from(groups.values());
-    entries.forEach((group) => {
-      group.tasks.sort((a, b) => (a.departmentName || '').localeCompare(b.departmentName || ''));
-    });
-    return entries.sort((a, b) => {
-      const aDate = a.deliverable?.date || '';
-      const bDate = b.deliverable?.date || '';
-      if (aDate && bDate) return aDate.localeCompare(bDate);
-      if (aDate) return -1;
-      if (bDate) return 1;
-      return (a.deliverable?.description || '').localeCompare(b.deliverable?.description || '');
-    });
-  }, [deliverableTasks]);
-
-  const qaTaskGroups = useMemo(() => {
-    const groups = new Map<number, { deliverable: DeliverableQATask['deliverableInfo']; tasks: DeliverableQATask[] }>();
-    qaTasks.forEach((task) => {
-      const info = task.deliverableInfo;
-      if (!info) return;
-      if (!groups.has(info.id)) {
-        groups.set(info.id, { deliverable: info, tasks: [] });
-      }
-      groups.get(info.id)!.tasks.push(task);
-    });
-    const entries = Array.from(groups.values());
-    entries.forEach((group) => {
-      group.tasks.sort((a, b) => (a.departmentName || '').localeCompare(b.departmentName || ''));
-    });
-    return entries.sort((a, b) => {
-      const aDate = a.deliverable?.date || '';
-      const bDate = b.deliverable?.date || '';
-      if (aDate && bDate) return aDate.localeCompare(bDate);
-      if (aDate) return -1;
-      if (bDate) return 1;
-      return (a.deliverable?.description || '').localeCompare(b.deliverable?.description || '');
-    });
-  }, [qaTasks]);
-
-  const completionOptions: DeliverableTaskCompletionStatus[] = ['not_started', 'in_progress', 'complete'];
-  const qaOptions: DeliverableTaskQaStatus[] = ['not_reviewed', 'in_review', 'approved', 'changes_required'];
-  const [qaSearchState, setQaSearchState] = React.useState<{ taskId: number | null; value: string; departmentId: number | null }>({
-    taskId: null,
-    value: '',
-    departmentId: null,
-  });
-  const qaPeopleQuery = useQuery({
-    queryKey: ['project-dashboard', 'qa-people-search', qaSearchState.value, qaSearchState.departmentId, verticalState.selectedVerticalId ?? null],
-    queryFn: () =>
-      peopleApi.search(qaSearchState.value.trim(), 20, {
-        department: qaSearchState.departmentId != null ? qaSearchState.departmentId : undefined,
-        vertical: verticalState.selectedVerticalId ?? undefined,
+  const canManageTaskTracking = isAdminOrManager(auth?.user);
+  const dashboardProjectTasks = useMemo(
+    () =>
+      [...projectTasks].sort((a, b) => {
+        const dept = (a.departmentName || '').localeCompare(b.departmentName || '');
+        if (dept !== 0) return dept;
+        return (a.name || '').localeCompare(b.name || '');
       }),
-    enabled: qaSearchState.value.trim().length >= 2 && qaSearchState.departmentId != null,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
+    [projectTasks]
+  );
+  const dashboardDeliverableTasks = useMemo(
+    () =>
+      [...deliverableTasks].sort((a, b) => {
+        const aDate = a.deliverableInfo?.date || '';
+        const bDate = b.deliverableInfo?.date || '';
+        if (aDate !== bDate) return aDate.localeCompare(bDate);
+        const dept = (a.departmentName || '').localeCompare(b.departmentName || '');
+        if (dept !== 0) return dept;
+        return (a.name || '').localeCompare(b.name || '');
+      }),
+    [deliverableTasks]
+  );
 
   const resetAddAssignment = () => {
     setAssignmentMode('person');
@@ -604,31 +576,36 @@ const ProjectDashboard: React.FC = () => {
     }
   };
 
-  const handleTaskUpdate = async (taskId: number, patch: Partial<DeliverableTask>) => {
+  const normalizePercent = (value: number): number => {
+    const bounded = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+    return Math.round(bounded / 5) * 5;
+  };
+
+  const handleTaskUpdate = async (taskId: number, patch: Pick<Partial<ProjectTask>, 'completionPercent' | 'assigneeIds'>) => {
     if (updatingTaskId) return;
     try {
       setUpdatingTaskId(taskId);
-      await deliverableTasksApi.update(taskId, patch);
-      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'deliverable-tasks', projectId] });
+      await projectTasksApi.update(taskId, patch);
+      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'tasks', projectId] });
     } catch (e) {
-      console.error('Failed to update deliverable task', e);
+      console.error('Failed to update task', e);
     } finally {
       setUpdatingTaskId(null);
     }
   };
-
-  const handleQaTaskUpdate = async (taskId: number, patch: Partial<DeliverableQATask>) => {
-    if (updatingQaTaskId) return;
-    try {
-      setUpdatingQaTaskId(taskId);
-      await deliverableQaTasksApi.update(taskId, patch);
-      await queryClient.invalidateQueries({ queryKey: ['project-dashboard', 'qa-tasks', projectId] });
-    } catch (e) {
-      console.error('Failed to update QA task', e);
-    } finally {
-      setUpdatingQaTaskId(null);
+  const commitDashboardTaskPercent = React.useCallback(async (task: ProjectTask, rawValue: string) => {
+    if (!task.id) {
+      setEditingTaskPercentId(null);
+      return;
     }
-  };
+    const parsed = Number(rawValue);
+    const normalized = normalizePercent(parsed);
+    setTaskDraftPercent((prev) => ({ ...prev, [task.id!]: String(normalized) }));
+    setEditingTaskPercentId(null);
+    if (normalized !== task.completionPercent) {
+      await handleTaskUpdate(task.id, { completionPercent: normalized });
+    }
+  }, [handleTaskUpdate]);
 
   const risks = (risksQuery.data?.results || []) as ProjectRisk[];
   const changeLogEntries = (changeLogQuery.data || []) as ProjectChangeLogEntry[];
@@ -1008,264 +985,179 @@ const ProjectDashboard: React.FC = () => {
                 ) : null}
               </Card>
 
-              <Card className="p-3">
-                <div className="relative flex items-center justify-center">
-                  <div className="text-sm font-semibold text-[var(--text)] text-center">Deliverable Tasks</div>
-                </div>
-                <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
-                {deliverableTasksQuery.isLoading ? (
-                  <div className="text-[11px] text-[var(--muted)]">Loading tasks…</div>
-                ) : taskGroups.length === 0 ? (
-                  <div className="text-[11px] text-[var(--muted)]">No tasks generated yet.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {taskGroups.map((group) => {
-                      const deliverableLabel = group.deliverable?.description
-                        || (group.deliverable?.percentage != null ? `${group.deliverable.percentage}%` : 'Milestone');
-                      const dateLabel = group.deliverable?.date
-                        ? formatUtcToLocal(group.deliverable.date, { dateStyle: 'medium' })
-                        : null;
-                      return (
-                        <div key={group.deliverable?.id} className="space-y-1">
-                          <div className="text-[11px] text-[var(--muted)]">
-                            {deliverableLabel}{dateLabel ? ` · ${dateLabel}` : ''}
-                          </div>
-                          <div className="grid grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_1fr] gap-2 text-[10px] text-[var(--muted)] mb-1">
-                            <div>Department</div>
-                            <div>Sheet</div>
-                            <div>Scope</div>
-                            <div>Completion</div>
-                            <div>QA</div>
-                            <div>Assignee</div>
-                          </div>
-                          <div className="space-y-1">
-                            {group.tasks.map((task) => (
-                              <div key={task.id} className="grid grid-cols-[1fr_1fr_2fr_0.9fr_0.9fr_1fr] gap-2 items-center text-[11px]">
-                                <div className="truncate">{task.departmentName || `Dept #${task.departmentId}`}</div>
-                                <div className="truncate">
-                                  {[task.sheetNumber, task.sheetName].filter(Boolean).join(' · ') || '—'}
-                                </div>
-                                <div className="truncate">{task.scopeDescription || '—'}</div>
-                                <div>
-                                  <select
-                                    value={task.completionStatus}
-                                    disabled={updatingTaskId === task.id}
-                                    onChange={(e) =>
-                                      task.id &&
-                                      handleTaskUpdate(task.id, { completionStatus: e.currentTarget.value as DeliverableTaskCompletionStatus })
-                                    }
-                                    className="w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer"
-                                  >
-                                    {completionOptions.map((opt) => (
-                                      <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  <select
-                                    value={task.qaStatus}
-                                    disabled={updatingTaskId === task.id}
-                                    onChange={(e) =>
-                                      task.id &&
-                                      handleTaskUpdate(task.id, { qaStatus: e.currentTarget.value as DeliverableTaskQaStatus })
-                                    }
-                                    className="w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer"
-                                  >
-                                    {qaOptions.map((opt) => (
-                                      <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  {task.completionStatus === 'complete' ? (
-                                    <div className="truncate text-[11px] text-[var(--muted)]">{task.assignedToName || '—'}</div>
-                                  ) : (
-                                    <select
-                                      value={task.assignedTo ?? ''}
-                                      disabled={updatingTaskId === task.id}
-                                      onChange={(e) =>
-                                        task.id &&
-                                        handleTaskUpdate(task.id, { assignedTo: e.currentTarget.value ? Number(e.currentTarget.value) : null })
-                                      }
-                                      className="w-full bg-transparent border border-transparent text-[11px] focus:border-[var(--border)] focus:bg-[var(--card)] rounded px-0 py-0 appearance-none cursor-pointer"
-                                    >
-                                      <option value="">Unassigned</option>
-                                      {projectMembers.map((member) => (
-                                        <option key={member.id} value={member.id}>{member.name}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
+              {taskTrackingEnabled && (
+                <Card className="p-3">
+                  <div className="relative flex items-center justify-center">
+                    <div className="text-sm font-semibold text-[var(--text)] text-center">Task Tracking</div>
                   </div>
-                )}
-              </Card>
-
-              <Card className="p-3">
-                <div className="relative flex items-center justify-center">
-                  <div className="text-sm font-semibold text-[var(--text)] text-center">QA Check List</div>
-                </div>
-                <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
-                {qaTasksQuery.isLoading ? (
-                  <div className="text-[11px] text-[var(--muted)]">Loading QA checklist…</div>
-                ) : qaTaskGroups.length === 0 ? (
-                  <div className="text-[11px] text-[var(--muted)]">No QA items yet.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {qaTaskGroups.map((group) => {
-                      const deliverableLabel = group.deliverable?.description
-                        || (group.deliverable?.percentage != null ? `${group.deliverable.percentage}%` : 'Milestone');
-                      const dateLabel = group.deliverable?.date
-                        ? formatUtcToLocal(group.deliverable.date, { dateStyle: 'medium' })
-                        : null;
-                      return (
-                        <div key={group.deliverable?.id} className="space-y-1">
-                          <div className="text-[11px] text-[var(--muted)]">
-                            {deliverableLabel}{dateLabel ? ` · ${dateLabel}` : ''}
-                          </div>
-                          <div className="grid grid-cols-[1.2fr_0.7fr_1.2fr_0.9fr_0.9fr] gap-2 text-[10px] text-[var(--muted)] mb-1">
-                            <div>Department</div>
-                            <div>Reviewed</div>
-                            <div>QA Assignee</div>
-                            <div>QA Due</div>
-                            <div>Reviewed On</div>
-                          </div>
-                          <div className="space-y-1">
-                            {group.tasks.map((task) => (
-                              <div key={task.id} className="grid grid-cols-[1.2fr_0.7fr_1.2fr_0.9fr_0.9fr] gap-2 items-center text-[11px]">
-                                <div className="truncate">{task.departmentName || `Dept #${task.departmentId}`}</div>
-                                <div>
-                                  <label className="inline-flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={task.qaStatus === 'reviewed'}
-                                      disabled={updatingQaTaskId === task.id}
-                                      onChange={(e) =>
-                                        task.id &&
-                                        handleQaTaskUpdate(task.id, { qaStatus: e.currentTarget.checked ? 'reviewed' : 'not_reviewed' })
-                                      }
-                                      className="h-3 w-3 accent-[var(--primary)]"
-                                    />
-                                    <span className="text-[11px] text-[var(--muted)]">Done</span>
-                                  </label>
-                                </div>
-                                <div>
-                                  {task.id ? (
-                                    <div className="relative" ref={(el) => {
-                                      if (el) {
-                                        qaBoxRefs.current.set(task.id as number, el);
-                                      } else {
-                                        qaBoxRefs.current.delete(task.id as number);
-                                      }
-                                    }}>
-                                      <input
-                                        type="text"
-                                        placeholder="Search Name/Role"
-                                        value={
-                                          Object.prototype.hasOwnProperty.call(qaSearchByTaskId, task.id)
-                                            ? qaSearchByTaskId[task.id]
-                                            : (task.qaAssignedToName || '')
-                                        }
-                                        disabled={updatingQaTaskId === task.id}
-                                        onChange={(e) => {
-                                          const nextValue = e.target.value;
-                                          setQaSearchByTaskId((prev) => ({ ...prev, [task.id as number]: nextValue }));
-                                          setQaDropdownOpenId(task.id as number);
-                                          setQaSearchState({
-                                            taskId: task.id as number,
-                                            value: nextValue,
-                                            departmentId: task.departmentId ?? null,
-                                          });
-                                        }}
-                                        onFocus={() => {
-                                          setQaDropdownOpenId(task.id as number);
-                                          const existingValue = Object.prototype.hasOwnProperty.call(qaSearchByTaskId, task.id)
-                                            ? qaSearchByTaskId[task.id]
-                                            : '';
-                                          setQaSearchState({
-                                            taskId: task.id as number,
-                                            value: existingValue,
-                                            departmentId: task.departmentId ?? null,
-                                          });
-                                        }}
-                                        className="w-full px-2 py-1 text-[11px] bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                                      />
-                                      {qaDropdownOpenId === task.id && (
-                                        <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
-                                          {(() => {
-                                            const typedValue = (qaSearchByTaskId[task.id] || '').trim().toLowerCase();
-                                            const matches =
-                                              qaSearchState.taskId === task.id ? (qaPeopleQuery.data || []) : [];
-                                            return (
-                                              <div className="py-1">
-                                                {task.qaAssignedTo ? (
-                                                  <button
-                                                    type="button"
-                                                    className="w-full text-left px-2 py-1 text-[11px] text-[var(--muted)] hover:bg-[var(--surfaceHover)]"
-                                                    onClick={() => {
-                                                      handleQaTaskUpdate(task.id as number, { qaAssignedTo: null });
-                                                      setQaSearchByTaskId((prev) => ({ ...prev, [task.id as number]: '' }));
-                                                      setQaDropdownOpenId(null);
-                                                      setQaSearchState({ taskId: null, value: '', departmentId: null });
-                                                    }}
-                                                  >
-                                                    Unassigned
-                                                  </button>
-                                                ) : null}
-                                                {typedValue.length < 2 ? (
-                                                  <div className="px-2 py-1 text-[11px] text-[var(--muted)]">Type at least 2 characters to search</div>
-                                                ) : qaPeopleQuery.isLoading ? (
-                                                  <div className="px-2 py-1 text-[11px] text-[var(--muted)]">Searching…</div>
-                                                ) : matches.length === 0 ? (
-                                                  <div className="px-2 py-1 text-[11px] text-[var(--muted)]">No matches</div>
-                                                ) : (
-                                                  matches.map((person) => (
-                                                    <button
-                                                      key={person.id}
-                                                      type="button"
-                                                      className="w-full text-left px-2 py-1 text-[11px] hover:bg-[var(--surfaceHover)]"
-                                                      onClick={() => {
-                                                        handleQaTaskUpdate(task.id as number, { qaAssignedTo: person.id ?? null });
-                                                        setQaSearchByTaskId((prev) => ({ ...prev, [task.id as number]: person.name }));
-                                                        setQaDropdownOpenId(null);
-                                                        setQaSearchState({ taskId: null, value: '', departmentId: null });
-                                                      }}
-                                                    >
-                                                      <div className="text-[var(--text)]">{person.name}</div>
-                                                      <div className="text-[10px] text-[var(--muted)]">{person.roleName || 'Role not set'}</div>
-                                                    </button>
-                                                  ))
-                                                )}
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
+                  <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
+                  {taskTrackingQuery.isLoading ? (
+                    <div className="text-[11px] text-[var(--muted)]">Loading tasks…</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {([
+                        { label: 'Project Tasks', tasks: dashboardProjectTasks, deliverableMode: false },
+                        { label: 'Deliverable Tasks', tasks: dashboardDeliverableTasks, deliverableMode: true },
+                      ] as Array<{ label: string; tasks: ProjectTask[]; deliverableMode: boolean }>).map((section) => (
+                        <div key={section.label} className="space-y-2">
+                          <div className="text-xs font-medium text-[var(--muted)]">{section.label}</div>
+                          {section.tasks.length === 0 ? (
+                            <div className="text-[11px] text-[var(--muted)]">No tasks yet.</div>
+                          ) : (
+                            section.tasks.map((task) => {
+                              const taskId = task.id ?? 0;
+                              const taskColor = getTaskProgressColor(task.completionPercent);
+                              const percentValue = taskDraftPercent[taskId] ?? String(task.completionPercent ?? 0);
+                              const assignedNames = (task.assigneeNames && task.assigneeNames.length > 0)
+                                ? task.assigneeNames
+                                : (task.assigneeIds || [])
+                                  .map((id) => memberNameById.get(id))
+                                  .filter((name): name is string => Boolean(name));
+                              const pickerSearch = taskAssigneeSearch[taskId] || '';
+                              const normalizedPickerSearch = pickerSearch.trim().toLowerCase();
+                              const availableMembers = projectMembers.filter((member) => !(task.assigneeIds || []).includes(member.id));
+                              const filteredAvailableMembers = normalizedPickerSearch
+                                ? availableMembers.filter((member) => member.name.toLowerCase().includes(normalizedPickerSearch))
+                                : availableMembers;
+                              const deliverableLabel = task.deliverableInfo?.description
+                                || (task.deliverableInfo?.percentage != null ? `${task.deliverableInfo.percentage}%` : 'Deliverable');
+                              return (
+                                <div key={task.id} className="rounded border border-[var(--border)] p-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="text-[11px] text-[var(--text)] truncate">
+                                        {section.deliverableMode ? `${deliverableLabel}: ${task.name}` : task.name}
+                                      </div>
+                                      <div className="text-[10px] text-[var(--muted)] truncate">
+                                        {task.departmentName || `Dept #${task.departmentId}`}
+                                      </div>
                                     </div>
-                                  ) : (
-                                    <div className="text-[11px] text-[var(--muted)]">—</div>
-                                  )}
+                                    {canManageTaskTracking && task.id ? (
+                                      editingTaskPercentId === task.id ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            step={5}
+                                            autoFocus
+                                            value={percentValue}
+                                            onChange={(e) => {
+                                              const nextValue = e.currentTarget.value;
+                                              setTaskDraftPercent((prev) => ({ ...prev, [taskId]: nextValue }));
+                                            }}
+                                            onBlur={() => { void commitDashboardTaskPercent(task, percentValue); }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.currentTarget.blur();
+                                              }
+                                              if (e.key === 'Escape') {
+                                                setTaskDraftPercent((prev) => ({ ...prev, [taskId]: String(task.completionPercent ?? 0) }));
+                                                setEditingTaskPercentId(null);
+                                              }
+                                            }}
+                                            disabled={updatingTaskId === task.id}
+                                            className="w-14 px-1 py-0.5 text-[11px] text-right bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                          />
+                                          <span className="text-[11px] text-[var(--muted)]">%</span>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setTaskDraftPercent((prev) => ({
+                                              ...prev,
+                                              [taskId]: String(task.completionPercent ?? 0),
+                                            }));
+                                            setEditingTaskPercentId(task.id ?? null);
+                                          }}
+                                          className="text-[11px] hover:opacity-90"
+                                          style={{ color: taskColor }}
+                                        >
+                                          {task.completionPercent}%
+                                        </button>
+                                      )
+                                    ) : (
+                                      <div className="text-[11px]" style={{ color: taskColor }}>{task.completionPercent}%</div>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 h-5 rounded bg-[var(--surfaceOverlay)] overflow-hidden">
+                                    <div
+                                      className="h-full transition-all"
+                                      style={{ width: `${task.completionPercent ?? 0}%`, backgroundColor: taskColor }}
+                                    />
+                                  </div>
+                                  <div className="mt-2 space-y-2">
+                                    {canManageTaskTracking && task.id ? (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="text-[11px] text-[var(--muted)] truncate">
+                                            {assignedNames.length ? assignedNames.join(', ') : 'Unassigned'}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => setOpenTaskAssigneePickerId((prev) => (prev === task.id ? null : task.id!))}
+                                            disabled={updatingTaskId === task.id}
+                                            className="w-5 h-5 rounded border border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)] flex items-center justify-center text-[11px] disabled:opacity-50"
+                                            title="Add assignee"
+                                            aria-label="Add assignee"
+                                          >
+                                            +
+                                          </button>
+                                        </div>
+                                        {openTaskAssigneePickerId === task.id ? (
+                                          <div className="rounded border border-[var(--border)] p-2 space-y-1 bg-[var(--card)]">
+                                            <input
+                                              type="text"
+                                              value={pickerSearch}
+                                              onChange={(e) => {
+                                                const nextValue = e.currentTarget.value;
+                                                setTaskAssigneeSearch((prev) => ({ ...prev, [taskId]: nextValue }));
+                                              }}
+                                              placeholder="Search members"
+                                              className="w-full px-2 py-1 text-[11px] bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)]"
+                                            />
+                                            <div className="max-h-28 overflow-auto rounded border border-[var(--border)]">
+                                              {filteredAvailableMembers.length === 0 ? (
+                                                <div className="px-2 py-1 text-[11px] text-[var(--muted)]">No available members</div>
+                                              ) : (
+                                                filteredAvailableMembers.map((member) => (
+                                                  <button
+                                                    key={member.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                      if (!task.id) return;
+                                                      const nextIds = Array.from(new Set([...(task.assigneeIds || []), member.id]));
+                                                      setOpenTaskAssigneePickerId(null);
+                                                      setTaskAssigneeSearch((prev) => ({ ...prev, [taskId]: '' }));
+                                                      void handleTaskUpdate(task.id, { assigneeIds: nextIds });
+                                                    }}
+                                                    className="w-full text-left px-2 py-1 text-[11px] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                                                  >
+                                                    {member.name}
+                                                  </button>
+                                                ))
+                                              )}
+                                            </div>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[11px] text-[var(--muted)] truncate">
+                                        {assignedNames.length ? assignedNames.join(', ') : 'Unassigned'}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="truncate text-[11px] text-[var(--muted)]">
-                                  {task.dueDate ? (formatUtcToLocal(task.dueDate, { dateStyle: 'medium' }) || task.dueDate) : '—'}
-                                </div>
-                                <div className="truncate text-[11px] text-[var(--muted)]">
-                                  {task.reviewedAt ? (formatUtcToLocal(task.reviewedAt, { dateStyle: 'medium' }) || task.reviewedAt) : '—'}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                              );
+                            })
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </Card>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              )}
             </div>
 
             <Card className="p-3 xl:col-span-3">

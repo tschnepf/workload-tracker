@@ -13,6 +13,7 @@ from .views import (
     DeliverablePhaseMappingSettingsView,
     QATaskSettingsView,
     NetworkGraphSettingsView,
+    TaskProgressColorSettingsView,
 )
 
 urlpatterns = [
@@ -29,4 +30,5 @@ urlpatterns = [
     path('deliverable_phase_mapping/', DeliverablePhaseMappingSettingsView.as_view(), name='deliverable_phase_mapping'),
     path('qa_task_settings/', QATaskSettingsView.as_view(), name='qa_task_settings'),
     path('network_graph_settings/', NetworkGraphSettingsView.as_view(), name='network_graph_settings'),
+    path('task_progress_colors/', TaskProgressColorSettingsView.as_view(), name='task_progress_colors'),
 ]
