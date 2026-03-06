@@ -247,6 +247,7 @@ urlpatterns = [
     # Database backups API
     path('api/backups/', backups.BackupListCreateView.as_view(), name='backups_list_create'),
     path('api/backups/status/', backups.BackupStatusView.as_view(), name='backups_status'),
+    path('api/backups/settings/', backups.BackupAutomationSettingsView.as_view(), name='backups_settings'),
     path('api/backups/upload-restore/', backups.UploadAndRestoreView.as_view(), name='backups_upload_restore'),
     path('api/backups/<str:id>/download/', backups.BackupDownloadView.as_view(), name='backups_download'),
     path('api/backups/<str:id>/', backups.BackupDeleteView.as_view(), name='backups_delete'),

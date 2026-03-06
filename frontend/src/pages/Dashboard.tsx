@@ -39,6 +39,7 @@ type WeekSelectionMode = 'preset' | 'custom';
 const MIN_WEEKS = 1;
 const PRESET_MAX_WEEKS = 12;
 const CUSTOM_MAX_WEEKS = 52;
+const TOP_ROW_HEIGHT_FALLBACK_PX = 620;
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -65,7 +66,9 @@ const Dashboard: React.FC = () => {
   const [projectsTotal, setProjectsTotal] = useState<number>(0);
   const [showClientMixCard, setShowClientMixCard] = useState(false);
   const deliverablesListRef = React.useRef<HTMLDivElement | null>(null);
+  const upcomingCardRef = React.useRef<HTMLDivElement | null>(null);
   const [showDeliverablesScrollHint, setShowDeliverablesScrollHint] = useState(false);
+  const [upcomingCardHeight, setUpcomingCardHeight] = useState<number | null>(null);
   // People metadata (hire date, active) for availability filtering
   const [peopleMeta, setPeopleMeta] = useState<Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>>(new Map());
 
@@ -94,7 +97,7 @@ const Dashboard: React.FC = () => {
   const upcomingRange = useMemo((): CalendarRange => {
     const start = new Date();
     const end = new Date(start);
-    end.setDate(start.getDate() + 6);
+    end.setDate(start.getDate() + 13);
     return { start: toIsoDate(start), end: toIsoDate(end) };
   }, []);
 
@@ -142,6 +145,26 @@ const Dashboard: React.FC = () => {
     observer.observe(node);
     return () => observer.disconnect();
   }, [updateDeliverablesScrollHint, upcomingDeliverables.length, upcomingDeliverablesQuery.isLoading]);
+
+  useLayoutEffect(() => {
+    const node = upcomingCardRef.current;
+    if (!node) return;
+
+    const updateHeight = () => {
+      const nextHeight = Math.round(node.getBoundingClientRect().height);
+      setUpcomingCardHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+    };
+
+    updateHeight();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateHeight());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [upcomingDeliverables.length, upcomingDeliverablesQuery.isLoading]);
+
+  const topRowHeightPx = useMemo(() => {
+    return upcomingCardHeight ?? TOP_ROW_HEIGHT_FALLBACK_PX;
+  }, [upcomingCardHeight]);
 
   const totalMembers = useMemo(() => {
     if (!data) return 0;
@@ -495,8 +518,21 @@ const Dashboard: React.FC = () => {
 
         <StatusStrip tone={statusTone}>{statusMessage}</StatusStrip>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <div className="col-span-12 lg:col-span-4 lg:self-stretch flex flex-col gap-4 min-h-0">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start">
+          <div className="col-span-12 lg:col-span-4 lg:self-start">
+            <UpcomingDeliverablesCard
+              deliverables={upcomingDeliverables}
+              isLoading={upcomingDeliverablesQuery.isLoading}
+              listRef={deliverablesListRef}
+              cardRef={upcomingCardRef}
+              onScroll={updateDeliverablesScrollHint}
+              showScrollHint={showDeliverablesScrollHint}
+            />
+          </div>
+          <div
+            className="col-span-12 lg:col-span-4 lg:col-start-5 flex flex-col gap-4 min-h-0"
+            style={{ height: `${topRowHeightPx}px`, minHeight: `${topRowHeightPx}px`, maxHeight: `${topRowHeightPx}px` }}
+          >
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <KpiCard
                 label="Average Utilization"
@@ -511,37 +547,35 @@ const Dashboard: React.FC = () => {
                 subtext={projectsTotal ? `Total: ${projectsTotal}` : 'Current period'}
               />
             </div>
+            <div className="flex-1 min-h-0">
+              {showClientMixCard ? (
+                <AssignedHoursByClientCard className="w-full h-full" responsive />
+              ) : (
+                <Card className="ux-panel w-full h-full p-5">
+                  <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    Load the client mix chart on demand for this view.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowClientMixCard(true)}
+                    className="mt-4 rounded-lg border border-[var(--primary)] bg-[var(--primary)]/15 px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--primary)]/25"
+                  >
+                    Load Client Mix
+                  </button>
+                </Card>
+              )}
+            </div>
+          </div>
+          <div
+            className="col-span-12 lg:col-span-4 lg:col-start-9 lg:self-start flex flex-col min-h-0 overflow-hidden"
+            style={{ height: `${topRowHeightPx}px`, minHeight: `${topRowHeightPx}px`, maxHeight: `${topRowHeightPx}px` }}
+          >
             <RecentAssignmentsCard
               assignments={data.recent_assignments ?? []}
-              className="flex-1"
+              className="h-full min-h-0"
             />
           </div>
-          <div className="col-span-12 lg:col-span-4 lg:col-start-5">
-            {showClientMixCard ? (
-              <AssignedHoursByClientCard className="w-full h-full" responsive />
-            ) : (
-              <Card className="ux-panel w-full h-full p-5">
-                <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
-                <p className="mt-2 text-xs text-[var(--muted)]">
-                  Load the client mix chart on demand for this view.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowClientMixCard(true)}
-                  className="mt-4 rounded-lg border border-[var(--primary)] bg-[var(--primary)]/15 px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--primary)]/25"
-                >
-                  Load Client Mix
-                </button>
-              </Card>
-            )}
-          </div>
-          <UpcomingDeliverablesCard
-            deliverables={upcomingDeliverables}
-            isLoading={upcomingDeliverablesQuery.isLoading}
-            listRef={deliverablesListRef}
-            onScroll={updateDeliverablesScrollHint}
-            showScrollHint={showDeliverablesScrollHint}
-          />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -596,6 +630,7 @@ type UpcomingDeliverablesCardProps = {
   deliverables: DeliverableCalendarUnion[];
   isLoading: boolean;
   listRef: React.RefObject<HTMLDivElement>;
+  cardRef?: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
   showScrollHint: boolean;
 };
@@ -604,18 +639,20 @@ const UpcomingDeliverablesCard: React.FC<UpcomingDeliverablesCardProps> = ({
   deliverables,
   isLoading,
   listRef,
+  cardRef,
   onScroll,
   showScrollHint,
 }) => {
   const { open: openProjectDetails } = useProjectDetailsDrawer();
   return (
     <Card
-      className="ux-panel col-span-12 flex min-h-0 flex-col overflow-hidden p-4 lg:col-span-4 lg:col-start-9"
+      ref={cardRef}
+      className="ux-panel flex min-h-0 flex-col overflow-hidden p-4"
     >
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-semibold text-[var(--text)]">Upcoming Deliverables</h3>
-          <p className="text-xs text-[var(--muted)]">Next 7 days</p>
+          <p className="text-xs text-[var(--muted)]">Next 2 weeks</p>
         </div>
         <span className="text-xs text-[var(--muted)]">{deliverables.length}</span>
       </div>
@@ -625,7 +662,7 @@ const UpcomingDeliverablesCard: React.FC<UpcomingDeliverablesCardProps> = ({
         <div>Deliverable</div>
         <div className="text-right">Date</div>
       </div>
-      <div ref={listRef} onScroll={onScroll} className="mt-3 h-[420px] space-y-3 overflow-y-auto pr-2">
+      <div ref={listRef} onScroll={onScroll} className="mt-3 space-y-3 pr-2">
         {isLoading ? (
           <div className="text-sm text-[var(--muted)]">Loading deliverables…</div>
         ) : deliverables.length === 0 ? (

@@ -22,14 +22,14 @@ export interface MultiRoleCapacityChartProps {
 }
 
 const COLORS = [
-  '#22c55e', // green
-  '#60a5fa', // blue
-  '#a78bfa', // purple
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#10b981', // emerald
-  '#3b82f6', // blue-500
-  '#eab308', // yellow-500
+  'var(--chart-accent-b)',
+  'var(--chart-accent-a)',
+  'var(--chart-neutral)',
+  'var(--color-state-warning)',
+  'var(--color-state-danger)',
+  'var(--chart-project)',
+  'var(--chart-person)',
+  'var(--chart-client)',
 ];
 
 export function roleColorForId(roleId: number): string {
@@ -39,6 +39,17 @@ export function roleColorForId(roleId: number): string {
 }
 
 export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ weekKeys, series, mode = 'hours', tension, hideLegend, height: heightProp }) => {
+  const palette = {
+    axis: 'var(--color-border)',
+    grid: 'var(--color-border-subtle)',
+    tick: 'var(--color-text-secondary)',
+    crosshair: 'var(--color-border-subtle)',
+    tooltipBg: 'var(--color-surface-elevated)',
+    tooltipBorder: 'var(--color-border)',
+    tooltipText: 'var(--color-text-primary)',
+    tooltipMuted: 'var(--color-text-secondary)',
+  } as const;
+
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = React.useState<number | null>(null);
   // Keep the chart frame visible even when series is empty (e.g., all roles deselected).
@@ -180,18 +191,18 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
     <div ref={containerRef} style={{ display: 'block', maxWidth: '100%', position: 'relative' }}>
       <svg width={width} height={height} role="img" aria-label="Role capacity vs assigned">
         {/* Axes */}
-        <line x1={padLeft} y1={height - padV} x2={width - padRight} y2={height - padV} stroke="#4b5563" strokeWidth={1} />
-        <line x1={padLeft} y1={padV} x2={padLeft} y2={height - padV} stroke="#4b5563" strokeWidth={1} />
+        <line x1={padLeft} y1={height - padV} x2={width - padRight} y2={height - padV} stroke={palette.axis} strokeWidth={1} />
+        <line x1={padLeft} y1={padV} x2={padLeft} y2={height - padV} stroke={palette.axis} strokeWidth={1} />
 
         {/* Axis labels */}
-        <text x={width / 2} y={height - 6} fontSize={11} fill="#94a3b8" textAnchor="middle">{xLabel}</text>
-        <text x={18} y={height / 2} fontSize={11} fill="#94a3b8" textAnchor="middle" transform={`rotate(-90, 18, ${height / 2})`}>{yLabel}</text>
+        <text x={width / 2} y={height - 6} fontSize={11} fill={palette.tick} textAnchor="middle">{xLabel}</text>
+        <text x={18} y={height / 2} fontSize={11} fill={palette.tick} textAnchor="middle" transform={`rotate(-90, 18, ${height / 2})`}>{yLabel}</text>
 
         {/* Y ticks */}
         {yTicks.map((t) => (
           <g key={t}>
-            <line x1={padLeft - 4} y1={y(t)} x2={width - padRight} y2={y(t)} stroke="#374151" strokeDasharray="2,4" />
-            <text x={padLeft - 10} y={y(t) + 4} fontSize={10} fill="#9ca3af" textAnchor="end">{t}</text>
+            <line x1={padLeft - 4} y1={y(t)} x2={width - padRight} y2={y(t)} stroke={palette.grid} strokeDasharray="2,4" />
+            <text x={padLeft - 10} y={y(t) + 4} fontSize={10} fill={palette.tick} textAnchor="end">{t}</text>
           </g>
         ))}
 
@@ -218,7 +229,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
         {hover && (
           <g pointerEvents="none">
             {/* vertical line */}
-            <line x1={hover.x} y1={padV} x2={hover.x} y2={height - padV} stroke="#6b7280" strokeDasharray="3,3" />
+            <line x1={hover.x} y1={padV} x2={hover.x} y2={height - padV} stroke={palette.crosshair} strokeDasharray="3,3" />
             {/* markers for hovered role */}
             {(() => {
               const sRaw = series.find((r) => r.roleId === hover.roleId);
@@ -324,7 +335,7 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
 
         {/* X labels */}
         {weekKeys.map((wk, i) => (
-          <text key={wk} x={x(i)} y={height - padV + 14} fontSize={10} fill="#94a3b8" textAnchor="middle">
+          <text key={wk} x={x(i)} y={height - padV + 14} fontSize={10} fill={palette.tick} textAnchor="middle">
             {wk.slice(5)}
           </text>
         ))}
@@ -350,18 +361,19 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
         return (
           <div
             ref={tooltipRef}
-            style={{ position: 'absolute', left, top, pointerEvents: 'none', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}
+            className="rounded-sm border p-2 text-xs shadow-lg"
+            style={{ position: 'absolute', left, top, pointerEvents: 'none', background: palette.tooltipBg, borderColor: palette.tooltipBorder, color: palette.tooltipText }}
             role="tooltip"
           >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, background: hover.color, borderRadius: 2, display: 'inline-block' }} />
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: hover.color }} />
             <strong style={{ fontWeight: 600 }}>{hover.roleName}{hover.peopleCount != null ? ` (${hover.peopleCount})` : ''}</strong>
           </div>
-          <div style={{ color: 'var(--muted)' }}>{weekKeys[hover.i]}</div>
+          <div style={{ color: palette.tooltipMuted }}>{weekKeys[hover.i]}</div>
           <div>Demand: {Math.round(hover.rawDemand)}h, Assigned: {Math.round(hover.rawAssigned)}h</div>
           <div>Projected: {Math.round(hover.rawProjected)}h, Available: {Math.round(hover.availableHours)}h</div>
           <div>Demand: {Math.round(hover.pctDemand)}%, Available: {Math.round(hover.availablePct)}%</div>
-          <div style={{ marginTop: 4, color: 'var(--muted)' }}>Median available: {Math.round(hover.medianAvailableHours)}h, {Math.round(hover.medianAvailablePct)}%</div>
+          <div style={{ marginTop: 4, color: palette.tooltipMuted }}>Median available: {Math.round(hover.medianAvailableHours)}h, {Math.round(hover.medianAvailablePct)}%</div>
           </div>
         );
       })()}
@@ -370,16 +382,16 @@ export const MultiRoleCapacityChart: React.FC<MultiRoleCapacityChartProps> = ({ 
       {!hideLegend && (
         <div className="flex flex-wrap gap-3 mt-2">
           {seriesData.map((s) => (
-            <div key={s.roleId} className="flex items-center gap-2 text-xs text-[var(--text)]">
+            <div key={s.roleId} className="flex items-center gap-2 text-xs text-[var(--color-text-primary)]">
               <span style={{ background: roleColorForId(s.roleId), width: 12, height: 2, display: 'inline-block' }}></span>
               <span>{s.roleName}</span>
-              <span className="text-[var(--muted)]">(solid: {normalized ? '% assigned' : 'assigned'}, dotted: {normalized ? '% demand' : 'demand'}, dashed: {normalized ? '100% cap' : 'capacity'})</span>
+              <span className="text-[var(--color-text-secondary)]">(solid: {normalized ? '% assigned' : 'assigned'}, dotted: {normalized ? '% demand' : 'demand'}, dashed: {normalized ? '100% cap' : 'capacity'})</span>
             </div>
           ))}
         </div>
       )}
       {noData && (
-        <div className="text-[var(--muted)] mt-2">No data</div>
+        <div className="mt-2 text-[var(--color-text-secondary)]">No data</div>
       )}
     </div>
   );

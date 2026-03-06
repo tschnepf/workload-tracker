@@ -81,7 +81,7 @@ const PerformanceDashboard: React.FC = () => {
       case 'good': return 'text-emerald-400';
       case 'warning': return 'text-amber-400'; 
       case 'poor': return 'text-red-400';
-      default: return 'text-[#969696]';
+      default: return 'text-[var(--color-text-secondary)]';
     }
   };
 
@@ -90,7 +90,7 @@ const PerformanceDashboard: React.FC = () => {
       case 'good': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'warning': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
       case 'poor': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      default: return 'bg-[#3e3e42]/20 text-[#969696] border-[#3e3e42]/30';
+      default: return 'bg-[#3e3e42]/20 text-[var(--color-text-secondary)] border-[var(--color-border)]/30';
     }
   };
 
@@ -185,7 +185,7 @@ const PerformanceDashboard: React.FC = () => {
             
             return (
               <div key={metricName} className="text-center p-4 bg-[#3e3e42]/50 rounded-lg">
-                <div className="text-sm font-medium text-[#cccccc] mb-2">{metricName}</div>
+                <div className="text-sm font-medium text-[var(--color-text-primary)] mb-2">{metricName}</div>
                 
                 {latestMetric ? (
                   <>
@@ -195,7 +195,7 @@ const PerformanceDashboard: React.FC = () => {
                     <div className={`text-xs px-2 py-1 rounded border mt-2 inline-block ${getScoreBadgeColor(latestMetric.score)}`}>
                       {latestMetric.score}
                     </div>
-                    <div className="text-xs text-[#969696] mt-1">
+                    <div className="text-xs text-[var(--color-text-secondary)] mt-1">
                       Budget: {formatValue(metricName, budget.budget)}
                     </div>
                     {latestMetric.exceedsBudget && (
@@ -205,7 +205,7 @@ const PerformanceDashboard: React.FC = () => {
                     )}
                   </>
                 ) : (
-                  <div className="text-[#969696] text-sm">No data</div>
+                  <div className="text-[var(--color-text-secondary)] text-sm">No data</div>
                 )}
               </div>
             );
@@ -224,7 +224,7 @@ const PerformanceDashboard: React.FC = () => {
               <div key={index} className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded">
                 <div>
                   <div className="font-medium text-red-400">{violation.metric}</div>
-                  <div className="text-sm text-[#969696]">
+                  <div className="text-sm text-[var(--color-text-secondary)]">
                     {formatTimestamp(violation.timestamp)}
                   </div>
                 </div>
@@ -232,7 +232,7 @@ const PerformanceDashboard: React.FC = () => {
                   <div className="text-red-400 font-medium">
                     {formatValue(violation.metric, violation.value)}
                   </div>
-                  <div className="text-xs text-[#969696]">
+                  <div className="text-xs text-[var(--color-text-secondary)]">
                     Budget: {formatValue(violation.metric, violation.budget)}
                   </div>
                   <div className="text-xs text-red-300">
@@ -243,7 +243,7 @@ const PerformanceDashboard: React.FC = () => {
             ))}
             
             {violations.length > 10 && (
-              <div className="text-center text-[#969696] text-sm pt-3">
+              <div className="text-center text-[var(--color-text-secondary)] text-sm pt-3">
                 ... and {violations.length - 10} more violations
               </div>
             )}
@@ -257,18 +257,18 @@ const PerformanceDashboard: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#3e3e42]">
-                <th className="text-left py-2 text-[#cccccc]">Metric</th>
-                <th className="text-left py-2 text-[#cccccc]">Value</th>
-                <th className="text-left py-2 text-[#cccccc]">Score</th>
-                <th className="text-left py-2 text-[#cccccc]">Budget Status</th>
-                <th className="text-left py-2 text-[#cccccc]">Time</th>
+              <tr className="border-b border-[var(--color-border)]">
+                <th className="text-left py-2 text-[var(--color-text-primary)]">Metric</th>
+                <th className="text-left py-2 text-[var(--color-text-primary)]">Value</th>
+                <th className="text-left py-2 text-[var(--color-text-primary)]">Score</th>
+                <th className="text-left py-2 text-[var(--color-text-primary)]">Budget Status</th>
+                <th className="text-left py-2 text-[var(--color-text-primary)]">Time</th>
               </tr>
             </thead>
             <tbody>
               {metrics.slice(-20).reverse().map((metric, index) => (
-                <tr key={index} className="border-b border-[#3e3e42]/50">
-                  <td className="py-2 text-[#cccccc] font-medium">{metric.metric}</td>
+                <tr key={index} className="border-b border-[var(--color-border)]/50">
+                  <td className="py-2 text-[var(--color-text-primary)] font-medium">{metric.metric}</td>
                   <td className={`py-2 ${getScoreColor(metric.score)}`}>
                     {formatValue(metric.metric, metric.value)}
                   </td>
@@ -284,7 +284,7 @@ const PerformanceDashboard: React.FC = () => {
                       <span className="text-emerald-400 text-xs">Within budget</span>
                     )}
                   </td>
-                  <td className="py-2 text-[#969696] text-xs">
+                  <td className="py-2 text-[var(--color-text-secondary)] text-xs">
                     {formatTimestamp(metric.timestamp)}
                   </td>
                 </tr>

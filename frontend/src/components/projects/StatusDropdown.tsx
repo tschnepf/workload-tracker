@@ -130,7 +130,7 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className={`absolute top-full left-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded-lg shadow-lg z-50 min-w-[140px] py-1 ${className}`}
+      className={`absolute top-full left-0 mt-1 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 min-w-[140px] py-1 ${className}`}
       style={{
         contain: 'layout style paint',
         transform: 'translateZ(0)', // Force hardware acceleration
@@ -153,7 +153,7 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
             className={`
               w-full text-left px-3 py-2 text-xs transition-colors border-0 bg-transparent
               hover:bg-[#3e3e42] focus:bg-[#3e3e42] focus:outline-none
-              ${isSelected ? 'bg-[#007acc]/20 border-l-2 border-l-[#007acc]' : ''}
+              ${isSelected ? 'bg-[var(--color-action-primary)]/20 border-l-2 border-l-[#007acc]' : ''}
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
             onClick={(e) => {

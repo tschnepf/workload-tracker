@@ -6,9 +6,9 @@ const Bar: React.FC<{ w?: string; h?: string }>= ({ w = '100%', h = '12px' }) =>
 
 const ProjectsSkeleton: React.FC = () => {
   return (
-    <div className="h-full min-h-0 flex bg-[#1e1e1e]" role="status" aria-live="polite" aria-busy="true">
+    <div className="h-full min-h-0 flex bg-[var(--color-bg)]" role="status" aria-live="polite" aria-busy="true">
       {/* Left list */}
-      <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0 min-h-0 p-3">
+      <div className="w-1/2 border-r border-[var(--color-border)] flex flex-col min-w-0 min-h-0 p-3">
         <div className="mb-3 flex items-center justify-between">
           <Bar w="120px" h="18px" />
           <Bar w="60px" h="24px" />

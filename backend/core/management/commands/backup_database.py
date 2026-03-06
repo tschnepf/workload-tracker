@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from core.backup_config import resolve_backups_dir
 from core.backup_utils import (
     build_paths,
     sanitize_part,
@@ -131,7 +132,7 @@ class Command(BaseCommand):
             raise CommandError("DATABASE_URL not configured; cannot run pg_dump")
         env = _env_for_pg(dsn)
 
-        backups_dir = str(getattr(settings, "BACKUPS_DIR", "/backups"))
+        backups_dir = resolve_backups_dir()
         backups_dir_abs = os.path.abspath(backups_dir)
         os.makedirs(backups_dir_abs, exist_ok=True)
         if not (os.access(backups_dir_abs, os.W_OK) and os.access(backups_dir_abs, os.X_OK)):

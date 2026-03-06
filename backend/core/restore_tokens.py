@@ -6,16 +6,18 @@ from typing import Any
 from django.conf import settings
 from django.core import signing
 
+from core.backup_config import resolve_backups_dir
+
 TOKEN_SALT = 'core.restore.job.token'
 
 
 def is_restore_mode_active() -> bool:
-    lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
+    lock_path = os.path.join(resolve_backups_dir(), '.restore.lock')
     return os.path.exists(lock_path)
 
 
 def _restore_session_value() -> str | None:
-    lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
+    lock_path = os.path.join(resolve_backups_dir(), '.restore.lock')
     if not os.path.exists(lock_path):
         return None
     try:

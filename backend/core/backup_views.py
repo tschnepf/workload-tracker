@@ -4,6 +4,7 @@ import os
 import time
 from typing import Optional
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from django.http import FileResponse
 from rest_framework.generics import GenericAPIView
@@ -14,9 +15,13 @@ from rest_framework.throttling import ScopedRateThrottle
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse, OpenApiTypes
 
 from django.conf import settings
+from django.utils import timezone
 
+from .backup_config import set_runtime_backups_dir
+from .backup_schedule import next_scheduled_run
 from .backup_service import BackupService
 from .job_access import JobAccessRegistrationError, enqueue_user_facing_task
+from .models import BackupAutomationSettings
 from .restore_tokens import issue_restore_job_token
 
 
@@ -57,6 +62,10 @@ BackupStatusSerializer = inline_serializer(
         'policy': serializers.CharField(),
         'encryptionEnabled': serializers.BooleanField(),
         'encryptionProvider': serializers.CharField(allow_null=True, required=False),
+        'lastAutomaticBackupAt': serializers.CharField(allow_null=True, required=False),
+        'nextAutomaticBackupAt': serializers.CharField(allow_null=True, required=False),
+        'automaticBackupsEnabled': serializers.BooleanField(required=False),
+        'backupsDir': serializers.CharField(required=False),
     },
 )
 
@@ -83,6 +92,76 @@ BackupDeleteResponseSerializer = inline_serializer(
     name='BackupDeleteResponse',
     fields={'deleted': serializers.BooleanField()},
 )
+
+
+class BackupAutomationSettingsSerializer(serializers.ModelSerializer):
+    enabled = serializers.BooleanField()
+    scheduleType = serializers.ChoiceField(
+        source='schedule_type',
+        choices=[choice[0] for choice in BackupAutomationSettings.SCHEDULE_CHOICES],
+    )
+    scheduleDayOfWeek = serializers.IntegerField(source='schedule_day_of_week', min_value=0, max_value=6, required=False)
+    scheduleDayOfMonth = serializers.IntegerField(source='schedule_day_of_month', min_value=1, max_value=31, required=False)
+    scheduleHour = serializers.IntegerField(source='schedule_hour', min_value=0, max_value=23)
+    scheduleMinute = serializers.IntegerField(source='schedule_minute', min_value=0, max_value=59)
+    scheduleTimezone = serializers.CharField(source='schedule_timezone')
+    backupsDir = serializers.CharField(source='backups_dir')
+    retentionDaily = serializers.IntegerField(source='retention_daily', min_value=1, max_value=365)
+    retentionWeekly = serializers.IntegerField(source='retention_weekly', min_value=1, max_value=104)
+    retentionMonthly = serializers.IntegerField(source='retention_monthly', min_value=1, max_value=240)
+    lastAutomaticBackupAt = serializers.DateTimeField(source='last_automatic_backup_at', allow_null=True, required=False, read_only=True)
+    lastAutomaticBackupFilename = serializers.CharField(source='last_automatic_backup_filename', read_only=True)
+    nextAutomaticBackupAt = serializers.SerializerMethodField(read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = BackupAutomationSettings
+        fields = [
+            'enabled',
+            'scheduleType',
+            'scheduleDayOfWeek',
+            'scheduleDayOfMonth',
+            'scheduleHour',
+            'scheduleMinute',
+            'scheduleTimezone',
+            'backupsDir',
+            'retentionDaily',
+            'retentionWeekly',
+            'retentionMonthly',
+            'lastAutomaticBackupAt',
+            'lastAutomaticBackupFilename',
+            'nextAutomaticBackupAt',
+            'updatedAt',
+        ]
+
+    def get_nextAutomaticBackupAt(self, obj):
+        if not bool(getattr(obj, 'enabled', True)):
+            return None
+        return next_scheduled_run(obj, now_utc=timezone.now())
+
+    def validate_scheduleTimezone(self, value):
+        tz_name = str(value or '').strip()
+        if not tz_name:
+            raise serializers.ValidationError('Timezone is required.')
+        try:
+            ZoneInfo(tz_name)
+        except Exception:
+            raise serializers.ValidationError('Invalid timezone.')
+        return tz_name
+
+    def validate_backupsDir(self, value):
+        path = os.path.abspath(str(value or '').strip())
+        if not path:
+            raise serializers.ValidationError('Backup location is required.')
+        if not os.path.isabs(path):
+            raise serializers.ValidationError('Backup location must be an absolute path.')
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception:
+            raise serializers.ValidationError('Backup location could not be created.')
+        if not (os.access(path, os.W_OK) and os.access(path, os.X_OK)):
+            raise serializers.ValidationError('Backup location must be writable by the backend service.')
+        return path
 
 # Celery availability check
 try:  # pragma: no cover - defensive import
@@ -191,6 +270,53 @@ class BackupStatusView(GenericAPIView):
     def get(self, request):
         svc = BackupService()
         return Response(svc.get_status())
+
+
+class BackupAutomationSettingsView(GenericAPIView):
+    permission_classes = [IsAdminUser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'backup_status'
+
+    @extend_schema(responses=BackupAutomationSettingsSerializer)
+    def get(self, request):
+        obj = BackupAutomationSettings.get_active()
+        if obj.backups_dir:
+            set_runtime_backups_dir(obj.backups_dir)
+        return Response(BackupAutomationSettingsSerializer(obj).data)
+
+    @extend_schema(request=BackupAutomationSettingsSerializer, responses=BackupAutomationSettingsSerializer)
+    def put(self, request):
+        obj = BackupAutomationSettings.get_active()
+        ser = BackupAutomationSettingsSerializer(instance=obj, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+
+        if obj.backups_dir:
+            set_runtime_backups_dir(obj.backups_dir)
+        obj.next_automatic_backup_at = next_scheduled_run(obj, now_utc=timezone.now())
+        obj.save(update_fields=['next_automatic_backup_at', 'updated_at'])
+
+        try:
+            from accounts.models import AdminAuditLog  # type: ignore
+
+            AdminAuditLog.objects.create(
+                actor=getattr(request, 'user', None),
+                action='backup_automation_settings_update',
+                detail={
+                    'enabled': bool(obj.enabled),
+                    'scheduleType': obj.schedule_type,
+                    'backupsDir': obj.backups_dir,
+                    'retention': {
+                        'daily': int(obj.retention_daily),
+                        'weekly': int(obj.retention_weekly),
+                        'monthly': int(obj.retention_monthly),
+                    },
+                },
+            )
+        except Exception:  # nosec B110
+            pass
+
+        return Response(BackupAutomationSettingsSerializer(obj).data)
 
 
 class BackupDownloadView(GenericAPIView):

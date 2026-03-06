@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { darkTheme } from '../../theme/tokens';
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
 
 interface ModalProps {
   isOpen: boolean;
@@ -7,9 +8,10 @@ interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
   width?: number | string;
+  footer?: React.ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children, width = 900 }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children, width = 900, footer }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,33 +44,30 @@ const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children, width =
       <div
         ref={dialogRef}
         tabIndex={-1}
-        style={{
-          width, maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto',
-          background: darkTheme.colors.background.secondary,
-          color: darkTheme.colors.text.primary,
-          borderRadius: darkTheme.borderRadius.lg,
-          border: `1px solid ${darkTheme.colors.border.primary}`,
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-        }}
+        className="flex max-h-[90vh] flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] shadow-[var(--elevation-3)]"
+        style={{ width, maxWidth: '95vw' }}
       >
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: darkTheme.spacing.md, borderBottom: `1px solid ${darkTheme.colors.border.secondary}`
-        }}>
-          <div style={{ fontWeight: 600 }}>{title}</div>
-          <button onClick={onClose} style={{
-            color: darkTheme.colors.text.secondary,
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            padding: darkTheme.spacing.xs
-          }} aria-label="Close">✕</button>
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+          <div className="font-semibold">{title}</div>
+          <IconButton label="Close dialog" onClick={onClose} size="sm">
+            <span aria-hidden="true">✕</span>
+          </IconButton>
         </div>
-        <div style={{ padding: darkTheme.spacing.md }}>
+        <div className="overflow-auto p-4">
           {children}
         </div>
+        {footer ? (
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-4 py-3">
+            {footer}
+          </div>
+        ) : (
+          <div className="flex items-center justify-end border-t border-[var(--color-border)] px-4 py-3">
+            <Button variant="ghost" onClick={onClose}>Close</Button>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default Modal;
-

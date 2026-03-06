@@ -1,7 +1,25 @@
 export type Mode = 'light' | 'dark' | 'system';
+export type ColorScheme = 'default' | 'light' | 'sky' | 'midnight' | 'navy' | 'triad';
 
 const MODE_KEY = 'theme';
 const SCHEME_KEY = 'colorScheme';
+const ALLOWED_SCHEMES: Set<ColorScheme> = new Set([
+  'default',
+  'light',
+  'sky',
+  'midnight',
+  'navy',
+  'triad',
+]);
+
+export const COLOR_SCHEME_OPTIONS: ReadonlyArray<{ value: ColorScheme; label: string }> = [
+  { value: 'default', label: 'Default' },
+  { value: 'light', label: 'Light' },
+  { value: 'navy', label: 'Navy' },
+  { value: 'triad', label: 'Triad' },
+  { value: 'midnight', label: 'Midnight' },
+  { value: 'sky', label: 'Sky' },
+];
 
 function root(): HTMLElement {
   return document.documentElement;
@@ -21,13 +39,26 @@ export function setMode(mode: Mode): void {
   applyMode(mode);
 }
 
-export function getColorScheme(): string {
-  try { return (localStorage.getItem(SCHEME_KEY) || 'default'); } catch { return 'default'; }
+function normalizeScheme(value?: string | null): ColorScheme {
+  let scheme = (value || 'default').toLowerCase();
+  // Backward-compat aliases and removals
+  if (scheme === 'smc-navy') scheme = 'navy';
+  if (scheme === 'steel-cyan' || scheme === 'topbar') scheme = 'default';
+  return (ALLOWED_SCHEMES.has(scheme as ColorScheme) ? (scheme as ColorScheme) : 'default');
+}
+
+export function getColorScheme(): ColorScheme {
+  try {
+    return normalizeScheme(localStorage.getItem(SCHEME_KEY));
+  } catch {
+    return 'default';
+  }
 }
 
 export function setColorScheme(name: string): void {
-  try { localStorage.setItem(SCHEME_KEY, name); } catch {}
-  applyScheme(name);
+  const next = normalizeScheme(name);
+  try { localStorage.setItem(SCHEME_KEY, next); } catch {}
+  applyScheme(next);
 }
 
 export function applyMode(mode?: Mode): void {
@@ -41,10 +72,7 @@ export function applyMode(mode?: Mode): void {
 
 export function applyScheme(name?: string): void {
   const el = root();
-  let scheme = (name || getColorScheme() || 'default').toLowerCase();
-  // Backward-compat aliases and removals
-  if (scheme === 'smc-navy') scheme = 'navy';
-  if (scheme === 'steel-cyan' || scheme === 'topbar') scheme = 'default';
+  const scheme = normalizeScheme(name || getColorScheme());
   // Remove any previous theme-* classes
   Array.from(el.classList).forEach(cls => {
     if (cls.startsWith('theme-')) el.classList.remove(cls);

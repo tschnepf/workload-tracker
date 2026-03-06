@@ -45,7 +45,7 @@ import {
   NetworkGraphBootstrapResponse,
   NetworkGraphDefaults,
 } from '@/types/models';
-import type { BackupListResponse, BackupStatus } from '@/types/backup';
+import type { BackupAutomationSettings, BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
 import { resolveApiBase } from '@/utils/apiBase';
 import { apiClient, authHeaders } from '@/api/client';
@@ -2364,6 +2364,28 @@ export const backupApi = {
     if (!res.data) {
       const status = res.response?.status ?? 500;
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
+  // Automatic backup scheduler settings
+  getBackupAutomationSettings: async (): Promise<BackupAutomationSettings> => {
+    const res = await apiClient.GET('/backups/settings/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as any;
+  },
+
+  updateBackupAutomationSettings: async (payload: Partial<BackupAutomationSettings>): Promise<BackupAutomationSettings> => {
+    const res = await apiClient.PUT('/backups/settings/' as any, {
+      body: payload as any,
+      headers: authHeaders(),
+    });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, res.error, `HTTP ${status}`), status);
     }
     return res.data as any;
   },

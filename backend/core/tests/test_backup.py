@@ -181,6 +181,48 @@ class BackupAPITests(TestCase):
             r = self.client.get('/api/backups/status/')
             self.assertEqual(r.status_code, 200)
             self.assertTrue(r.json()['retentionOk'])
+            self.assertIn('lastAutomaticBackupAt', r.json())
+            self.assertIn('nextAutomaticBackupAt', r.json())
+            self.assertIn('backupsDir', r.json())
+
+    def test_backup_settings_get_put(self):
+        with override_settings(BACKUPS_DIR=self.tmpdir):
+            self._admin_login()
+
+            get_resp = self.client.get('/api/backups/settings/')
+            self.assertEqual(get_resp.status_code, 200)
+            payload = get_resp.json()
+            self.assertEqual(payload['scheduleType'], 'daily')
+            self.assertEqual(payload['retentionDaily'], 7)
+            self.assertEqual(payload['retentionWeekly'], 4)
+            self.assertEqual(payload['retentionMonthly'], 12)
+
+            new_dir = os.path.join(self.tmpdir, 'custom')
+            put_resp = self.client.put(
+                '/api/backups/settings/',
+                data=json.dumps({
+                    'enabled': True,
+                    'scheduleType': 'weekly',
+                    'scheduleDayOfWeek': 5,
+                    'scheduleHour': 3,
+                    'scheduleMinute': 30,
+                    'scheduleTimezone': 'America/Phoenix',
+                    'backupsDir': new_dir,
+                    'retentionDaily': 7,
+                    'retentionWeekly': 4,
+                    'retentionMonthly': 12,
+                }),
+                content_type='application/json',
+            )
+            self.assertEqual(put_resp.status_code, 200)
+            updated = put_resp.json()
+            self.assertEqual(updated['scheduleType'], 'weekly')
+            self.assertEqual(updated['scheduleDayOfWeek'], 5)
+            self.assertEqual(updated['scheduleHour'], 3)
+            self.assertEqual(updated['scheduleMinute'], 30)
+            self.assertEqual(updated['scheduleTimezone'], 'America/Phoenix')
+            self.assertEqual(updated['backupsDir'], os.path.abspath(new_dir))
+            self.assertTrue(os.path.isdir(new_dir))
 
     @override_settings()
     def test_create_backup_enqueues_job_and_throttle(self):

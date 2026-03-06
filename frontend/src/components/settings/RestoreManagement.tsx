@@ -37,7 +37,7 @@ function PhaseIndicator({ state, message }: { state: string; message?: string | 
     <div className="flex items-center gap-2 text-xs">
       {steps.map((s, i) => (
         <div key={s} className="flex items-center gap-2">
-          <span className={`${i <= activeIdx ? 'text-[#cccccc]' : 'text-[#969696]'}`}>{s}</span>
+          <span className={`${i <= activeIdx ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>{s}</span>
           {i < steps.length - 1 && <span className="text-[#3e3e42]">→</span>}
         </div>
       ))}
@@ -170,20 +170,20 @@ const RestoreManagement: React.FC = () => {
         {/* Options */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div>
-            <label className="block text-sm text-[#969696] mb-1">Parallel jobs (pg_restore)</label>
+            <label className="block text-sm text-[var(--color-text-secondary)] mb-1">Parallel jobs (pg_restore)</label>
             <input
               type="number"
               min={2}
               max={4}
               value={jobs}
               onChange={(e) => setJobs(Math.max(2, Math.min(4, Number((e.target as HTMLInputElement).value) || 2)))}
-              className="w-full bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-3 py-2 min-h-[44px]"
+              className="w-full bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-3 py-2 min-h-[44px]"
             />
-            <div className="text-xs text-[#969696] mt-1">Use 2–4 threads for most databases. Higher values may not improve performance and can increase load.</div>
+            <div className="text-xs text-[var(--color-text-secondary)] mt-1">Use 2–4 threads for most databases. Higher values may not improve performance and can increase load.</div>
           </div>
           <div className="flex items-center gap-2 mt-6">
             <input id="rm-migrate" type="checkbox" checked={migrate} onChange={(e) => setMigrate((e.target as HTMLInputElement).checked)} />
-            <label htmlFor="rm-migrate" className="text-sm text-[#cccccc]">Run migrations after restore if needed</label>
+            <label htmlFor="rm-migrate" className="text-sm text-[var(--color-text-primary)]">Run migrations after restore if needed</label>
           </div>
         </div>
 
@@ -196,7 +196,7 @@ const RestoreManagement: React.FC = () => {
         ) : (
           <div className="overflow-auto">
             <table className="min-w-full text-sm text-left">
-              <thead className="text-[#969696]">
+              <thead className="text-[var(--color-text-secondary)]">
                 <tr>
                   <th className="py-2 pr-4">Date</th>
                   <th className="py-2 pr-4">Filename</th>
@@ -204,12 +204,12 @@ const RestoreManagement: React.FC = () => {
                   <th className="py-2 pr-4">Action</th>
                 </tr>
               </thead>
-              <tbody className="text-[#cccccc]">
+              <tbody className="text-[var(--color-text-primary)]">
                 {items.map(b => {
                   const dt = b.createdAt ? new Date(b.createdAt) : null;
                   const when = dt ? dt.toLocaleString() : '-';
                   return (
-                    <tr key={b.id} className="border-t border-[#3e3e42]">
+                    <tr key={b.id} className="border-t border-[var(--color-border)]">
                       <td className="py-2 pr-4 whitespace-nowrap">{when}</td>
                       <td className="py-2 pr-4">
                         <div className="font-mono break-all">{b.filename}</div>
@@ -228,11 +228,11 @@ const RestoreManagement: React.FC = () => {
 
         {/* Active job status */}
         {activeJob && (
-          <div className="mt-4 p-3 rounded border border-[#3e3e42] bg-[#252526]">
-            <div className="text-sm text-[#cccccc] mb-1">Restoring: <span className="font-mono">{activeJob.target || activeJob.jobId}</span></div>
-            <div className="text-xs text-[#969696] mb-2">State: {activeJob.state}{activeJob.progress != null ? ` (${activeJob.progress}%)` : ''}</div>
+          <div className="mt-4 p-3 rounded border border-[var(--color-border)] bg-[#252526]">
+            <div className="text-sm text-[var(--color-text-primary)] mb-1">Restoring: <span className="font-mono">{activeJob.target || activeJob.jobId}</span></div>
+            <div className="text-xs text-[var(--color-text-secondary)] mb-2">State: {activeJob.state}{activeJob.progress != null ? ` (${activeJob.progress}%)` : ''}</div>
             <PhaseIndicator state={activeJob.state} message={activeJob.message} />
-            {activeJob.message && (<div className="text-xs text-[#969696] mt-2">{activeJob.message}</div>)}
+            {activeJob.message && (<div className="text-xs text-[var(--color-text-secondary)] mt-2">{activeJob.message}</div>)}
             <div className="mt-2"><Button variant="ghost" size="sm" onClick={() => setActiveJob(null)}>Dismiss</Button></div>
           </div>
         )}
@@ -245,12 +245,12 @@ const RestoreManagement: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div className="sm:col-span-2">
-            <label className="block text-sm text-[#969696] mb-1">Backup file (.pgcustom or .sql.gz)</label>
+            <label className="block text-sm text-[var(--color-text-secondary)] mb-1">Backup file (.pgcustom or .sql.gz)</label>
             <input
               type="file"
               accept=".pgcustom,.sql.gz"
               onChange={(e) => setUploadFile(((e.target as HTMLInputElement).files?.[0]) || null)}
-              className="w-full text-sm text-[#cccccc]"
+              className="w-full text-sm text-[var(--color-text-primary)]"
             />
           </div>
           <div className="flex items-end">
@@ -259,7 +259,7 @@ const RestoreManagement: React.FC = () => {
         </div>
 
         {uploadFile && (
-          <div className="text-xs text-[#969696]">Selected: <span className="font-mono">{uploadFile.name}</span></div>
+          <div className="text-xs text-[var(--color-text-secondary)]">Selected: <span className="font-mono">{uploadFile.name}</span></div>
         )}
       </Card>
     </div>

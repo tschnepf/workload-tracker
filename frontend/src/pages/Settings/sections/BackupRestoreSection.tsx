@@ -1,5 +1,6 @@
 import React from 'react';
 import BackupOverview from '@/components/settings/BackupOverview';
+import BackupAutomationSettings from '@/components/settings/BackupAutomationSettings';
 import BackupManagement from '@/components/settings/BackupManagement';
 import RestoreManagement from '@/components/settings/RestoreManagement';
 import { useSettingsData } from '../SettingsDataContext';
@@ -19,6 +20,7 @@ const BackupRestoreSection: React.FC = () => {
       className="mt-6"
     >
       <div className="grid grid-cols-1 gap-6">
+        <BackupAutomationSettings />
         <BackupOverview />
         <BackupManagement />
         <RestoreManagement />

@@ -15,6 +15,7 @@ import { startViewTransition, supportsViewTransitions } from '@/utils/viewTransi
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { setPendingPath, useNavFeedback } from '@/lib/navFeedback';
 import { isAdminOrManager, isAdminUser } from '@/utils/roleAccess';
+import IconButton from '@/components/ui/IconButton';
 
 // Reusable Icon Component for navigation
 const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type: string, className?: string, isActive?: boolean }) => {
@@ -202,10 +203,18 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
 // Tooltips render via portal for menu items so they never get clipped by the scrollbox
 
 type SidebarProps = {
-  showLabels?: boolean; // When true, render text labels next to icons (used for mobile drawer)
+  showLabels?: boolean;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+  hideCollapseToggle?: boolean;
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  showLabels = false,
+  expanded = false,
+  onToggleExpanded,
+  hideCollapseToggle = false,
+}) => {
   const location = useLocation();
   const nav = useNavigation();
   const { pendingPath: localPendingPath } = useNavFeedback();
@@ -346,12 +355,14 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
     return false;
   };
 
-  const widthClass = showLabels ? 'w-64' : 'w-16';
-  const linkLayoutClass = showLabels ? 'justify-start gap-3 w-full' : 'justify-center';
+  const labelsVisible = showLabels || expanded;
+  const widthClass = labelsVisible ? 'w-56' : 'w-16';
+  const linkLayoutClass = labelsVisible ? 'items-center justify-start gap-3 w-full' : 'items-center justify-center w-full';
 
   const renderNavItems = (items: Array<{ path: string; icon: string; label: string; description?: string }>) => (
     items.map((item) => (
-      <TooltipPortal key={item.path} title={item.label} description={item.description}>
+      <div key={item.path} className="w-full">
+        <TooltipPortal title={item.label} description={item.description}>
         <Link
           to={item.path}
           onMouseEnter={() => {
@@ -383,12 +394,12 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
             startViewTransition(() => navigate(item.path)).catch(() => navigate(item.path));
           }}
           aria-current={isActive(item.path) ? 'page' : undefined}
-          aria-label={!showLabels ? item.label : undefined}
+          aria-label={!labelsVisible ? item.label : undefined}
           className={`
-            group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
+            group flex rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
             ${isActive(item.path) 
-              ? 'bg-[var(--primary)]/10 border-r-2 border-[var(--primary)] text-[var(--primary)]' 
-              : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+              ? 'bg-[var(--surfaceHover)] border-l-2 border-[var(--color-action-primary)] text-[var(--color-action-primary)]' 
+              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)]'
             }
           `}
         >
@@ -399,38 +410,63 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
               isActive={isActive(item.path)}
             />
           </div>
-          {showLabels && (
-            <span className="text-[var(--text)] text-sm">{item.label}</span>
+          {labelsVisible && (
+            <span className="truncate text-sm text-[var(--color-text-primary)]">{item.label}</span>
           )}
         </Link>
       </TooltipPortal>
+      </div>
     ))
   );
 
   return (
-    <div className={`bg-[var(--surface)] border-r border-[var(--border)] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
+    <div className={`bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-shrink-0 ${widthClass} h-screen flex flex-col z-10`}>
 
       {/* Header */}
-      <div className="h-16 flex items-center relative flex-shrink-0">
+      <div className="h-16 flex items-center relative flex-shrink-0 border-b border-[var(--color-border)]">
         <TooltipPortal title="Workload Tracker" description="Resource Management System">
-          {/* Match nav icon alignment: center within px-3 gutter */}
-          <div className="w-full h-full flex items-center">
-            <div className="w-full px-3 flex items-center justify-center">
+          <div className="flex h-full w-full items-center px-3">
+            <div className={`flex min-w-0 items-center ${labelsVisible ? 'gap-3 justify-start' : 'justify-center w-full'}`}>
               {!logoError ? (
                 <img
                   src="/brand/SMC-TRIANGLE.png"
                   alt="Brand"
-                  className="w-8 h-8 block object-contain mx-auto relative left-[3px]"
+                  className="h-8 w-8 object-contain"
                   onError={() => setLogoError(true)}
                 />
               ) : (
-                <div className="w-8 h-8 bg-[var(--primary)] rounded flex items-center justify-center mx-auto relative left-[3px]">
+                <div className="h-8 w-8 rounded bg-[var(--color-action-primary)] flex items-center justify-center">
                   <span className="text-white text-sm leading-8 font-bold">WT</span>
                 </div>
               )}
+              {labelsVisible ? <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">Workload Tracker</span> : null}
             </div>
           </div>
         </TooltipPortal>
+        {!hideCollapseToggle ? (
+          <div className={labelsVisible ? 'absolute right-2 top-2' : 'absolute right-0.5 top-0.5'}>
+            <IconButton
+              label={labelsVisible ? 'Collapse navigation' : 'Expand navigation'}
+              size="sm"
+              className={`${!labelsVisible ? 'h-6 w-6 ' : ''}border-0 shadow-none`}
+              onClick={onToggleExpanded}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                {labelsVisible ? (
+                  <>
+                    <line x1="15" y1="6" x2="9" y2="12" />
+                    <line x1="15" y1="18" x2="9" y2="12" />
+                  </>
+                ) : (
+                  <>
+                    <line x1="9" y1="6" x2="15" y2="12" />
+                    <line x1="9" y1="18" x2="15" y2="12" />
+                  </>
+                )}
+              </svg>
+            </IconButton>
+          </div>
+        ) : null}
       </div>
 
       {/* Scrollable middle: Navigation Menu */}
@@ -440,22 +476,22 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
           {renderNavItems(primaryItems)}
         </div>
 
-        <div className="my-4 mx-6 border-t border-[var(--border)]" />
+        <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
         <div className="space-y-1 px-3">
           {renderNavItems(workloadItems)}
         </div>
 
-        <div className="my-4 mx-6 border-t border-[var(--border)]" />
+        <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
         <div className="space-y-1 px-3">
           {renderNavItems(orgItems)}
         </div>
 
-        <div className="my-4 mx-6 border-t border-[var(--border)]" />
+        <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
         <div className="space-y-1 px-3">
           {renderNavItems(settingsItems)}
         </div>
 
-        <div className="my-4 mx-6 border-t border-[var(--border)]" />
+        <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
         <div className="space-y-1 px-3">
           {renderNavItems(extraItems)}
         </div>
@@ -463,8 +499,9 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
       </div>
 
       {/* Bottom Section (pinned) */}
-      <div className="px-3 space-y-1 py-4 border-t border-[var(--border)] flex-shrink-0">
+      <div className="px-3 space-y-1 py-4 border-t border-[var(--color-border)] flex-shrink-0">
         {/* User Profile */}
+        <div className="w-full">
         <TooltipPortal title="User Profile" description="Account settings">
           <Link
             to="/profile"
@@ -494,22 +531,24 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
               startViewTransition(() => navigate('/profile')).catch(() => navigate('/profile'));
             }}
             aria-current={isActive('/profile') ? 'page' : undefined}
-            aria-label={!showLabels ? 'Profile' : undefined}
-            className={`flex items-center rounded-md hover:bg-[var(--surfaceHover)] cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+            aria-label={!labelsVisible ? 'Profile' : undefined}
+            className={`flex rounded-md hover:bg-[var(--surfaceHover)] cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
           >
-            <div className="w-6 h-6 bg-[var(--primary)] rounded-full flex items-center justify-center flex-shrink-0">
+            <div className="w-6 h-6 bg-[var(--color-action-primary)] rounded-full flex items-center justify-center flex-shrink-0">
               <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
             </div>
-            {showLabels && (
-              <span className="text-[var(--text)] text-sm">Profile</span>
+            {labelsVisible && (
+              <span className="text-sm text-[var(--color-text-primary)]">Profile</span>
             )}
           </Link>
         </TooltipPortal>
+        </div>
 
         {/* Help */}
+        <div className="w-full">
         <TooltipPortal title="Help & Support" description="Documentation and assistance">
           <Link
             to="/help"
@@ -539,17 +578,18 @@ const Sidebar: React.FC<SidebarProps> = ({ showLabels = false }) => {
               startViewTransition(() => navigate('/help')).catch(() => navigate('/help'));
             }}
             aria-current={isActive('/help') ? 'page' : undefined}
-            aria-label={!showLabels ? 'Help' : undefined}
-            className={`flex items-center rounded-md text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+            aria-label={!labelsVisible ? 'Help' : undefined}
+            className={`flex rounded-md text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)] transition-colors px-3 py-2.5 ${linkLayoutClass}`}
           >
             <div className="flex-shrink-0">
               <IconComponent type="help" className="w-4 h-4" />
             </div>
-            {showLabels && (
-              <span className="text-[var(--text)] text-sm">Help</span>
+            {labelsVisible && (
+              <span className="text-sm text-[var(--color-text-primary)]">Help</span>
             )}
           </Link>
         </TooltipPortal>
+        </div>
       </div>
     </div>
   );

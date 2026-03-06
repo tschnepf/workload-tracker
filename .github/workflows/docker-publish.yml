@@ -88,6 +88,9 @@ jobs:
         run: |
           set -euo pipefail
           npx tsc --noEmit 2>&1 | tee ts-errors.txt
+      - name: UI hardcoded guardrail
+        working-directory: frontend
+        run: npm run -s check:ui-hardcoded
       - name: Upload TS diagnostics (on failure)
         if: failure()
         uses: actions/upload-artifact@v4

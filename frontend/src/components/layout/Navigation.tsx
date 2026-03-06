@@ -11,11 +11,11 @@ const Navigation: React.FC = () => {
   
   // VSCode-style dark theme navigation styling - maintain consistency
   const navStyles = {
-    container: 'bg-[#2d2d30] border-b border-[#3e3e42] shadow-sm',
+    container: 'bg-[var(--color-surface-elevated)] border-b border-[var(--color-border)] shadow-sm',
     inner: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
-    logo: 'text-xl font-bold text-[#cccccc]',
+    logo: 'text-xl font-bold text-[var(--color-text-primary)]',
     links: 'flex space-x-8',
-    link: 'text-[#969696] hover:text-[#cccccc] px-3 py-2 text-sm font-medium transition-colors',
+    link: 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] px-3 py-2 text-sm font-medium transition-colors',
     activeLink: 'text-[#007acc] hover:text-[#1e90ff] px-3 py-2 text-sm font-medium'
   };
 

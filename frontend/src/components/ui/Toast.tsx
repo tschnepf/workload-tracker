@@ -37,27 +37,27 @@ const Toast: React.FC<ToastProps> = ({
     switch (type) {
       case 'success':
         return {
-          border: 'border-emerald-400/40',
-          background: 'bg-emerald-500/10',
-          text: 'text-emerald-300'
+          border: 'border-[var(--color-state-success)]',
+          background: { backgroundColor: 'color-mix(in srgb, var(--color-state-success) 16%, transparent)' },
+          text: 'text-[var(--color-text-primary)]'
         };
       case 'warning':
         return {
-          border: 'border-orange-400/40',
-          background: 'bg-orange-500/10', 
-          text: 'text-orange-300'
+          border: 'border-[var(--color-state-warning)]',
+          background: { backgroundColor: 'color-mix(in srgb, var(--color-state-warning) 16%, transparent)' },
+          text: 'text-[var(--color-text-primary)]'
         };
       case 'error':
         return {
-          border: 'border-red-400/40',
-          background: 'bg-red-500/10',
-          text: 'text-red-300'
+          border: 'border-[var(--color-state-danger)]',
+          background: { backgroundColor: 'color-mix(in srgb, var(--color-state-danger) 16%, transparent)' },
+          text: 'text-[var(--color-text-primary)]'
         };
       default:
         return {
-          border: 'border-blue-400/40',
-          background: 'bg-blue-500/10',
-          text: 'text-blue-300'
+          border: 'border-[var(--color-state-info)]',
+          background: { backgroundColor: 'color-mix(in srgb, var(--color-state-info) 16%, transparent)' },
+          text: 'text-[var(--color-text-primary)]'
         };
     }
   };
@@ -73,12 +73,12 @@ const Toast: React.FC<ToastProps> = ({
     >
       <div className={`
         relative rounded-xl px-4 py-4 pr-10 min-w-[320px] max-w-[400px]
-        bg-[#2d2d30] backdrop-blur-md
+        bg-[var(--color-surface-elevated)] backdrop-blur-md
         border ${styles.border}
-        shadow-2xl shadow-black/30
-        ${styles.background}
+        shadow-[var(--elevation-3)]
         transition-all duration-200 motion-reduce:transition-none hover:shadow-3xl
-      `}>
+      `}
+      style={styles.background}>
         {/* Content */}
         <div className="space-y-2">
           <div className={`text-sm font-medium leading-5 ${styles.text}`}>
@@ -104,12 +104,12 @@ const Toast: React.FC<ToastProps> = ({
         {/* Close Button */}
         <button
           onClick={onDismiss}
-          className={`
+            className={`
             absolute top-3 right-3 w-6 h-6 rounded-full 
             flex items-center justify-center
             ${styles.text} opacity-60 hover:opacity-100 
             hover:bg-white/10 transition-all duration-200
-            focus:outline-none focus:ring-2 focus:ring-white/20
+            focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]
           `}
           aria-label="Dismiss notification"
         >

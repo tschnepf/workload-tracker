@@ -1,6 +1,7 @@
 import React from 'react';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useVerticals } from '@/hooks/useVerticals';
+import Select from '@/components/ui/Select';
 
 type Props = {
   expand?: boolean;
@@ -13,12 +14,12 @@ export const GlobalVerticalFilter: React.FC<Props> = ({ expand = false }) => {
   const value = state.selectedVerticalId ?? '';
 
   return (
-    <div className={`flex items-center ${expand ? 'min-w-0 flex-1' : 'flex-none'}`}>
-      <select
+    <div className={`flex min-w-0 items-center ${expand ? 'flex-1' : 'flex-none'}`}>
+      <Select
         aria-label="Global vertical filter"
         value={value}
         onChange={(e) => {
-          const next = e.target.value;
+          const next = (e.target as HTMLSelectElement).value;
           if (!next) {
             clearVertical();
             return;
@@ -26,7 +27,8 @@ export const GlobalVerticalFilter: React.FC<Props> = ({ expand = false }) => {
           setVertical(Number(next));
         }}
         disabled={isLoading}
-        className={`h-10 bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] ${expand ? 'min-w-[140px]' : 'w-[110px] sm:w-[140px]'}`}
+        size="sm"
+        className={`${expand ? 'min-w-[180px] flex-1' : 'w-[140px] sm:w-[190px]'}`}
       >
         <option value="">{isLoading ? 'Loading…' : 'All Verticals'}</option>
         {verticals.map((v) => (
@@ -34,7 +36,7 @@ export const GlobalVerticalFilter: React.FC<Props> = ({ expand = false }) => {
             {v.shortName ? `${v.name} (${v.shortName})` : v.name}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 };

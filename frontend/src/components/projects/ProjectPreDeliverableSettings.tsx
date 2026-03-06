@@ -59,11 +59,11 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
   if (!projectId) return null;
 
   return (
-    <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
+    <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-[#cccccc] font-semibold">Pre-Deliverable Settings</div>
-          <div className="text-[#969696] text-sm">Override global defaults for this project</div>
+          <div className="text-[var(--color-text-primary)] font-semibold">Pre-Deliverable Settings</div>
+          <div className="text-[var(--color-text-secondary)] text-sm">Override global defaults for this project</div>
         </div>
         <div className="flex items-center gap-2">
           {error && (
@@ -76,7 +76,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
       </div>
       {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
       {loading ? (
-        <div className="text-[#cccccc]">Loading…</div>
+        <div className="text-[var(--color-text-primary)]">Loading…</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
@@ -90,7 +90,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
             </thead>
             <tbody className="text-[#e5e7eb]">
               {settings.map((row, idx) => (
-                <tr key={row.typeId} className="border-t border-[#3e3e42]">
+                <tr key={row.typeId} className="border-t border-[var(--color-border)]">
                   <td className="py-2 pr-4">{row.typeName}</td>
                   <td className="py-2 pr-4">
                     <input
@@ -105,7 +105,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
                       min={0}
                       max={60}
                       value={row.daysBefore ?? 0}
-                      className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                      className="w-24 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                       onChange={e => updateRow(idx, { daysBefore: Math.max(0, Math.min(60, Number(e.currentTarget.value))) })}
                     />
                   </td>

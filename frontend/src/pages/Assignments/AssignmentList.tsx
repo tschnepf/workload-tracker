@@ -106,7 +106,7 @@ const AssignmentList: React.FC = () => {
         <PageState
           isLoading
           loadingState={(
-            <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
+            <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6">
               <div className="space-y-2">
                 <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
                 <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
@@ -191,10 +191,10 @@ const AssignmentList: React.FC = () => {
         )}
 
         {/* Assignments Table */}
-        <Card className="bg-[#2d2d30] border-[#3e3e42] overflow-hidden">
+        <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] overflow-hidden">
           {assignments.length === 0 ? (
             <div className="p-6 text-center">
-              <div className="text-[#969696] mb-4">No project assignments yet</div>
+              <div className="text-[var(--color-text-secondary)] mb-4">No project assignments yet</div>
               <Button
                 variant="primary"
                 onClick={() => navigate('/assignments/new')}
@@ -205,21 +205,21 @@ const AssignmentList: React.FC = () => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-[#3e3e42] border-b border-[#3e3e42]">
+                <thead className="bg-[#3e3e42] border-b border-[var(--color-border)]">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[var(--color-text-primary)] uppercase tracking-wider">
                       Person
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[var(--color-text-primary)] uppercase tracking-wider">
                       Project
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[var(--color-text-primary)] uppercase tracking-wider">
                       Allocation
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-[#cccccc] uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-[var(--color-text-primary)] uppercase tracking-wider">
                       Created
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-[#cccccc] uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-[var(--color-text-primary)] uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -228,7 +228,7 @@ const AssignmentList: React.FC = () => {
                 {assignments.map((assignment) => (
                     <tr key={assignment.id} className="hover:bg-[#3e3e42]/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-[#cccccc]">
+                        <div className="font-medium text-[var(--color-text-primary)]">
                           {assignment.personName
                             || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'))}
                         </div>
@@ -240,7 +240,7 @@ const AssignmentList: React.FC = () => {
                         <UtilizationBadge percentage={assignment.allocationPercentage} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[#969696] text-sm">
+                        <div className="text-[var(--color-text-secondary)] text-sm">
                           {assignment.createdAt ? new Date(assignment.createdAt).toLocaleDateString() : '-'}
                         </div>
                       </td>
@@ -269,9 +269,9 @@ const AssignmentList: React.FC = () => {
         </Card>
 
         {/* Summary */}
-    <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
-          <div className="text-[#969696] text-sm">
-      Total: <span className="text-[#cccccc] font-medium">{assignments.length}</span> active assignments
+    <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-4">
+          <div className="text-[var(--color-text-secondary)] text-sm">
+      Total: <span className="text-[var(--color-text-primary)] font-medium">{assignments.length}</span> active assignments
           </div>
         </Card>
       </div>

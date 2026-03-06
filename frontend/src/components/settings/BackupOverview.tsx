@@ -31,33 +31,49 @@ const BackupOverview: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <div className="text-[#969696]">Last Backup</div>
-            <div className="text-[#cccccc]">{data?.lastBackupAt ? new Date(data.lastBackupAt).toLocaleString() : '—'}</div>
+            <div className="text-[var(--color-text-secondary)]">Last Backup</div>
+            <div className="text-[var(--color-text-primary)]">{data?.lastBackupAt ? new Date(data.lastBackupAt).toLocaleString() : '—'}</div>
           </div>
           <div>
-            <div className="text-[#969696]">Last Backup Size</div>
-            <div className="text-[#cccccc]">{formatBytes(data?.lastBackupSize)}</div>
+            <div className="text-[var(--color-text-secondary)]">Last Backup Size</div>
+            <div className="text-[var(--color-text-primary)]">{formatBytes(data?.lastBackupSize)}</div>
           </div>
           <div>
-            <div className="text-[#969696]">Retention</div>
+            <div className="text-[var(--color-text-secondary)]">Retention</div>
             <div className={data?.retentionOk ? 'text-emerald-400' : 'text-red-400'}>
               {data?.retentionOk ? 'OK' : 'No backups found'}{data?.policy ? ` • Policy: ${data.policy}` : ''}
             </div>
           </div>
           <div>
-            <div className="text-[#969696]">Offsite Sync</div>
-            <div className={data?.offsiteEnabled ? 'text-[#cccccc]' : 'text-[#969696]'}>
+            <div className="text-[var(--color-text-secondary)]">Offsite Sync</div>
+            <div className={data?.offsiteEnabled ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}>
               {data?.offsiteEnabled ? `Enabled${data?.offsiteLastSyncAt ? ` • Last sync: ${new Date(data.offsiteLastSyncAt).toLocaleString()}` : ''}` : 'Disabled'}
             </div>
           </div>
+          <div>
+            <div className="text-[var(--color-text-secondary)]">Last Automatic Backup</div>
+            <div className="text-[var(--color-text-primary)]">
+              {data?.lastAutomaticBackupAt ? new Date(data.lastAutomaticBackupAt).toLocaleString() : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[var(--color-text-secondary)]">Next Scheduled Backup</div>
+            <div className="text-[var(--color-text-primary)]">
+              {data?.nextAutomaticBackupAt ? new Date(data.nextAutomaticBackupAt).toLocaleString() : '—'}
+            </div>
+          </div>
           <div className="md:col-span-2">
-            <div className="text-[#969696]">Encryption</div>
+            <div className="text-[var(--color-text-secondary)]">Backup Location</div>
+            <div className="text-[var(--color-text-primary)] font-mono">{data?.backupsDir || '/backups'}</div>
+          </div>
+          <div className="md:col-span-2">
+            <div className="text-[var(--color-text-secondary)]">Encryption</div>
             {data?.encryptionEnabled ? (
-              <div className="text-[#cccccc]">
+              <div className="text-[var(--color-text-primary)]">
                 Enabled {data?.encryptionProvider ? `(${data.encryptionProvider})` : ''}. Keep keys managed securely; do not store secrets in source control.
               </div>
             ) : (
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Disabled. To enable, set BACKUP_ENCRYPTION_ENABLED=true and configure provider/keys in backend environment.
               </div>
             )}
@@ -69,4 +85,3 @@ const BackupOverview: React.FC = () => {
 };
 
 export default BackupOverview;
-

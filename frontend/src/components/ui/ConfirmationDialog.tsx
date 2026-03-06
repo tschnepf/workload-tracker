@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { darkTheme } from '@/theme/tokens';
 
 type ConfirmOptions = {
   title: string;
@@ -29,17 +28,25 @@ const DialogBody: React.FC<{
   const canConfirm = options.requiredText ? typed.trim() === options.requiredText : true;
 
   return (
-    <Modal isOpen={open} onClose={() => { setOpen(false); onResolve(false); }} title={options.title}>
-      <div style={{ display: 'grid', gap: 12 }}>
-        <div style={{
-          background: 'rgba(239, 68, 68, 0.12)',
-          color: darkTheme.colors.text.primary,
-          border: `1px solid ${darkTheme.colors.semantic.error}40`,
-          padding: '12px 14px',
-          borderRadius: 8,
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: 6, color: darkTheme.colors.semantic.error }}>Dangerous operation</div>
-          <div style={{ color: darkTheme.colors.text.secondary }}>{options.message}</div>
+    <Modal
+      isOpen={open}
+      onClose={() => { setOpen(false); onResolve(false); }}
+      title={options.title}
+      footer={(
+        <>
+          <Button variant="ghost" onClick={() => { setOpen(false); onResolve(false); }}>
+            {options.cancelLabel || 'Cancel'}
+          </Button>
+          <Button variant="danger" onClick={() => { setOpen(false); onResolve(true); }} disabled={!canConfirm}>
+            {options.confirmLabel || 'Confirm'}
+          </Button>
+        </>
+      )}
+    >
+      <div className="grid gap-3">
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-state-danger)] bg-[color:color-mix(in_srgb,var(--color-state-danger)_14%,transparent)] px-3 py-3 text-[var(--color-text-primary)]">
+          <div className="mb-1 font-semibold text-[var(--color-state-danger)]">Dangerous operation</div>
+          <div className="text-[var(--color-text-secondary)]">{options.message}</div>
         </div>
 
         {options.requiredText && (
@@ -52,15 +59,6 @@ const DialogBody: React.FC<{
             />
           </div>
         )}
-
-        <div className="flex items-center justify-end gap-2 mt-2">
-          <Button variant="ghost" onClick={() => { setOpen(false); onResolve(false); }}>
-            {options.cancelLabel || 'Cancel'}
-          </Button>
-          <Button variant="danger" onClick={() => { setOpen(false); onResolve(true); }} disabled={!canConfirm}>
-            {options.confirmLabel || 'Confirm'}
-          </Button>
-        </div>
       </div>
     </Modal>
   );
@@ -81,4 +79,3 @@ export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
 }
 
 export default confirmDialog;
-

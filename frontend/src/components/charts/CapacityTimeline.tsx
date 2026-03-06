@@ -80,10 +80,21 @@ function aggregate(data: WorkloadForecastItem[], scale: Scale): AggregatedPoint[
 // Simple, dependency-free SVG chart matching the requested look
 export const CapacityTimeline: React.FC<CapacityTimelineProps> = ({ weeklyData, scale, seriesVisibility }) => {
   const vis = { utilization: true, capacity: true, allocated: true, available: true, ...(seriesVisibility || {}) };
+  const palette = {
+    axis: 'var(--color-border)',
+    grid: 'var(--color-border-subtle)',
+    tick: 'var(--color-text-secondary)',
+    utilization: 'var(--color-state-warning)',
+    capacity: 'var(--chart-accent-a)',
+    allocated: 'var(--chart-accent-b)',
+    available: 'var(--chart-neutral)',
+    tooltipBg: 'var(--color-surface-elevated)',
+    tooltipBorder: 'var(--color-border)',
+    tooltipText: 'var(--color-text-primary)',
+    tooltipMuted: 'var(--color-text-secondary)',
+  } as const;
 
   const data = useMemo(() => aggregate(weeklyData, scale), [weeklyData, scale]);
-
-  if (!data.length) return <div className="text-[var(--muted)]">No data</div>;
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{
@@ -93,6 +104,8 @@ export const CapacityTimeline: React.FC<CapacityTimelineProps> = ({ weeklyData, 
     index: number;
     series: 'capacity' | 'allocated' | 'available';
   }>({ show: false, left: 0, top: 0, index: 0, series: 'allocated' });
+
+  if (!data.length) return <div className="text-[var(--color-text-secondary)]">No data</div>;
 
   const pad = 36;
   const step = 44; // horizontal spacing per point
@@ -150,47 +163,47 @@ export const CapacityTimeline: React.FC<CapacityTimelineProps> = ({ weeklyData, 
     <div style={{ overflowX: 'auto', position: 'relative' }} ref={wrapperRef}>
       <svg width={width} height={height} role="img" aria-label="Capacity timeline chart" onMouseMove={handleMove}>
         {/* Axes */}
-        <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="#4b5563" strokeWidth={1} />
-        <line x1={pad} y1={pad} x2={pad} y2={height - pad} stroke="#4b5563" strokeWidth={1} />
+        <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke={palette.axis} strokeWidth={1} />
+        <line x1={pad} y1={pad} x2={pad} y2={height - pad} stroke={palette.axis} strokeWidth={1} />
 
         {/* Y ticks */}
         {yTicks.map((t) => (
           <g key={t}>
-            <line x1={pad - 4} y1={y(t)} x2={width - pad} y2={y(t)} stroke="#374151" strokeDasharray="2,4" />
-            <text x={8} y={y(t) + 4} fontSize={10} fill="#9ca3af">{t}</text>
+            <line x1={pad - 4} y1={y(t)} x2={width - pad} y2={y(t)} stroke={palette.grid} strokeDasharray="2,4" />
+            <text x={8} y={y(t) + 4} fontSize={10} fill={palette.tick}>{t}</text>
           </g>
         ))}
 
         {/* Utilization area */}
         {vis.utilization && (
-          <path d={utilAreaPath} fill="#d97706" fillOpacity={0.35} stroke="none" />
+          <path d={utilAreaPath} fill={palette.utilization} fillOpacity={0.28} stroke="none" />
         )}
 
         {/* Lines */}
-        {vis.capacity && <path d={capPath} fill="none" stroke="#60a5fa" strokeWidth={2} />}
-        {vis.allocated && <path d={allocPath} fill="none" stroke="#22c55e" strokeWidth={2} />}
-        {vis.available && <path d={availPath} fill="none" stroke="#a78bfa" strokeWidth={2} />}
+        {vis.capacity && <path d={capPath} fill="none" stroke={palette.capacity} strokeWidth={2} />}
+        {vis.allocated && <path d={allocPath} fill="none" stroke={palette.allocated} strokeWidth={2} />}
+        {vis.available && <path d={availPath} fill="none" stroke={palette.available} strokeWidth={2} />}
 
         {/* Data point dots with hover tooltips */}
         {vis.capacity && caps.map((v, i) => (
           <circle key={`cap-${i}`} cx={x(i)} cy={y(v)} r={3}
-            fill="#60a5fa" stroke="#0b4ea2" strokeWidth={1}
+            fill={palette.capacity} stroke="var(--color-bg)" strokeWidth={1}
             onMouseEnter={(e) => handleEnter('capacity', i, e)} onMouseLeave={handleLeave} />
         ))}
         {vis.allocated && alloc.map((v, i) => (
           <circle key={`alloc-${i}`} cx={x(i)} cy={y(v)} r={3}
-            fill="#22c55e" stroke="#036d2a" strokeWidth={1}
+            fill={palette.allocated} stroke="var(--color-bg)" strokeWidth={1}
             onMouseEnter={(e) => handleEnter('allocated', i, e)} onMouseLeave={handleLeave} />
         ))}
         {vis.available && avail.map((v, i) => (
           <circle key={`avail-${i}`} cx={x(i)} cy={y(v)} r={3}
-            fill="#a78bfa" stroke="#5b21b6" strokeWidth={1}
+            fill={palette.available} stroke="var(--color-bg)" strokeWidth={1}
             onMouseEnter={(e) => handleEnter('available', i, e)} onMouseLeave={handleLeave} />
         ))}
 
         {/* X labels */}
         {data.map((d, i) => (
-          <text key={i} x={x(i)} y={height - pad + 14} fontSize={10} fill="#94a3b8" textAnchor="middle">
+          <text key={i} x={x(i)} y={height - pad + 14} fontSize={10} fill={palette.tick} textAnchor="middle">
             {d.label}
           </text>
         ))}
@@ -198,30 +211,40 @@ export const CapacityTimeline: React.FC<CapacityTimelineProps> = ({ weeklyData, 
 
       {/* Tooltip */}
       {tip.show && tipData && (
-        <div role="tooltip" style={{ position:'absolute', left: tip.left, top: tip.top, pointerEvents:'none',
-          background:'#111827', color:'#e5e7eb', border:'1px solid #374151', borderRadius:6, padding:'8px 10px', fontSize:12, boxShadow:'0 8px 16px rgba(0,0,0,0.4)'
-        }}>
+        <div
+          role="tooltip"
+          className="rounded-sm border p-2 text-xs shadow-lg"
+          style={{
+            position: 'absolute',
+            left: tip.left,
+            top: tip.top,
+            pointerEvents: 'none',
+            background: palette.tooltipBg,
+            color: palette.tooltipText,
+            borderColor: palette.tooltipBorder,
+          }}
+        >
           <div style={{ fontWeight: 600, marginBottom: 4 }}>{scale === 'week' ? `Week ${weeklyData[tip.index]?.weekStart}` : tipData.label}</div>
-          <div>Capacity: <span style={{ color:'#60a5fa' }}>{fmtH(tipData.totalCapacity)}</span></div>
-          <div>Allocated: <span style={{ color:'#22c55e' }}>{fmtH(tipData.utilized)}</span></div>
-          <div>Available: <span style={{ color:'#a78bfa' }}>{fmtH(tipData.available)}</span></div>
-          <div>Utilization: <span style={{ color:'#f59e0b' }}>{utilPct}%</span></div>
+          <div style={{ color: palette.tooltipMuted }}>Capacity: <span style={{ color: palette.capacity }}>{fmtH(tipData.totalCapacity)}</span></div>
+          <div style={{ color: palette.tooltipMuted }}>Allocated: <span style={{ color: palette.allocated }}>{fmtH(tipData.utilized)}</span></div>
+          <div style={{ color: palette.tooltipMuted }}>Available: <span style={{ color: palette.available }}>{fmtH(tipData.available)}</span></div>
+          <div style={{ color: palette.tooltipMuted }}>Utilization: <span style={{ color: palette.utilization }}>{utilPct}%</span></div>
         </div>
       )}
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mt-2">
-        <LegendDot color="#60a5fa" label="Total Capacity" />
-        <LegendDot color="#22c55e" label="Allocated Hours" />
-        <LegendDot color="#a78bfa" label="Available Hours" />
-        <LegendDot color="#d97706" label="Utilization (area)" box />
+        <LegendDot color={palette.capacity} label="Total Capacity" />
+        <LegendDot color={palette.allocated} label="Allocated Hours" />
+        <LegendDot color={palette.available} label="Available Hours" />
+        <LegendDot color={palette.utilization} label="Utilization (area)" box />
       </div>
     </div>
   );
 };
 
 const LegendDot: React.FC<{ color: string; label: string; box?: boolean }> = ({ color, label, box }) => (
-  <div className="flex items-center gap-2 text-[var(--text)] text-xs">
+  <div className="flex items-center gap-2 text-xs text-[var(--color-text-primary)]">
     <span
       style={{ background: color, width: 12, height: 6, display: 'inline-block', borderRadius: box ? 2 : 999 }}
       aria-hidden
@@ -233,7 +256,7 @@ const LegendDot: React.FC<{ color: string; label: string; box?: boolean }> = ({ 
 export const CapacityTimelineCompact: React.FC<CapacityTimelineProps> = ({ weeklyData, scale }) => {
   const data = useMemo(() => aggregate(weeklyData, scale), [weeklyData, scale]);
 
-  if (!data.length) return <div className="text-[var(--muted)]">No data</div>;
+  if (!data.length) return <div className="text-[var(--color-text-secondary)]">No data</div>;
 
   const maxCapacity = Math.max(10, ...data.map((d) => d.totalCapacity));
   const maxBarHeight = 40;
@@ -249,17 +272,17 @@ export const CapacityTimelineCompact: React.FC<CapacityTimelineProps> = ({ weekl
         const utilizationPct = Math.round(ratio * 100);
         return (
           <div key={idx} className="flex flex-col items-center min-w-[48px]">
-            <div className="w-3 h-10 rounded-full bg-[var(--border)] flex items-end justify-center">
+            <div className="flex h-10 w-3 items-end justify-center rounded-full bg-[var(--color-border)]">
               <div
-                className="w-full rounded-full bg-[#22c55e]"
+                className="w-full rounded-full bg-[var(--chart-accent-b)]"
                 style={{ height: `${barHeight}px` }}
                 aria-hidden
               />
             </div>
-            <div className="mt-1 text-[10px] text-[var(--muted)] truncate max-w-[56px] text-center">
+            <div className="mt-1 max-w-[56px] truncate text-center text-[10px] text-[var(--color-text-secondary)]">
               {point.label}
             </div>
-            <div className="text-[10px] text-[var(--muted)]">
+            <div className="text-[10px] text-[var(--color-text-secondary)]">
               {utilizationPct}%
             </div>
           </div>

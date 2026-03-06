@@ -123,7 +123,7 @@ const SkillsFilter: React.FC<SkillsFilterProps> = ({
       {selectedSkills.length > 0 && (
         <button
           onClick={handleClearAll}
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[#969696] hover:text-[#cccccc] text-sm"
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm"
         >
           Clear all
         </button>

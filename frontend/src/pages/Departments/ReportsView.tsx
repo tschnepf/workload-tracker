@@ -98,19 +98,19 @@ const AccordionSection: React.FC<{
   onToggle: () => void;
   children: React.ReactNode;
 }> = ({ title, description, isOpen, onToggle, children }) => (
-  <Card className="bg-[#2d2d30] border-[#3e3e42]">
+  <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
     <button
       type="button"
       onClick={onToggle}
       className="w-full flex justify-between items-center px-6 py-4 text-left"
     >
       <div>
-        <div className="text-sm font-semibold text-[#cccccc]">{title}</div>
+        <div className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</div>
         {description && (
-          <div className="text-xs text-[#969696] mt-1">{description}</div>
+          <div className="text-xs text-[var(--color-text-secondary)] mt-1">{description}</div>
         )}
       </div>
-      <span className="text-[#969696] text-lg" aria-hidden="true">
+      <span className="text-[var(--color-text-secondary)] text-lg" aria-hidden="true">
         {isOpen ? '−' : '+'}
       </span>
     </button>
@@ -404,7 +404,7 @@ const ReportsView: React.FC = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-[#969696]">Generating department reports...</div>
+          <div className="text-[var(--color-text-secondary)]">Generating department reports...</div>
         </div>
       </Layout>
     );
@@ -422,10 +422,10 @@ const ReportsView: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-[#cccccc]">
+            <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">
               Department Reports
             </h1>
-            <p className="text-[#969696] mt-2">
+            <p className="text-[var(--color-text-secondary)] mt-2">
               Performance analytics and resource insights
             </p>
           </div>
@@ -459,25 +459,25 @@ const ReportsView: React.FC = () => {
 
         {/* Company-Wide Summary */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
-            <div className="text-[#969696] text-sm">Total Departments</div>
-            <div className="text-2xl font-bold text-[#cccccc]">{reports.length}</div>
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
+            <div className="text-[var(--color-text-secondary)] text-sm">Total Departments</div>
+            <div className="text-2xl font-bold text-[var(--color-text-primary)]">{reports.length}</div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
-            <div className="text-[#969696] text-sm">Total People</div>
-            <div className="text-2xl font-bold text-[#cccccc]">{totalPeople}</div>
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
+            <div className="text-[var(--color-text-secondary)] text-sm">Total People</div>
+            <div className="text-2xl font-bold text-[var(--color-text-primary)]">{totalPeople}</div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
-            <div className="text-[#969696] text-sm">Avg Utilization</div>
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
+            <div className="text-[var(--color-text-secondary)] text-sm">Avg Utilization</div>
             <div className={`text-2xl font-bold ${getUtilizationColor(avgUtilization)}`}>
               {avgUtilization.toFixed(1)}%
             </div>
           </Card>
           
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
-            <div className="text-[#969696] text-sm">Available Capacity</div>
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
+            <div className="text-[var(--color-text-secondary)] text-sm">Available Capacity</div>
             <div className="text-2xl font-bold text-emerald-400">
               {Math.round(totalAvailableHours)}h
             </div>
@@ -501,11 +501,11 @@ const ReportsView: React.FC = () => {
         </AccordionSection>
 
         {isAdmin && (
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
             <div className="p-6 flex items-center justify-between gap-4">
               <div>
-                <div className="text-lg font-semibold text-[#cccccc] mb-1">Person Experience Report</div>
-                <div className="text-[#969696] text-sm">Search by person and see projects, roles, phases, avg hours, and a weekly sparkline over an adjustable window.</div>
+                <div className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">Person Experience Report</div>
+                <div className="text-[var(--color-text-secondary)] text-sm">Search by person and see projects, roles, phases, avg hours, and a weekly sparkline over an adjustable window.</div>
               </div>
               <a
                 href="/reports/person-experience"
@@ -518,41 +518,41 @@ const ReportsView: React.FC = () => {
         )}
 
         {/* Department Reports Table */}
-        <Card className="bg-[#2d2d30] border-[#3e3e42]">
+        <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
           <div className="p-6">
-            <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+            <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
               Department Performance Overview
             </h3>
             
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-[#3e3e42]">
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Department</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Team Size</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Utilization</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Peak</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Assignments</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Available</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Skills</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Top Skills</th>
-                    <th className="text-left text-sm font-medium text-[#969696] pb-3">Health</th>
+                  <tr className="border-b border-[var(--color-border)]">
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Department</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Team Size</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Utilization</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Peak</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Assignments</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Available</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Skills</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Top Skills</th>
+                    <th className="text-left text-sm font-medium text-[var(--color-text-secondary)] pb-3">Health</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reports.map((report) => {
                     const health = getDepartmentHealthScore(report);
                     return (
-                      <tr key={report.department.id} className="border-b border-[#3e3e42]/50">
+                      <tr key={report.department.id} className="border-b border-[var(--color-border)]/50">
                         <td className="py-3">
                           <div>
-                            <div className="font-medium text-[#cccccc]">{report.department.name}</div>
-                            <div className="text-xs text-[#969696]">
+                            <div className="font-medium text-[var(--color-text-primary)]">{report.department.name}</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">
                               {getDepartmentManagerSummary(report.department)}
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 text-[#cccccc]">
+                        <td className="py-3 text-[var(--color-text-primary)]">
                           {report.metrics.teamSize}
                         </td>
                         <td className="py-3">
@@ -567,7 +567,7 @@ const ReportsView: React.FC = () => {
                         <td className="py-3">
                           <UtilizationBadge percentage={report.metrics.peakUtilization} />
                         </td>
-                        <td className="py-3 text-[#cccccc]">
+                        <td className="py-3 text-[var(--color-text-primary)]">
                           {report.metrics.totalAssignments}
                         </td>
                         <td className="py-3 text-emerald-400">
@@ -575,8 +575,8 @@ const ReportsView: React.FC = () => {
                         </td>
                         <td className="py-3">
                           <div className="text-sm">
-                            <div className="text-[#cccccc]">{report.skills.uniqueSkills} unique</div>
-                            <div className="text-[#969696] text-xs">
+                            <div className="text-[var(--color-text-primary)]">{report.skills.uniqueSkills} unique</div>
+                            <div className="text-[var(--color-text-secondary)] text-xs">
                               {report.skills.skillGaps.length > 0 && `${report.skills.skillGaps.length} gaps`}
                             </div>
                           </div>
@@ -589,7 +589,7 @@ const ReportsView: React.FC = () => {
                               </span>
                             ))}
                             {report.skills.topSkills.length > 3 && (
-                              <span className="text-xs text-[#969696]">
+                              <span className="text-xs text-[var(--color-text-secondary)]">
                                 +{report.skills.topSkills.length - 3} more
                               </span>
                             )}
@@ -604,7 +604,7 @@ const ReportsView: React.FC = () => {
                             }`}>
                               {health.score}
                             </span>
-                            <span className="text-xs text-[#969696]">{health.status}</span>
+                            <span className="text-xs text-[var(--color-text-secondary)]">{health.status}</span>
                           </div>
                         </td>
                       </tr>
@@ -630,7 +630,7 @@ const ReportsView: React.FC = () => {
             </div>
           </Card>
           {/* Utilization Distribution */}
-          <Card className="bg-[#2d2d30] border-[#3e3e42]">
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
             <div className="p-6">
               <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
                 Department Utilization Distribution

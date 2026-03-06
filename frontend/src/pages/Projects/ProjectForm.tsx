@@ -345,10 +345,10 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
       <div className={embedded ? 'flex-1 overflow-y-auto px-4 py-4 space-y-6' : 'space-y-6'}>
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#cccccc]">
+          <h1 className="text-2xl font-bold text-[var(--color-text-primary)]">
             {isEditing ? 'Edit Project' : 'Create New Project'}
           </h1>
-          <p className="text-[#969696] mt-1">
+          <p className="text-[var(--color-text-secondary)] mt-1">
             {isEditing ? 'Update project information' : 'Add a new project to track assignments'}
           </p>
         </div>
@@ -361,7 +361,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
         )}
 
         {/* Form */}
-        <Card className="bg-[#2d2d30] border-[#3e3e42] p-4 md:p-6">
+        <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-4 md:p-6">
           <div className="space-y-6">
             
             {/* Project Name */}
@@ -374,13 +374,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 placeholder="e.g., Website Redesign, Mobile App"
                 required
                 error={validationErrors.name}
-                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
             </div>
 
             {/* Client - Smart Autocomplete */}
             <div className="relative">
-              <label className="block text-sm font-medium text-[#cccccc] mb-2" htmlFor="project-client">
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2" htmlFor="project-client">
                 Client <span className="text-red-400">*</span>
               </label>
               <input
@@ -399,7 +399,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 aria-activedescendant={highlightedClientId}
                 placeholder="e.g., Acme Corp, Internal"
                 autoComplete="off"
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
               {validationErrors.client && (
                 <p className="text-red-400 text-xs mt-1">{validationErrors.client}</p>
@@ -409,7 +409,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
               {showClientDropdown && visibleClients.length > 0 && (
                 <div
                   ref={clientDropdownRef}
-                  className="absolute z-50 w-full mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg max-h-60 overflow-auto"
+                  className="absolute z-50 w-full mt-1 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-md shadow-lg max-h-60 overflow-auto"
                 >
                   <ul role="listbox" id={clientListboxId} aria-label="Client suggestions">
                     {visibleClients.map((client, index) => {
@@ -425,7 +425,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                             selectClient(client);
                           }}
                           className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
-                            isActive ? 'bg-blue-600/40 text-white' : 'text-[#cccccc] hover:bg-[#3e3e42]'
+                            isActive ? 'bg-blue-600/40 text-white' : 'text-[var(--color-text-primary)] hover:bg-[#3e3e42]'
                           }`}
                         >
                           {client}
@@ -439,13 +439,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
 
             {/* Vertical */}
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                 Vertical
               </label>
               <select
                 value={formData.vertical || ''}
                 onChange={(e) => handleChange('vertical', e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
                 disabled={verticalsLoading}
               >
                 <option value="">{verticalsLoading ? 'Loading verticals...' : 'Select vertical'}</option>
@@ -462,13 +462,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
 
             {/* Status */}
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                 Status
               </label>
               <select
                 value={formData.status || 'active'}
                 onChange={(e) => handleChange('status', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
               >
                 {statusSelectOptions.map((status) => (
                   <option key={status.key} value={status.key}>
@@ -480,14 +480,14 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-[#cccccc] mb-2">
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                 Description
               </label>
               <textarea
                 value={formData.description || ''}
                 onChange={(e) => handleChange('description', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
                 placeholder="Brief description of the project"
               />
             </div>
@@ -500,9 +500,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.startDate || ''}
                 onChange={(nextValue) => handleChange('startDate', nextValue)}
                 placeholder="Select start date"
-                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
-              <p className="text-[#969696] text-sm mt-1">
+              <p className="text-[var(--color-text-secondary)] text-sm mt-1">
                 Leave blank if project start date is not yet determined
               </p>
             </div>
@@ -518,19 +518,19 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.estimatedHours || ''}
                 onChange={(e) => handleChange('estimatedHours', e.target.value ? parseInt(e.target.value) : undefined)}
                 placeholder="Total project hours"
-                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
             </div>
 
             {canEditAutoHoursTemplate && (
               <div>
-                <label className="block text-sm font-medium text-[#cccccc] mb-2">
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   Project Template
                 </label>
                 <select
                   value={formData.autoHoursTemplateId ?? ''}
                   onChange={(e) => handleChange('autoHoursTemplateId', e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                  className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
                   disabled={autoHoursTemplatesLoading}
                 >
                   <option value="">Global default</option>
@@ -552,7 +552,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.projectNumber || ''}
                 onChange={(e) => handleChange('projectNumber', e.target.value)}
                 placeholder="e.g., PRJ-2024-001"
-                className="bg-[#3e3e42] border-[#3e3e42] text-[#cccccc]"
+                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
             </div>
 
@@ -561,7 +561,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
 
         {/* Project-specific pre-deliverable settings */}
         {isEditing && id && (
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-4 md:p-6">
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-4 md:p-6">
             <button
               type="button"
               className="w-full flex items-center justify-between gap-4 text-left"
@@ -570,10 +570,10 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
               aria-controls={preSettingsPanelId}
             >
               <div>
-                <p className="text-sm font-semibold text-[#cccccc]">Pre-deliverable Settings</p>
-                <p className="text-xs text-[#969696]">Configure project-specific milestones and reminders</p>
+                <p className="text-sm font-semibold text-[var(--color-text-primary)]">Pre-deliverable Settings</p>
+                <p className="text-xs text-[var(--color-text-secondary)]">Configure project-specific milestones and reminders</p>
               </div>
-              <span className="text-[#969696] text-sm">
+              <span className="text-[var(--color-text-secondary)] text-sm">
                 {preSettingsOpen ? 'Hide' : 'Show'}
               </span>
             </button>
@@ -585,7 +585,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
           </Card>
         )}
         </div>
-      <div className={embedded ? 'border-t border-[#3e3e42] bg-[#1f1f23] px-4 py-3' : 'sticky bottom-0 left-0 right-0 bg-[#1f1f23] border-t border-[#3e3e42] px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.35)]'}>
+      <div className={embedded ? 'border-t border-[var(--color-border)] bg-[#1f1f23] px-4 py-3' : 'sticky bottom-0 left-0 right-0 bg-[#1f1f23] border-t border-[var(--color-border)] px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.35)]'}>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Button
             type="button"

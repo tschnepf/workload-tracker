@@ -12,14 +12,27 @@
   }
   
   body {
-    background-color: var(--bg);
-    color: var(--text);
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+  }
+
+  /* Keep native select menus theme-consistent and less "blue highlighted". */
+  select,
+  select option {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+
+  select option:checked,
+  select option:hover {
+    background-color: var(--color-surface-overlay);
+    color: var(--color-text-primary);
   }
 
   /* Theme-aware scrollbars (default to current theme tokens) */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) var(--card);
+    scrollbar-color: var(--color-border) var(--color-surface-elevated);
   }
 
   *::-webkit-scrollbar {
@@ -28,24 +41,24 @@
   }
 
   *::-webkit-scrollbar-track {
-    background: var(--card);
+    background: var(--color-surface-elevated);
   }
 
   *::-webkit-scrollbar-thumb {
-    background: var(--border);
+    background: var(--color-border);
     border-radius: 6px;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: var(--muted);
+    background: var(--color-text-secondary);
   }
 }
 
 /* Custom scrollbar for dark mode */
 @layer utilities {
-  /* Slightly bump secondary text (#969696) for better AA contrast on dark backgrounds */
+  /* Keep legacy muted text utility instances theme-aware while sweeping hardcoded classes. */
   [class*="text-\[#969696\]"] {
-    color: #bdbdbd !important; /* was #969696 */
+    color: color-mix(in srgb, var(--color-text-secondary) 85%, white) !important;
   }
 
   /* Respect users who prefer reduced motion */
@@ -60,7 +73,7 @@
 
   .scrollbar-dark {
     scrollbar-width: thin;
-    scrollbar-color: #475569 #1e293b;
+    scrollbar-color: var(--color-border) var(--color-surface);
   }
 
   .scrollbar-dark::-webkit-scrollbar {
@@ -68,22 +81,22 @@
   }
 
   .scrollbar-dark::-webkit-scrollbar-track {
-    background: #1e293b;
+    background: var(--color-surface);
   }
 
   .scrollbar-dark::-webkit-scrollbar-thumb {
-    background: #475569;
+    background: var(--color-border);
     border-radius: 3px;
   }
 
   .scrollbar-dark::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
+    background: var(--color-text-secondary);
   }
 
   /* Theme-aware scrollbar (use CSS variables) */
   .scrollbar-theme {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) var(--card);
+    scrollbar-color: var(--color-border) var(--color-surface-elevated);
   }
 
   .scrollbar-theme::-webkit-scrollbar {
@@ -91,16 +104,16 @@
   }
 
   .scrollbar-theme::-webkit-scrollbar-track {
-    background: var(--card);
+    background: var(--color-surface-elevated);
   }
 
   .scrollbar-theme::-webkit-scrollbar-thumb {
-    background: var(--border);
+    background: var(--color-border);
     border-radius: 3px;
   }
 
   .scrollbar-theme::-webkit-scrollbar-thumb:hover {
-    background: var(--muted);
+    background: var(--color-text-secondary);
   }
 
   /* Subtle row hover that stays neutral (less saturated than selection). */
@@ -112,30 +125,30 @@
 /* Rich text editor defaults (bullets/numbering visible despite global resets) */
 @layer components {
   .ux-page-shell {
-    border: 1px solid var(--borderSubtle);
-    border-radius: 16px;
-    padding: 16px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
     background:
-      linear-gradient(180deg, var(--surfaceOverlay), transparent 220px),
-      var(--bg);
+      linear-gradient(180deg, var(--color-surface-overlay), transparent 220px),
+      var(--color-bg);
   }
 
   .ux-page-hero {
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
     background:
-      radial-gradient(circle at top right, var(--surfaceOverlay), transparent 62%),
-      linear-gradient(180deg, var(--card), var(--surface));
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+      radial-gradient(circle at top right, var(--color-surface-overlay), transparent 62%),
+      linear-gradient(180deg, var(--color-surface-elevated), var(--color-surface));
+    box-shadow: var(--elevation-2);
   }
 
   .ux-panel {
-    border: 1px solid var(--border);
-    border-radius: 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
     background:
-      linear-gradient(180deg, var(--card), var(--surface));
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+      linear-gradient(180deg, var(--color-surface-elevated), var(--color-surface));
+    box-shadow: var(--elevation-1);
   }
 
   .rt-editor ul {
@@ -157,6 +170,11 @@
 }
 
 /* TipTap/ProseMirror editor focus outline control */
-.pm-editor .ProseMirror { outline: none; }
-.pm-editor .ProseMirror:focus { outline: none; }
-.pm-editor .ProseMirror:focus-visible { outline: none; }
+.pm-editor .ProseMirror {
+  outline: none;
+}
+
+.pm-editor .ProseMirror:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}

@@ -70,7 +70,7 @@ export const TopProgress: React.FC = () => {
         right: 0,
         height: 3,
         zIndex: 1000,
-        background: 'linear-gradient(90deg, #007acc, #4aa3ff)',
+        background: 'linear-gradient(90deg, var(--color-action-primary), var(--color-action-primary-hover))',
         opacity: 0.9,
         transformOrigin: 'left',
         animation: prefersReducedMotion ? undefined : 'tp-indeterminate 1.2s infinite',
@@ -101,4 +101,3 @@ export const TopProgress: React.FC = () => {
 };
 
 export default TopProgress;
-

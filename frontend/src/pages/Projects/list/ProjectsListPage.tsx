@@ -1116,7 +1116,7 @@ const ProjectsList: React.FC = () => {
   );
 
   const topBarHeader = (
-    <div className="flex items-center gap-1 min-w-0 w-full">
+    <div className="flex items-center gap-1 min-w-0">
       {searchBar}
       <button
         type="button"

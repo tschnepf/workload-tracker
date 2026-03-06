@@ -1,5 +1,6 @@
 import React from 'react';
 import Card from '@/components/ui/Card';
+import ChartFrame from '@/components/ui/ChartFrame';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import type {
   ForecastPlannerChartData,
@@ -26,18 +27,27 @@ type NormalizeMode = 'hours' | 'percent';
 type Point = { x: number; y: number };
 
 const CHART_COLORS = {
-  capacity: '#60a5fa',
-  included: '#22c55e',
-  excluded: '#a78bfa',
-  proposed: '#f59e0b',
-  total: '#f43f5e',
-  threshold: '#fb7185',
-  baseline: '#38bdf8',
-  confidenceBand: '#2563eb',
-  confidenceLine: '#1d4ed8',
+  capacity: 'var(--chart-accent-a)',
+  included: 'var(--chart-accent-b)',
+  excluded: 'var(--accent)',
+  proposed: 'var(--chart-client)',
+  total: 'var(--chart-accent-c)',
+  threshold: 'var(--color-state-danger)',
+  baseline: 'var(--chart-person)',
+  confidenceBand: 'var(--color-action-primary)',
+  confidenceLine: 'var(--color-action-primary-hover)',
 };
 
-const DEPT_COLORS = ['#60a5fa', '#22c55e', '#f59e0b', '#f97316', '#a78bfa', '#14b8a6', '#f43f5e', '#84cc16'];
+const DEPT_COLORS = [
+  'var(--chart-accent-a)',
+  'var(--chart-accent-b)',
+  'var(--chart-client)',
+  'var(--color-state-warning)',
+  'var(--accent)',
+  'var(--color-state-info)',
+  'var(--chart-accent-c)',
+  'var(--color-state-success)',
+];
 
 const yTicks = (maxValue: number): number[] => {
   if (maxValue <= 0) return [0, 1];
@@ -147,57 +157,54 @@ const TimePlot: React.FC<TimePlotProps> = ({
   };
 
   return (
-    <Card className="ux-panel">
-      <div className="p-4">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-          {rightSlot}
-        </div>
-        <div className="overflow-x-auto">
-          <svg width={width} height={height} role="img" aria-label={title}>
-            {ticks.map((tick) => (
-              <g key={tick}>
-                <line x1={padLeft} x2={width - padRight} y1={y(tick)} y2={y(tick)} stroke="var(--border)" strokeOpacity={0.45} />
-                <text x={padLeft - 6} y={y(tick) + 4} textAnchor="end" fill="var(--muted)" fontSize={10}>
-                  {Math.round(tick)}
-                </text>
-              </g>
-            ))}
-            {children({ width, height, padLeft, padRight, padTop, padBottom, x, y, innerW, innerH })}
-            {hoverIndex != null && hoverIndex >= 0 && hoverIndex < labels.length ? (
-              <line
-                x1={x(hoverIndex)}
-                x2={x(hoverIndex)}
-                y1={padTop}
-                y2={height - padBottom}
-                stroke="#94a3b8"
-                strokeDasharray="3,3"
-                opacity={0.7}
-              />
-            ) : null}
-            <rect
-              x={padLeft}
-              y={padTop}
-              width={innerW}
-              height={innerH}
-              fill="transparent"
-              onMouseMove={handleMove}
-              onMouseLeave={() => onHoverIndexChange(null)}
+    <ChartFrame
+      title={title}
+      rightSlot={rightSlot}
+      legend={legend ? <div className="flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">{legend}</div> : undefined}
+    >
+      <div className="overflow-x-auto">
+        <svg width={width} height={height} role="img" aria-label={title}>
+          {ticks.map((tick) => (
+            <g key={tick}>
+              <line x1={padLeft} x2={width - padRight} y1={y(tick)} y2={y(tick)} stroke="var(--color-border)" strokeOpacity={0.45} />
+              <text x={padLeft - 6} y={y(tick) + 4} textAnchor="end" fill="var(--color-text-secondary)" fontSize={10}>
+                {Math.round(tick)}
+              </text>
+            </g>
+          ))}
+          {children({ width, height, padLeft, padRight, padTop, padBottom, x, y, innerW, innerH })}
+          {hoverIndex != null && hoverIndex >= 0 && hoverIndex < labels.length ? (
+            <line
+              x1={x(hoverIndex)}
+              x2={x(hoverIndex)}
+              y1={padTop}
+              y2={height - padBottom}
+              stroke="var(--chart-neutral)"
+              strokeDasharray="3,3"
+              opacity={0.7}
             />
-            {labels.map((label, idx) => {
-              const sparse = labels.length <= 12 || idx % 2 === 0 || idx === labels.length - 1;
-              if (!sparse) return null;
-              return (
-                <text key={`${label}-${idx}`} x={x(idx)} y={height - 8} textAnchor="middle" fill="var(--muted)" fontSize={10}>
-                  {label}
-                </text>
-              );
-            })}
-          </svg>
-        </div>
-        {legend ? <div className="mt-2 flex flex-wrap gap-3 text-xs text-[var(--muted)]">{legend}</div> : null}
+          ) : null}
+          <rect
+            x={padLeft}
+            y={padTop}
+            width={innerW}
+            height={innerH}
+            fill="transparent"
+            onMouseMove={handleMove}
+            onMouseLeave={() => onHoverIndexChange(null)}
+          />
+          {labels.map((label, idx) => {
+            const sparse = labels.length <= 12 || idx % 2 === 0 || idx === labels.length - 1;
+            if (!sparse) return null;
+            return (
+              <text key={`${label}-${idx}`} x={x(idx)} y={height - 8} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={10}>
+                {label}
+              </text>
+            );
+          })}
+        </svg>
       </div>
-    </Card>
+    </ChartFrame>
   );
 };
 
@@ -232,7 +239,7 @@ const LegendToken: React.FC<{
 const statusColorMap = (defs: ProjectStatusDefinition[]): Record<string, string> => {
   const out: Record<string, string> = {};
   defs.forEach((def) => {
-    out[def.key] = def.colorHex || '#64748b';
+    out[def.key] = def.colorHex || 'var(--chart-neutral)';
   });
   return out;
 };
@@ -273,7 +280,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
   if (!chartData) {
     return (
       <Card className="ux-panel">
-        <div className="p-4 text-sm text-[var(--muted)]">Chart payload is unavailable for this scenario. Use the timeline table fallback below.</div>
+        <div className="p-4 text-sm text-[var(--color-text-secondary)]">Chart payload is unavailable for this scenario. Use the timeline table fallback below.</div>
       </Card>
     );
   }
@@ -356,10 +363,10 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
     <div className="space-y-6">
       <Card className="ux-panel">
         <div className="p-4 grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-4">
-          <label className="text-xs text-[var(--muted)]">
+          <label className="text-xs text-[var(--color-text-secondary)]">
             Time Grain
             <select
-              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--card)] p-2 text-sm text-[var(--text)]"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm text-[var(--color-text-primary)]"
               value={timeGrain}
               onChange={(e) => setTimeGrain(e.target.value as ForecastPlannerTimeGrain)}
             >
@@ -367,10 +374,10 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               <option value="monthly">Monthly</option>
             </select>
           </label>
-          <label className="text-xs text-[var(--muted)]">
+          <label className="text-xs text-[var(--color-text-secondary)]">
             Normalize
             <select
-              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--card)] p-2 text-sm text-[var(--text)]"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm text-[var(--color-text-primary)]"
               value={normalizeMode}
               onChange={(e) => setNormalizeMode(e.target.value as NormalizeMode)}
             >
@@ -378,7 +385,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               <option value="percent">Percent</option>
             </select>
           </label>
-          <div className="text-xs text-[var(--muted)]">
+          <div className="text-xs text-[var(--color-text-secondary)]">
             Series Visibility
             <div className="mt-2 flex flex-wrap gap-2">
               {([
@@ -389,7 +396,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               ] as const).map(([key, label]) => (
                 <button
                   key={key}
-                  className={`rounded border px-2 py-1 text-xs ${seriesVisibility[key] ? 'border-[var(--primary)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
+                  className={`rounded-sm border px-2 py-1 text-xs ${seriesVisibility[key] ? 'border-[var(--color-action-primary)] text-[var(--color-text-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-secondary)]'}`}
                   onClick={() => setSeriesVisibility((prev) => ({ ...prev, [key]: !prev[key] }))}
                 >
                   {label}
@@ -397,9 +404,9 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               ))}
             </div>
           </div>
-          <div className="text-xs text-[var(--muted)]">
+          <div className="text-xs text-[var(--color-text-secondary)]">
             Cursor
-            <div className="mt-2 rounded border border-[var(--border)] px-2 py-2 text-sm text-[var(--text)]">{resolveHoverLabel()}</div>
+            <div className="mt-2 rounded-sm border border-[var(--color-border)] px-2 py-2 text-sm text-[var(--color-text-primary)]">{resolveHoverLabel()}</div>
           </div>
         </div>
       </Card>
@@ -410,7 +417,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         maxY={teamChartMax}
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
-        rightSlot={<span className="text-xs text-[var(--muted)]">{normalizeMode === 'hours' ? 'Hours' : '% of capacity'}</span>}
+        rightSlot={<span className="text-xs text-[var(--color-text-secondary)]">{normalizeMode === 'hours' ? 'Hours' : '% of capacity'}</span>}
         legend={(
           <>
             <LegendToken label="Capacity" color={CHART_COLORS.capacity} kind="line" />
@@ -447,11 +454,11 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         onHoverIndexChange={setHoverIndex}
         legend={(
           <>
-            <LegendToken label="Safe Band" color="#14532d" kind="band" />
-            <LegendToken label="Caution Band" color="#854d0e" kind="band" />
-            <LegendToken label="No-Go Band" color="#7f1d1d" kind="band" />
+            <LegendToken label="Safe Band" color="color-mix(in srgb, var(--color-state-success) 70%, black)" kind="band" />
+            <LegendToken label="Caution Band" color="color-mix(in srgb, var(--color-state-warning) 70%, black)" kind="band" />
+            <LegendToken label="No-Go Band" color="color-mix(in srgb, var(--color-state-danger) 70%, black)" kind="band" />
             <LegendToken label="Threshold" color={CHART_COLORS.threshold} kind="dashed" />
-            <LegendToken label="Team Utilization" color="#f43f5e" kind="line" />
+            <LegendToken label="Team Utilization" color={CHART_COLORS.total} kind="line" />
           </>
         )}
       >
@@ -461,11 +468,11 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
           const points = team.teamUtilizationPct.map((v, i) => ({ x: x(i), y: y(v) }));
           return (
             <>
-              <rect x={padLeft} y={padTop} width={width - padLeft - padRight} height={Math.max(0, cautionY - padTop)} fill="#14532d" fillOpacity={0.08} />
-              <rect x={padLeft} y={cautionY} width={width - padLeft - padRight} height={Math.max(0, thresholdY - cautionY)} fill="#854d0e" fillOpacity={0.09} />
-              <rect x={padLeft} y={thresholdY} width={width - padLeft - padRight} height={Math.max(0, height - padBottom - thresholdY)} fill="#7f1d1d" fillOpacity={0.1} />
+              <rect x={padLeft} y={padTop} width={width - padLeft - padRight} height={Math.max(0, cautionY - padTop)} fill="color-mix(in srgb, var(--color-state-success) 70%, black)" fillOpacity={0.08} />
+              <rect x={padLeft} y={cautionY} width={width - padLeft - padRight} height={Math.max(0, thresholdY - cautionY)} fill="color-mix(in srgb, var(--color-state-warning) 70%, black)" fillOpacity={0.09} />
+              <rect x={padLeft} y={thresholdY} width={width - padLeft - padRight} height={Math.max(0, height - padBottom - thresholdY)} fill="color-mix(in srgb, var(--color-state-danger) 70%, black)" fillOpacity={0.1} />
               <line x1={padLeft} x2={width - padRight} y1={thresholdY} y2={thresholdY} stroke={CHART_COLORS.threshold} strokeDasharray="5,4" strokeWidth={1.5} />
-              <path d={linePath(points)} stroke="#f43f5e" strokeWidth={2.4} fill="none" />
+              <path d={linePath(points)} stroke={CHART_COLORS.total} strokeWidth={2.4} fill="none" />
             </>
           );
         }}
@@ -479,7 +486,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         onHoverIndexChange={setHoverIndex}
         rightSlot={(
           <button
-            className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)]"
+            className="rounded-sm border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
             onClick={() => setStatusDetailMode((prev) => !prev)}
           >
             {statusDetailMode ? 'Group View' : 'Drill by Status'}
@@ -494,10 +501,10 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
           ) : (
             <>
               {statusDetailSeries.included.slice(0, 8).map(([key]) => (
-                <LegendToken key={`legend-included-${key}`} label={`Included: ${key}`} color={statusColors[key] || '#64748b'} kind="area" />
+                <LegendToken key={`legend-included-${key}`} label={`Included: ${key}`} color={statusColors[key] || 'var(--chart-neutral)'} kind="area" />
               ))}
               {statusDetailSeries.excluded.slice(0, 8).map(([key]) => (
-                <LegendToken key={`legend-excluded-${key}`} label={`Excluded: ${key}`} color={statusColors[key] || '#64748b'} kind="dashed" />
+                <LegendToken key={`legend-excluded-${key}`} label={`Excluded: ${key}`} color={statusColors[key] || 'var(--chart-neutral)'} kind="dashed" />
               ))}
             </>
           )
@@ -526,8 +533,8 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               base.splice(0, base.length, ...top);
               return (
                 <g key={`${mode}-${key}`}>
-                  <path d={stackedAreaPath(topPts, basePts)} fill={statusColors[key] || '#64748b'} fillOpacity={mode === 'included' ? 0.22 : 0.14} />
-                  <path d={linePath(topPts)} stroke={statusColors[key] || '#64748b'} strokeWidth={1.5} fill="none" />
+                  <path d={stackedAreaPath(topPts, basePts)} fill={statusColors[key] || 'var(--chart-neutral)'} fillOpacity={mode === 'included' ? 0.22 : 0.14} />
+                  <path d={linePath(topPts)} stroke={statusColors[key] || 'var(--chart-neutral)'} strokeWidth={1.5} fill="none" />
                 </g>
               );
             });
@@ -549,9 +556,9 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         onHoverIndexChange={setHoverIndex}
         legend={(
           <>
-            <LegendToken label="Positive Delta (added demand)" color="#f59e0b" kind="bar" />
-            <LegendToken label="Negative Delta (reduced demand)" color="#38bdf8" kind="bar" />
-            <LegendToken label="Zero Baseline" color="#94a3b8" kind="line" />
+            <LegendToken label="Positive Delta (added demand)" color="var(--chart-client)" kind="bar" />
+            <LegendToken label="Negative Delta (reduced demand)" color="var(--chart-person)" kind="bar" />
+            <LegendToken label="Zero Baseline" color="var(--chart-neutral)" kind="line" />
           </>
         )}
       >
@@ -560,7 +567,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
           const step = labels.length <= 1 ? 20 : (width - padLeft - padRight) / (labels.length - 1);
           return (
             <>
-              <line x1={padLeft} x2={width - padRight} y1={zeroY} y2={zeroY} stroke="var(--border)" />
+              <line x1={padLeft} x2={width - padRight} y1={zeroY} y2={zeroY} stroke="var(--color-border)" />
               {impact.deltaDemand.map((value, idx) => {
                 const v = Number(value || 0);
                 const barHalf = Math.max(4, step * 0.3);
@@ -573,12 +580,12 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
                     y={Math.min(top, bottom)}
                     width={barHalf * 2}
                     height={Math.max(1, Math.abs(bottom - top))}
-                    fill={v >= 0 ? '#f59e0b' : '#38bdf8'}
+                    fill={v >= 0 ? 'var(--chart-client)' : 'var(--chart-person)'}
                     fillOpacity={0.85}
                   />
                 );
               })}
-              <line x1={padLeft} x2={width - padRight} y1={height - padBottom} y2={height - padBottom} stroke="var(--border)" />
+              <line x1={padLeft} x2={width - padRight} y1={height - padBottom} y2={height - padBottom} stroke="var(--color-border)" />
             </>
           );
         }}
@@ -587,8 +594,8 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
       <Card className="ux-panel">
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--text)]">Role Bottleneck Trends</h3>
-            <span className="text-xs text-[var(--muted)]">{activeRole?.roleName || 'No role selected'}</span>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Role Bottleneck Trends</h3>
+            <span className="text-xs text-[var(--color-text-secondary)]">{activeRole?.roleName || 'No role selected'}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {(chartData.roleSeries.topBottleneckRoleIds || []).map((roleId) => {
@@ -596,7 +603,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               return (
                 <button
                   key={roleId}
-                  className={`rounded border px-2 py-1 text-xs ${selectedRoleId === roleId ? 'border-[var(--primary)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--muted)]'}`}
+                  className={`rounded-sm border px-2 py-1 text-xs ${selectedRoleId === roleId ? 'border-[var(--color-action-primary)] text-[var(--color-text-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-secondary)]'}`}
                   onClick={() => setSelectedRoleId(roleId)}
                 >
                   {role?.roleName || `Role ${roleId}`}
@@ -611,7 +618,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               maxY={roleChartMax}
               hoverIndex={hoverIndex}
               onHoverIndexChange={setHoverIndex}
-              rightSlot={<span className="text-xs text-[var(--muted)]">Peak {fmtPct(Math.max(...(roleUtil || [0])))}</span>}
+              rightSlot={<span className="text-xs text-[var(--color-text-secondary)]">Peak {fmtPct(Math.max(...(roleUtil || [0])))}</span>}
               legend={(
                 <>
                   <LegendToken label="Capacity" color={CHART_COLORS.capacity} kind="line" />
@@ -637,7 +644,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
               }}
             </TimePlot>
           ) : (
-            <div className="text-sm text-[var(--muted)]">No bottleneck role data available for this view.</div>
+            <div className="text-sm text-[var(--color-text-secondary)]">No bottleneck role data available for this view.</div>
           )}
         </div>
       </Card>
@@ -692,7 +699,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
                   </g>
                 );
               })}
-              <line x1={padLeft} x2={width - padRight} y1={height - padBottom} y2={height - padBottom} stroke="var(--border)" />
+              <line x1={padLeft} x2={width - padRight} y1={height - padBottom} y2={height - padBottom} stroke="var(--color-border)" />
             </>
           );
         }}
@@ -728,29 +735,29 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
 
       <Card className="ux-panel">
         <div className="p-4">
-          <h3 className="mb-3 text-sm font-semibold text-[var(--text)]">Earliest Feasible Start Windows</h3>
-          <div className="mb-3 flex flex-wrap gap-3 text-xs text-[var(--muted)]">
-            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: '#94a3b8' }} />Requested Start</span>
-            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: '#22c55e' }} />Earliest Feasible Start</span>
-            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: '#f59e0b' }} />Delay (weeks)</span>
+          <h3 className="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">Earliest Feasible Start Windows</h3>
+          <div className="mb-3 flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--chart-neutral)' }} />Requested Start</span>
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--chart-accent-b)' }} />Earliest Feasible Start</span>
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--chart-client)' }} />Delay (weeks)</span>
           </div>
           {chartData.feasibleStarts.rows.length === 0 ? (
-            <div className="text-sm text-[var(--muted)]">No proposed projects in this scenario.</div>
+            <div className="text-sm text-[var(--color-text-secondary)]">No proposed projects in this scenario.</div>
           ) : (
             <div className="space-y-2">
               {chartData.feasibleStarts.rows.map((row, idx) => (
                 <button
                   key={`${row.templateId}-${idx}`}
-                  className={`w-full rounded border p-3 text-left ${selectedStartRow === idx ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}
+                  className={`w-full rounded-md border p-3 text-left ${selectedStartRow === idx ? 'border-[var(--color-action-primary)]' : 'border-[var(--color-border)]'}`}
                   onClick={() => setSelectedStartRow(idx)}
                 >
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-[var(--text)]">{row.name}</span>
-                    <span className="text-[var(--muted)]">
+                    <span className="font-medium text-[var(--color-text-primary)]">{row.name}</span>
+                    <span className="text-[var(--color-text-secondary)]">
                       {row.earliestFeasibleStartDate ? `Earliest ${row.earliestFeasibleStartDate}` : 'No feasible start in horizon'}
                     </span>
                   </div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">
+                  <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
                     Requested {row.requestedStartDate || 'N/A'}
                     {row.delayWeeks != null ? ` • Delay ${row.delayWeeks}w` : ''}
                   </div>
@@ -767,7 +774,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
         maxY={confidenceMax}
         hoverIndex={hoverIndex}
         onHoverIndexChange={setHoverIndex}
-        rightSlot={<span className="text-xs text-[var(--muted)]">{chartData.confidenceSeries.enabled ? 'Probability-weighted' : 'Weighting disabled'}</span>}
+        rightSlot={<span className="text-xs text-[var(--color-text-secondary)]">{chartData.confidenceSeries.enabled ? 'Probability-weighted' : 'Weighting disabled'}</span>}
         legend={(
           <>
             <LegendToken label="Expected Demand" color={CHART_COLORS.confidenceLine} kind="line" />
@@ -798,7 +805,7 @@ const ForecastChartsSection: React.FC<Props> = ({ result, statusDefinitions }) =
       </TimePlot>
 
       <Card className="ux-panel">
-        <div className="p-4 text-xs text-[var(--muted)] grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 p-4 text-xs text-[var(--color-text-secondary)] md:grid-cols-2 xl:grid-cols-4">
           <div>Included @ cursor: {fmtHours(seriesAt(team.scheduledIncluded, hoverIndex))}</div>
           <div>Excluded @ cursor: {fmtHours(seriesAt(team.scheduledExcluded, hoverIndex))}</div>
           <div>Proposed @ cursor: {fmtHours(seriesAt(team.proposed, hoverIndex))}</div>

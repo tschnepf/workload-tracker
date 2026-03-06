@@ -10,26 +10,55 @@ interface CardProps {
   className?: string;
   title?: string;
   onClick?: () => void;
+  variant?: 'default' | 'surface' | 'outline';
+  elevation?: 'none' | 'sm' | 'md' | 'lg';
+  padding?: 'sm' | 'md' | 'lg';
 }
 
-const Card: React.FC<CardProps> = ({ children, className = '', title, onClick }) => {
-  // VSCode-style dark theme card styling - consistent across all cards
-  const baseStyles = `
-    bg-[var(--card)] border border-[var(--border)]
-    rounded-lg shadow-lg shadow-black/5
-    p-6
-  `;
+const Card = React.forwardRef<HTMLDivElement, CardProps>(({
+  children,
+  className = '',
+  title,
+  onClick,
+  variant = 'default',
+  elevation = 'sm',
+  padding = 'lg',
+}, ref) => {
+  const variantMap = {
+    default: 'bg-[var(--color-surface-elevated)] border-[var(--color-border)]',
+    surface: 'bg-[var(--color-surface)] border-[var(--color-border)]',
+    outline: 'bg-transparent border-[var(--color-border)]',
+  } as const;
+
+  const elevationMap = {
+    none: 'shadow-none',
+    sm: 'shadow-[var(--elevation-1)]',
+    md: 'shadow-[var(--elevation-2)]',
+    lg: 'shadow-[var(--elevation-3)]',
+  } as const;
+
+  const paddingMap = {
+    sm: 'p-3',
+    md: 'p-4',
+    lg: 'p-6',
+  } as const;
 
   return (
-    <div className={`${baseStyles} ${className}`} onClick={onClick}>
+    <div
+      ref={ref}
+      className={`rounded-[var(--radius-lg)] border ${variantMap[variant]} ${elevationMap[elevation]} ${paddingMap[padding]} ${className}`}
+      onClick={onClick}
+    >
       {title && (
-        <h3 className="text-lg font-semibold text-[var(--text)] mb-4">
+        <h3 className="mb-4 text-lg font-semibold text-[var(--color-text-primary)]">
           {title}
         </h3>
       )}
       {children}
     </div>
   );
-};
+});
+
+Card.displayName = 'Card';
 
 export default Card;

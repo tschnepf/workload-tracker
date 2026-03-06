@@ -95,7 +95,7 @@ const HierarchyView: React.FC = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-[#969696]">Loading organizational structure...</div>
+          <div className="text-[var(--color-text-secondary)]">Loading organizational structure...</div>
         </div>
       </Layout>
     );
@@ -104,8 +104,8 @@ const HierarchyView: React.FC = () => {
   const DetailsPanel: React.FC = () => {
     if (!selectedDepartment) {
       return (
-        <Card className="bg-[#2d2d30] border-[#3e3e42] p-6 flex items-center justify-center">
-          <div className="text-center text-[#969696]">
+        <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6 flex items-center justify-center">
+          <div className="text-center text-[var(--color-text-secondary)]">
             <h3 className="text-lg mb-2">Select a Department</h3>
             <p className="text-sm">Click on any department in the hierarchy to view details</p>
           </div>
@@ -117,31 +117,31 @@ const HierarchyView: React.FC = () => {
     const teamMembers = people.filter(p => p.department === selectedDepartment.id);
 
     return (
-      <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
-        <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
+      <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6">
+        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">
           Department Details
         </h3>
 
         <div className="space-y-4">
           {/* Basic Info */}
           <div>
-            <h4 className="font-medium text-[#cccccc] mb-2">
+            <h4 className="font-medium text-[var(--color-text-primary)] mb-2">
               {selectedDepartment.name}
             </h4>
             <div className="space-y-1 text-sm">
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Primary Manager:{' '}
-                <span className="text-[#cccccc]">
+                <span className="text-[var(--color-text-primary)]">
                   {getPrimaryManagerName(selectedDepartment) || 'None assigned'}
                 </span>
               </div>
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Secondary Managers:{' '}
-                <span className="text-[#cccccc]">
+                <span className="text-[var(--color-text-primary)]">
                   {getSecondaryManagersLabel(selectedDepartment)}
                 </span>
               </div>
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Status:{' '}
                 <span className={selectedDepartment.isActive ? 'text-emerald-400' : 'text-gray-400'}>
                   {selectedDepartment.isActive ? 'Active' : 'Inactive'}
@@ -152,19 +152,19 @@ const HierarchyView: React.FC = () => {
 
           {/* Statistics */}
           <div>
-            <h4 className="font-medium text-[#cccccc] mb-2">Statistics</h4>
+            <h4 className="font-medium text-[var(--color-text-primary)] mb-2">Statistics</h4>
             <div className="space-y-1 text-sm">
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Direct reports:{' '}
-                <span className="text-[#cccccc]">{stats.directReports}</span>
+                <span className="text-[var(--color-text-primary)]">{stats.directReports}</span>
               </div>
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Sub-departments:{' '}
-                <span className="text-[#cccccc]">{stats.subDepartments}</span>
+                <span className="text-[var(--color-text-primary)]">{stats.subDepartments}</span>
               </div>
-              <div className="text-[#969696]">
+              <div className="text-[var(--color-text-secondary)]">
                 Total team size:{' '}
-                <span className="text-[#cccccc]">{stats.totalTeamSize}</span>
+                <span className="text-[var(--color-text-primary)]">{stats.totalTeamSize}</span>
               </div>
             </div>
           </div>
@@ -172,8 +172,8 @@ const HierarchyView: React.FC = () => {
           {/* Description */}
           {selectedDepartment.description && (
             <div>
-              <h4 className="font-medium text-[#cccccc] mb-2">Description</h4>
-              <p className="text-sm text-[#969696]">
+              <h4 className="font-medium text-[var(--color-text-primary)] mb-2">Description</h4>
+              <p className="text-sm text-[var(--color-text-secondary)]">
                 {selectedDepartment.description}
               </p>
             </div>
@@ -181,20 +181,20 @@ const HierarchyView: React.FC = () => {
 
           {/* Team Members */}
           <div>
-            <h4 className="font-medium text-[#cccccc] mb-2">Team Members</h4>
+            <h4 className="font-medium text-[var(--color-text-primary)] mb-2">Team Members</h4>
             {teamMembers.length > 0 ? (
               <div className="space-y-2">
                 {teamMembers.map(person => (
                   <div key={person.id} className="text-sm">
-                    <div className="text-[#cccccc]">{person.name}</div>
-                    <div className="text-[#969696] text-xs">
+                    <div className="text-[var(--color-text-primary)]">{person.name}</div>
+                    <div className="text-[var(--color-text-secondary)] text-xs">
                       {person.weeklyCapacity}h capacity
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-sm text-[#969696]">No team members assigned</div>
+              <div className="text-sm text-[var(--color-text-secondary)]">No team members assigned</div>
             )}
           </div>
         </div>
@@ -208,16 +208,16 @@ const HierarchyView: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-[#cccccc]">
+            <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">
               Department Hierarchy
             </h1>
-            <p className="text-[#969696] mt-2">
+            <p className="text-[var(--color-text-secondary)] mt-2">
               Organizational structure and team relationships
             </p>
           </div>
           
           <div className="text-right">
-            <div className="text-sm text-[#969696]">
+            <div className="text-sm text-[var(--color-text-secondary)]">
               <div>{departments.length} departments</div>
               <div>{people.length} people</div>
             </div>
@@ -237,8 +237,8 @@ const HierarchyView: React.FC = () => {
         )}
 
         {departments.length === 0 ? (
-          <Card className="bg-[#2d2d30] border-[#3e3e42] p-8 text-center">
-            <div className="text-[#969696]">
+          <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-8 text-center">
+            <div className="text-[var(--color-text-secondary)]">
               <h3 className="text-lg mb-2">No Departments</h3>
               <p>Create departments to see the organizational hierarchy</p>
             </div>
@@ -247,8 +247,8 @@ const HierarchyView: React.FC = () => {
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
             {/* Hierarchy Visualization */}
             <div className="xl:col-span-3">
-              <Card className="bg-[#2d2d30] border-[#3e3e42] p-6">
-                <h3 className="text-lg font-semibold text-[#cccccc] mb-6">
+              <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6">
+                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-6">
                   Organizational Chart
                 </h3>
                 <DepartmentHierarchy
@@ -280,14 +280,14 @@ const HierarchyView: React.FC = () => {
             }
           }}
         >
-          <div className="w-full max-w-md h-full bg-[#2d2d30] text-[#cccccc] shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#3e3e42]">
+          <div className="w-full max-w-md h-full bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)] shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
               <div className="text-base font-semibold truncate">
                 {selectedDepartment?.name || 'Department details'}
               </div>
               <button
                 type="button"
-                className="text-xl text-[#969696]"
+                className="text-xl text-[var(--color-text-secondary)]"
                 onClick={() => setMobileDetailOpen(false)}
                 aria-label="Close department details"
               >

@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ProjectAssignmentsColumn from './ProjectAssignmentsColumn';
 
 vi.mock('./AssignmentRow', () => ({
@@ -69,9 +70,20 @@ const baseProps: any = {
   onSwapPlaceholder: vi.fn(),
 };
 
+function renderWithQueryClient(ui: React.ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 describe('ProjectAssignmentsColumn', () => {
   it('renders narrow ordering as add button -> add card -> assignment cards', () => {
-    render(<ProjectAssignmentsColumn {...baseProps} isNarrowLayout />);
+    renderWithQueryClient(<ProjectAssignmentsColumn {...baseProps} isNarrowLayout />);
 
     const addButtonRow = screen.getByTestId('assignments-add-button-narrow');
     const addCard = screen.getByTestId('add-assignment-card');
@@ -82,13 +94,13 @@ describe('ProjectAssignmentsColumn', () => {
   });
 
   it('renders wide add button row and hides narrow button row', () => {
-    render(<ProjectAssignmentsColumn {...baseProps} isNarrowLayout={false} />);
+    renderWithQueryClient(<ProjectAssignmentsColumn {...baseProps} isNarrowLayout={false} />);
     expect(screen.getByTestId('assignments-add-button-wide')).toBeInTheDocument();
     expect(screen.queryByTestId('assignments-add-button-narrow')).not.toBeInTheDocument();
   });
 
   it('renders empty state when there are no assignments and add form is closed', () => {
-    render(
+    renderWithQueryClient(
       <ProjectAssignmentsColumn
         {...baseProps}
         showAddAssignment={false}

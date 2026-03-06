@@ -730,6 +730,11 @@ CELERY_BEAT_SCHEDULE['network-graph-weekly-snapshot-scheduler'] = {
     'task': 'assignments.tasks.network_graph_weekly_snapshot_scheduler_task',
     'schedule': timedelta(minutes=int(os.getenv('NETWORK_GRAPH_SNAPSHOT_SCHEDULER_INTERVAL_MINUTES', '15'))),
 }
+CELERY_BEAT_SCHEDULE['backup-automation-scheduler'] = {
+    'task': 'core.backup_tasks.automatic_backup_scheduler_task',
+    'schedule': timedelta(minutes=int(os.getenv('BACKUP_AUTOMATION_SCHEDULER_INTERVAL_MINUTES', '15'))),
+    'options': {'queue': 'db_maintenance'},
+}
 CELERY_BEAT_SCHEDULE['web-push-deferred-flush'] = {
     'task': 'core.tasks.flush_deferred_push_notifications_task',
     'schedule': timedelta(minutes=int(os.getenv('WEB_PUSH_DEFERRED_FLUSH_INTERVAL_MINUTES', '10'))),

@@ -30,6 +30,51 @@
   --shade2: #26262a;
   --shade3: #232327;
   --shade4: #1f1f24;
+
+  /* Semantic aliases (authoritative app contract) */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--card);
+  --color-surface-overlay: var(--surfaceOverlay);
+  --color-border: var(--border);
+  --color-border-subtle: var(--borderSubtle);
+  --color-border-overlay: var(--borderOverlay);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+  --color-focus-ring: var(--focus);
+  --color-state-info: var(--statusInfo);
+  --color-state-success: var(--statusSuccess);
+  --color-state-warning: var(--statusWarning);
+  --color-state-danger: var(--statusDanger);
+  --color-action-primary: var(--primary);
+  --color-action-primary-hover: var(--primaryHover);
+
+  /* Layout tokens */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --elevation-2: 0 8px 20px rgba(0, 0, 0, 0.18);
+  --elevation-3: 0 14px 32px rgba(0, 0, 0, 0.24);
+
+  /* Chart defaults */
+  --chart-person: #3b82f6;
+  --chart-project: #14b8a6;
+  --chart-client: #f59e0b;
+  --chart-neutral: #94a3b8;
+  --chart-accent-a: #60a5fa;
+  --chart-accent-b: #22c55e;
+  --chart-accent-c: #f43f5e;
 }
 
 .theme-default {
@@ -76,6 +121,9 @@
   --surfaceOverlay: rgba(37, 99, 235, 0.12);
   --borderOverlay: rgba(37, 99, 235, 0.30);
   --shade0: #ffffff; --shade1: #fbfdff; --shade2: #f7faff; --shade3: #f3f7ff; --shade4: #eff5ff;
+  --elevation-1: 0 1px 2px rgba(17, 24, 39, 0.08);
+  --elevation-2: 0 8px 20px rgba(17, 24, 39, 0.1);
+  --elevation-3: 0 14px 30px rgba(17, 24, 39, 0.14);
 }
 
 /* Additional schemes can be tuned later; scaffold a couple of variants */
@@ -96,6 +144,10 @@
   --surfaceOverlay: rgba(34, 65, 89, 0.45);
   --borderOverlay: rgba(34, 65, 89, 0.35);
   --shade0: #162838; --shade1: #142233; --shade2: #121e2e; --shade3: #101a29; --shade4: #0e1724;
+  --chart-person: #38bdf8;
+  --chart-project: #22d3ee;
+  --chart-client: #fbbf24;
+  --chart-neutral: #94a3b8;
 }
 /* Midnight scheme: deep navy surfaces and shades */
 .theme-midnight {
@@ -117,6 +169,9 @@
   --shade4: #0e1420;
   --surfaceOverlay: rgba(32, 45, 73, 0.45);
   --borderOverlay: rgba(59, 82, 118, 0.35);
+  --chart-person: #60a5fa;
+  --chart-project: #34d399;
+  --chart-client: #f59e0b;
 }
 
 
@@ -141,6 +196,9 @@
   --surfaceOverlay: rgba(34, 58, 90, 0.45);
   --borderOverlay: rgba(44, 74, 116, 0.35);
   --shade0: #13203a; --shade1: #111c33; --shade2: #0f182d; --shade3: #0d1526; --shade4: #0b1220;
+  --chart-person: #60a5fa;
+  --chart-project: #2dd4bf;
+  --chart-client: #fbbf24;
 }
 
 /* Triad palette: warm primary with green accent */
@@ -161,6 +219,9 @@
   --surfaceOverlay: rgba(58, 47, 30, 0.45);
   --borderOverlay: rgba(74, 59, 38, 0.35);
   --shade0: #1f1a11; --shade1: #1c170f; --shade2: #19140d; --shade3: #17120c; --shade4: #14110b;
+  --chart-person: #f59e0b;
+  --chart-project: #10b981;
+  --chart-client: #f43f5e;
 }
 
 /* (Steel Cyan and Topbar themes removed) */

@@ -26,6 +26,14 @@ def default_auto_hours_phase_keys():
 _TASK_PROGRESS_COLOR_HEX_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
 
 
+def default_backups_dir() -> str:
+    return str(getattr(settings, 'BACKUPS_DIR', '/backups') or '/backups')
+
+
+def default_backup_schedule_timezone() -> str:
+    return str(getattr(settings, 'TIME_ZONE', 'UTC') or 'UTC')
+
+
 def _storage_cipher() -> Fernet:
     seed = (settings.SECRET_KEY or 'workload-tracker').encode('utf-8')
     digest = hashlib.sha256(seed).digest()
@@ -333,6 +341,63 @@ class TaskProgressColorSettings(models.Model):
                 {'minPercent': 26, 'maxPercent': 75, 'colorHex': '#3B82F6', 'label': '26-75%'},
                 {'minPercent': 76, 'maxPercent': 100, 'colorHex': '#EF4444', 'label': '76-100%'},
             ]
+        }
+        obj, _ = cls.objects.get_or_create(key='default', defaults=defaults)
+        return obj
+
+
+class BackupAutomationSettings(models.Model):
+    """Singleton runtime settings for automatic backups and retention."""
+
+    SCHEDULE_DAILY = 'daily'
+    SCHEDULE_WEEKLY = 'weekly'
+    SCHEDULE_MONTHLY = 'monthly'
+    SCHEDULE_CHOICES = (
+        (SCHEDULE_DAILY, 'Daily'),
+        (SCHEDULE_WEEKLY, 'Weekly'),
+        (SCHEDULE_MONTHLY, 'Monthly'),
+    )
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    enabled = models.BooleanField(default=True)
+    schedule_type = models.CharField(max_length=16, choices=SCHEDULE_CHOICES, default=SCHEDULE_DAILY)
+    # Python weekday index: Monday=0 ... Sunday=6
+    schedule_day_of_week = models.IntegerField(default=6, validators=[MinValueValidator(0), MaxValueValidator(6)])
+    # 1..31 (effective date is clamped to month length at runtime)
+    schedule_day_of_month = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(31)])
+    schedule_hour = models.IntegerField(default=2, validators=[MinValueValidator(0), MaxValueValidator(23)])
+    schedule_minute = models.IntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(59)])
+    schedule_timezone = models.CharField(max_length=64, default=default_backup_schedule_timezone)
+    backups_dir = models.CharField(max_length=1024, default=default_backups_dir)
+    retention_daily = models.PositiveIntegerField(default=7, validators=[MinValueValidator(1), MaxValueValidator(365)])
+    retention_weekly = models.PositiveIntegerField(default=4, validators=[MinValueValidator(1), MaxValueValidator(104)])
+    retention_monthly = models.PositiveIntegerField(default=12, validators=[MinValueValidator(1), MaxValueValidator(240)])
+    last_automatic_backup_at = models.DateTimeField(null=True, blank=True)
+    last_automatic_backup_filename = models.CharField(max_length=255, blank=True, default='')
+    next_automatic_backup_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Backup Automation Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"BackupAutomationSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        defaults = {
+            'enabled': True,
+            'schedule_type': cls.SCHEDULE_DAILY,
+            'schedule_day_of_week': 6,
+            'schedule_day_of_month': 1,
+            'schedule_hour': 2,
+            'schedule_minute': 0,
+            'schedule_timezone': default_backup_schedule_timezone(),
+            'backups_dir': default_backups_dir(),
+            'retention_daily': 7,
+            'retention_weekly': 4,
+            'retention_monthly': 12,
         }
         obj, _ = cls.objects.get_or_create(key='default', defaults=defaults)
         return obj

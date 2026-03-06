@@ -14,7 +14,7 @@ const Skeleton: React.FC<SkeletonProps> = ({ rows = 6, className = 'h-4 mb-2' })
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className={`w-full bg-[#3e3e42] rounded animate-pulse motion-reduce:animate-none ${className}`}
+          className={`w-full rounded-[var(--radius-sm)] bg-[var(--color-border)]/55 animate-pulse motion-reduce:animate-none ${className}`}
         />)
       )}
     </div>

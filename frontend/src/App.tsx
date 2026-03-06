@@ -9,6 +9,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/lib/queryClient';
 import Loader from '@/components/ui/Loader';
 import RoutePageBoundary from '@/components/RoutePageBoundary';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
 
 // Routing & auth wrappers are configured in route objects (main.tsx)
 
@@ -32,16 +34,17 @@ class LazyLoadErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex items-center justify-center min-h-screen bg-[#1e1e1e]">
-          <div className="text-center">
-            <div className="text-red-400 text-xl mb-2">Something went wrong</div>
-            <div className="text-[#969696] mb-4">Failed to load page component</div>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="bg-[#007acc] hover:bg-[#005a99] text-white px-4 py-2 rounded"
+        <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4">
+          <div className="w-full max-w-xl space-y-4">
+            <InlineAlert tone="error" title="Something went wrong">
+              Failed to load page component.
+            </InlineAlert>
+            <Button
+              onClick={() => window.location.reload()}
+              className="w-full sm:w-auto"
             >
               Reload Page
-            </button>
+            </Button>
           </div>
         </div>
       );

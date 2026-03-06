@@ -6,8 +6,8 @@ const Bar: React.FC<{ w?: string; h?: string }>= ({ w = '100%', h = '12px' }) =>
 
 const DepartmentsSkeleton: React.FC = () => {
   return (
-    <div className="h-full min-h-0 flex bg-[#1e1e1e]" role="status" aria-live="polite" aria-busy="true">
-      <div className="w-1/3 p-6 border-r border-[#3e3e42] bg-[#252526] min-h-0">
+    <div className="h-full min-h-0 flex bg-[var(--color-bg)]" role="status" aria-live="polite" aria-busy="true">
+      <div className="w-1/3 p-6 border-r border-[var(--color-border)] bg-[#252526] min-h-0">
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
             <Bar w="140px" h="22px" />
@@ -17,7 +17,7 @@ const DepartmentsSkeleton: React.FC = () => {
         </div>
         <div className="space-y-3">
           {Array.from({ length: 8 }).map((_, idx) => (
-            <div key={idx} className="p-4 bg-[#2d2d30] border border-[#3e3e42] rounded">
+            <div key={idx} className="p-4 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded">
               <Bar w="60%" />
               <div className="mt-2"><Bar w="40%" /></div>
             </div>

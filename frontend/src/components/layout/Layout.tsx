@@ -36,12 +36,21 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const SIDEBAR_EXPANDED_KEY = 'ui.sidebar.expanded';
   const location = useLocation();
   const nav = useNavigation();
   const navigate = useNavigate();
   const unifiedNavPending = true;
   useNavTiming();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [desktopSidebarExpanded, setDesktopSidebarExpanded] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(SIDEBAR_EXPANDED_KEY);
+      return saved == null ? true : saved === '1';
+    } catch {
+      return true;
+    }
+  });
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const auth = useAuth();
@@ -104,6 +113,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_EXPANDED_KEY, desktopSidebarExpanded ? '1' : '0');
+    } catch {
+      // ignore storage errors
+    }
+  }, [desktopSidebarExpanded, SIDEBAR_EXPANDED_KEY]);
 
   useEffect(() => {
     function onOnline() {
@@ -194,7 +211,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </a>
       {/* Desktop sidebar */}
       <div className="hidden md:block">
-        <Sidebar />
+        <Sidebar
+          expanded={desktopSidebarExpanded}
+          onToggleExpanded={() => setDesktopSidebarExpanded((prev) => !prev)}
+        />
       </div>
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Header actions bar */}
@@ -262,7 +282,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </svg>
               </button>
               {/* Reuse existing Sidebar markup for consistency */}
-              <Sidebar showLabels />
+              <Sidebar showLabels expanded hideCollapseToggle />
             </div>
           </div>
         </div>
@@ -287,78 +307,101 @@ const TopBarInner: React.FC<{
   onInstall: () => Promise<void> | void;
 }> = ({ authPresent, showVerticalFilter, showDepartmentFilter, onLogout, onOpenSidebar, hamburgerRef, canInstall, onInstall }) => {
   const { left } = useTopBarSlotValues();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!mobileFiltersOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileFiltersOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileFiltersOpen]);
+
   return (
-    <div
-      id="app-topbar"
-      className="flex-shrink-0"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-        flexWrap: 'nowrap',
-        padding: '6px 10px',
-        borderBottom: '1px solid var(--border)',
-        backgroundColor: 'var(--surface)',
-        zIndex: 30,
-        position: 'sticky',
-        top: 0,
-      }}
-    >
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <button
-          type="button"
-          aria-label="Open navigation"
-          className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
-          onClick={onOpenSidebar}
-          ref={hamburgerRef}
-        >
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-        <div className="min-w-0 flex-1 flex items-center gap-2 overflow-x-auto scrollbar-theme">
+    <>
+      <div
+        id="app-topbar"
+        className="sticky top-0 z-30 flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 sm:px-3"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <button
+            type="button"
+            aria-label="Open navigation"
+            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]"
+            onClick={onOpenSidebar}
+            ref={hamburgerRef}
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
           <div className="min-w-0 shrink-0">
             <div id="topbar-left-mount" className="min-w-0" />
             {left ? <div className="min-w-0">{left}</div> : null}
           </div>
-          <div className="flex items-center gap-2 min-w-0 shrink-0">
+          <div className="hidden min-w-0 shrink-0 items-center gap-2 overflow-x-auto scrollbar-theme sm:flex">
             {showVerticalFilter ? <GlobalVerticalFilter /> : null}
             {showDepartmentFilter ? <GlobalDepartmentFilter expand={false} /> : null}
           </div>
-          <div id="topbar-right-mount" className="min-w-0 flex-1" />
+          <div id="topbar-right-mount" className="min-w-0 shrink-0" />
+        </div>
+        <div className="ml-auto flex min-w-0 items-center gap-2">
+          {(showVerticalFilter || showDepartmentFilter) ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="sm:hidden"
+              onClick={() => setMobileFiltersOpen(true)}
+            >
+              Filters
+            </Button>
+          ) : null}
+          {canInstall && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Install app"
+              onClick={onInstall}
+              className="px-2 py-1 text-xs sm:text-sm"
+              style={{ minHeight: 32 }}
+            >
+              Install App
+            </Button>
+          )}
+          {authPresent ? <NotificationBell enabled={authPresent} /> : null}
+          {authPresent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Log out"
+              onClick={onLogout}
+              className="px-2 py-1 text-xs sm:text-sm"
+              style={{ minHeight: 32 }}
+            >
+              Log out
+            </Button>
+          )}
         </div>
       </div>
-      <div className="flex items-center gap-2 min-w-0 ml-auto">
-        {canInstall && (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Install app"
-            onClick={onInstall}
-            className="px-2 py-1 text-xs sm:text-sm"
-            style={{ minHeight: 32 }}
-          >
-            Install App
-          </Button>
-        )}
-        {authPresent ? <NotificationBell enabled={authPresent} /> : null}
-        {authPresent && (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Log out"
-            onClick={onLogout}
-            className="px-2 py-1 text-xs sm:text-sm"
-            style={{ minHeight: 32 }}
-          >
-            Log out
-          </Button>
-        )}
-      </div>
-    </div>
+      {mobileFiltersOpen ? (
+        <div className="fixed inset-0 z-40 sm:hidden" role="dialog" aria-modal="true" aria-label="Global filters">
+          <div className="absolute inset-0 bg-black/55" onClick={() => setMobileFiltersOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[70svh] overflow-auto rounded-t-[var(--radius-xl)] border-t border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 shadow-[var(--elevation-3)]">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Filters</h3>
+              <Button variant="ghost" size="sm" onClick={() => setMobileFiltersOpen(false)}>Close</Button>
+            </div>
+            <div className="grid gap-3">
+              {showVerticalFilter ? <GlobalVerticalFilter expand /> : null}
+              {showDepartmentFilter ? <GlobalDepartmentFilter expand /> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 };
 

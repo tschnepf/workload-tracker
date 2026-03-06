@@ -1,8 +1,12 @@
-﻿﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
-import { darkTheme } from '../../../theme/tokens';
 import { deliverablesApi, deliverableAssignmentsApi, peopleApi } from '../../../services/api';
+import Input from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
+import InlineAlert from '@/components/ui/InlineAlert';
+import PanelHeader from '@/components/ui/PanelHeader';
 
 interface Props { onClose: () => void }
 
@@ -17,13 +21,14 @@ const MilestoneReviewTool: React.FC<Props> = () => {
 
   useAuthenticatedEffect(() => {
     const run = async () => {
+      setLoading(true);
       try {
         const today = new Date();
-        const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
-        const end = new Date(today.getFullYear(), today.getMonth()+1, 0).toISOString().slice(0,10);
+        const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
         const data = await deliverablesApi.calendar(start, end, verticalState.selectedVerticalId ?? undefined);
-        setItems(data);
-        if (data.length > 0) setSelectedDeliverableId(data[0].id);
+        setItems(data || []);
+        if (data.length > 0) setSelectedDeliverableId((prev) => prev ?? data[0].id);
       } finally {
         setLoading(false);
       }
@@ -35,10 +40,8 @@ const MilestoneReviewTool: React.FC<Props> = () => {
     const loadAssignments = async () => {
       if (!selectedDeliverableId) return;
       try {
-        const [summary] = await Promise.all([
-          deliverablesApi.staffingSummary(selectedDeliverableId),
-        ]);
-        setStaff(summary);
+        const summary = await deliverablesApi.staffingSummary(selectedDeliverableId);
+        setStaff(summary || []);
       } catch (e) {
         console.error('Failed to load staffing summary', e);
       }
@@ -46,12 +49,11 @@ const MilestoneReviewTool: React.FC<Props> = () => {
     loadAssignments();
   }, [selectedDeliverableId]);
 
-  // Load people for linking (lightweight autocomplete seed)
   useEffect(() => {
     const load = async () => {
       try {
         const first = await peopleApi.autocomplete('', 50, verticalState.selectedVerticalId ?? undefined);
-        setPeople(first);
+        setPeople(first || []);
       } catch (e) {
         console.error('Failed to load people', e);
       }
@@ -62,11 +64,10 @@ const MilestoneReviewTool: React.FC<Props> = () => {
   const refreshSummary = async () => {
     if (!selectedDeliverableId) return;
     const summary = await deliverablesApi.staffingSummary(selectedDeliverableId);
-    setStaff(summary);
+    setStaff(summary || []);
   };
 
-  const shownIds = new Set((staff || []).map((s: any) => s.personId));
-  const linkedIds = new Set((staff || []).filter((s: any) => s.linkId != null).map((s: any) => s.personId));
+  const shownIds = useMemo(() => new Set((staff || []).map((s: any) => s.personId)), [staff]);
 
   const handleAddPerson = async (personId: number) => {
     if (!selectedDeliverableId || !personId) return;
@@ -91,6 +92,7 @@ const MilestoneReviewTool: React.FC<Props> = () => {
   };
 
   const handleRoleChange = async (linkId: number, role: string) => {
+    if (!linkId) return;
     setSaving(true);
     try {
       await deliverableAssignmentsApi.update(linkId, { roleOnMilestone: role });
@@ -101,148 +103,117 @@ const MilestoneReviewTool: React.FC<Props> = () => {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: darkTheme.spacing.md }}>
-      <div style={{ borderRight: `1px solid ${darkTheme.colors.border.secondary}`, paddingRight: darkTheme.spacing.md }}>
-        <div style={{ color: darkTheme.colors.text.secondary, marginBottom: darkTheme.spacing.sm }}>Milestones</div>
+    <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_2fr]">
+      <section className="space-y-3 border-b border-[var(--color-border)] pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
+        <PanelHeader title="Milestones" subtitle="Current month deliverables" />
         {loading ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Loadingâ€¦</div>
+          <InlineAlert tone="info">Loading…</InlineAlert>
         ) : (
-          <div style={{ display: 'grid', gap: darkTheme.spacing.xs }}>
-            {items.map((i) => (
-              <button key={i.id} onClick={() => setSelectedDeliverableId(i.id)} style={{
-                textAlign: 'left',
-                padding: darkTheme.spacing.xs,
-                borderRadius: darkTheme.borderRadius.sm,
-                border: `1px solid ${selectedDeliverableId === i.id ? darkTheme.colors.brand.primary : darkTheme.colors.border.secondary}`,
-                background: selectedDeliverableId === i.id ? darkTheme.colors.background.elevated : 'transparent',
-                color: darkTheme.colors.text.primary,
-                cursor: 'pointer'
-              }}>
-                <div style={{ fontWeight: 600 }}>{i.projectName || `Project ${i.project}`}</div>
-                <div style={{ fontSize: darkTheme.typography.fontSize.sm, color: darkTheme.colors.text.secondary }}>
-                  {i.title} â€” {i.date}
-                </div>
-              </button>
-            ))}
+          <div className="grid gap-2">
+            {items.map((item) => {
+              const selected = selectedDeliverableId === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedDeliverableId(item.id)}
+                  className={[
+                    'rounded-[var(--radius-md)] border px-3 py-2 text-left transition-colors',
+                    selected
+                      ? 'border-[var(--color-action-primary)] bg-[var(--surfaceHover)] text-[var(--color-text-primary)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)]',
+                  ].join(' ')}
+                >
+                  <div className="font-semibold">{item.projectName || `Project ${item.project}`}</div>
+                  <div className="text-sm text-[var(--color-text-secondary)]">
+                    {item.title} — {item.date}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
-      </div>
-      <div>
-        <div style={{ color: darkTheme.colors.text.secondary, marginBottom: darkTheme.spacing.sm }}>Assignments</div>
+      </section>
+
+      <section className="space-y-3">
+        <PanelHeader title="Assignments" subtitle="Link and annotate milestone staffing" />
         {selectedDeliverableId == null ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Select a milestone</div>
+          <InlineAlert tone="info">Select a milestone.</InlineAlert>
         ) : (
-          <div style={{ display: 'grid', gap: darkTheme.spacing.sm }}>
-            {/* Add Person */}
-            <div style={{ display: 'flex', gap: darkTheme.spacing.sm, alignItems: 'center' }}>
-              <select
-                disabled={saving}
-                defaultValue=""
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  if (val) handleAddPerson(val);
-                  e.currentTarget.value = '';
-                }}
-                style={{
-                  background: darkTheme.colors.background.tertiary,
-                  color: darkTheme.colors.text.primary,
-                  border: `1px solid ${darkTheme.colors.border.secondary}`,
-                  borderRadius: 6,
-                  padding: '6px 8px',
-                  minWidth: 240,
-                }}
-              >
-                <option value="">+ Add person to milestoneâ€¦</option>
-                {people.filter(p => !shownIds.has(p.id)).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              {saving && <span style={{ color: darkTheme.colors.text.muted }}>Savingâ€¦</span>}
+          <div className="grid gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="min-w-[220px] flex-1">
+                <Select
+                  aria-label="Add person to milestone"
+                  disabled={saving}
+                  defaultValue=""
+                  onChange={(e) => {
+                    const value = Number((e.target as HTMLSelectElement).value);
+                    if (value) void handleAddPerson(value);
+                    (e.target as HTMLSelectElement).value = '';
+                  }}
+                >
+                  <option value="">+ Add person to milestone…</option>
+                  {people.filter((person: any) => !shownIds.has(person.id)).map((person: any) => (
+                    <option key={person.id} value={person.id}>{person.name}</option>
+                  ))}
+                </Select>
+              </div>
+              {saving ? <div className="text-sm text-[var(--color-text-secondary)]">Saving…</div> : null}
             </div>
 
-            {/* Staff list */}
             {(!staff || staff.length === 0) ? (
-              <div style={{ color: darkTheme.colors.text.muted }}>No people found in window</div>
-            ) : staff.map((s: any) => (
-              <div key={s.linkId ?? s.personId} style={{
-                padding: darkTheme.spacing.sm,
-                background: darkTheme.colors.background.tertiary,
-                borderRadius: darkTheme.borderRadius.md,
-                border: `1px solid ${darkTheme.colors.border.secondary}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <InlineAlert tone="info">No people found in window.</InlineAlert>
+            ) : staff.map((entry: any) => (
+              <div key={entry.linkId ?? entry.personId} className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                <div className="mb-2 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <div style={{ fontWeight: 600 }}>{s.personName}</div>
-                    <div style={{ fontSize: darkTheme.typography.fontSize.sm, color: darkTheme.colors.text.secondary }}>
-                      Assigned hours until deliverable: {s.totalHours}
+                    <div className="font-semibold text-[var(--color-text-primary)]">{entry.personName}</div>
+                    <div className="text-sm text-[var(--color-text-secondary)]">
+                      Assigned hours until deliverable: {entry.totalHours}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
                       type="text"
-                      defaultValue={s.roleOnMilestone || ''}
-                      placeholder={s.linkId ? 'Role on milestone' : 'Link to edit role'}
-                      onBlur={(e) => s.linkId && handleRoleChange(s.linkId, e.target.value)}
-                      disabled={!s.linkId}
-                      style={{
-                        background: darkTheme.colors.background.tertiary,
-                        color: darkTheme.colors.text.primary,
-                        border: `1px solid ${darkTheme.colors.border.secondary}`,
-                        borderRadius: 6,
-                        padding: '6px 8px',
-                        minWidth: 180,
-                        opacity: s.linkId ? 1 : 0.6,
-                        cursor: s.linkId ? 'text' : 'not-allowed',
+                      defaultValue={entry.roleOnMilestone || ''}
+                      placeholder={entry.linkId ? 'Role on milestone' : 'Link to edit role'}
+                      onBlur={(e) => {
+                        if (entry.linkId) void handleRoleChange(entry.linkId, (e.target as HTMLInputElement).value);
                       }}
+                      disabled={!entry.linkId}
+                      className={!entry.linkId ? 'opacity-60 cursor-not-allowed' : ''}
                     />
-                    {s.linkId ? (
-                      <button
-                        onClick={() => handleRemoveLink(s.linkId)}
-                        style={{
-                          color: '#f87171',
-                          border: `1px solid ${darkTheme.colors.border.secondary}`,
-                          background: 'transparent',
-                          borderRadius: 6,
-                          padding: '6px 8px',
-                          cursor: 'pointer',
-                        }}
-                        title="Unlink from milestone"
-                      >Remove</button>
+                    {entry.linkId ? (
+                      <Button variant="danger" onClick={() => void handleRemoveLink(entry.linkId)}>
+                        Remove
+                      </Button>
                     ) : (
-                      <button
-                        onClick={() => handleAddPerson(s.personId)}
-                        style={{
-                          color: darkTheme.colors.text.primary,
-                          border: `1px solid ${darkTheme.colors.border.secondary}`,
-                          background: 'transparent',
-                          borderRadius: 6,
-                          padding: '6px 8px',
-                          cursor: 'pointer',
-                        }}
-                        title="Link this person to milestone"
-                      >Link</button>
+                      <Button variant="secondary" onClick={() => void handleAddPerson(entry.personId)}>
+                        Link
+                      </Button>
                     )}
                   </div>
                 </div>
-                {/* Simple week breakdown */}
-                {s.weekBreakdown && Object.keys(s.weekBreakdown).length > 0 && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {Object.entries(s.weekBreakdown).sort(([a],[b]) => a.localeCompare(b)).map(([wk, hrs]: any) => (
-                      <div key={wk} style={{
-                        fontSize: 12,
-                        color: darkTheme.colors.text.secondary,
-                        border: `1px solid ${darkTheme.colors.border.secondary}`,
-                        borderRadius: 4,
-                        padding: '2px 6px'
-                      }}>{wk}: {Math.round(Number(hrs))}h</div>
-                    ))}
+                {entry.weekBreakdown && Object.keys(entry.weekBreakdown).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(entry.weekBreakdown)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([week, hours]: any) => (
+                        <span
+                          key={week}
+                          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]"
+                        >
+                          {week}: {Math.round(Number(hours))}h
+                        </span>
+                      ))}
                   </div>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };

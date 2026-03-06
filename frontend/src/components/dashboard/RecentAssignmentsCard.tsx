@@ -58,7 +58,7 @@ const RecentAssignmentsCard: React.FC<{
   }, [items, matchesTokensText]);
 
   return (
-    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] flex flex-col min-h-[240px] ${className ?? ''}`}>
+    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] flex flex-col min-h-[240px] overflow-hidden ${className ?? ''}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-[var(--text)]">Recent Assignments</h3>
@@ -93,7 +93,7 @@ const RecentAssignmentsCard: React.FC<{
         </div>
       </div>
 
-      <div className="mt-3 flex-1 min-h-0 max-h-[360px] overflow-y-auto pr-2">
+      <div className="mt-3 flex-1 min-h-0 overflow-y-auto pr-2">
         {filteredItems.length === 0 ? (
           <div className="text-sm text-[var(--muted)]">
             {items.length === 0 ? 'No assignments in the last 7 days.' : 'No matches for current filters.'}

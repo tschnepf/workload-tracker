@@ -135,11 +135,11 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
   const rows = useMemo(() => settings?.phases || [], [settings]);
 
   return (
-    <Card className="bg-[#2d2d30] border-[#3e3e42] p-4">
+    <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-[#cccccc] font-semibold">Phase Mapping Rules</div>
-          <div className="text-[#969696] text-sm">Controls deliverable phase classification for analytics and tasks</div>
+          <div className="text-[var(--color-text-primary)] font-semibold">Phase Mapping Rules</div>
+          <div className="text-[var(--color-text-secondary)] text-sm">Controls deliverable phase classification for analytics and tasks</div>
         </div>
         <div className="flex items-center gap-2">
           {error && (
@@ -155,10 +155,10 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
       </div>
       {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
       {loading || !settings ? (
-        <div className="text-[#cccccc]">Loading…</div>
+        <div className="text-[var(--color-text-primary)]">Loading…</div>
       ) : (
         <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm text-[#cccccc]">
+          <label className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
             <input
               type="checkbox"
               checked={!!settings.useDescriptionMatch}
@@ -180,12 +180,12 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
               </thead>
               <tbody className="text-[#e5e7eb]">
                 {rows.map((row, index) => (
-                  <tr key={row._localId} className="border-t border-[#3e3e42]">
+                  <tr key={row._localId} className="border-t border-[var(--color-border)]">
                     <td className="py-2 pr-4">
                       <input
                         type="text"
                         value={row.key || ''}
-                        className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        className="w-24 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => updatePhaseField(index, 'key', e.currentTarget.value)}
                       />
                     </td>
@@ -193,7 +193,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                       <input
                         type="text"
                         value={row.label || ''}
-                        className="w-24 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        className="w-24 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => updatePhaseField(index, 'label', e.currentTarget.value)}
                       />
                     </td>
@@ -201,7 +201,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                       <input
                         type="text"
                         value={row._tokensText}
-                        className="w-64 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        className="w-64 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => {
                           const value = e.currentTarget.value;
                           const phases = settings?.phases.slice() || [];
@@ -231,7 +231,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                         min={0}
                         max={100}
                         value={row.rangeMin ?? ''}
-                        className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        className="w-20 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => {
                           const v = e.currentTarget.value.trim();
                           updatePhaseField(index, 'rangeMin', v === '' ? null : Number(v));
@@ -244,7 +244,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                         min={0}
                         max={100}
                         value={row.rangeMax ?? ''}
-                        className="w-20 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 py-1 text-xs"
+                        className="w-20 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => {
                           const v = e.currentTarget.value.trim();
                           updatePhaseField(index, 'rangeMax', v === '' ? null : Number(v));

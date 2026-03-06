@@ -21,7 +21,7 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
   onSkillsChange,
   skillType = 'all',
   placeholder = "Add skills...",
-  className = "w-full px-2 py-1 text-xs bg-[#2d2d30] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+  className = "w-full px-2 py-1 text-xs bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded text-[var(--color-text-primary)] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
 }) => {
   const [skillSearch, setSkillSearch] = useState('');
   const [skillResults, setSkillResults] = useState<SkillTag[]>([]);
@@ -193,19 +193,19 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
         
         {/* Search Results Dropdown with Create New Option */}
         {(showDropdown && skillResults.length > 0) || (skillSearch.length >= 2 && !isCreatingSkill) ? (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[#2d2d30] border border-[#3e3e42] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded shadow-lg z-50 max-h-32 overflow-y-auto">
             {/* Existing skills */}
             {skillResults.map((skill, index) => (
               <button
                 key={skill.id}
                 onClick={() => handleSkillSelect(skill)}
-                className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#cccccc] border-b border-[#3e3e42] last:border-b-0 ${
-                  selectedIndex === index ? 'bg-[#007acc]/30 border-[#007acc]' : ''
+                className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[var(--color-text-primary)] border-b border-[var(--color-border)] last:border-b-0 ${
+                  selectedIndex === index ? 'bg-[var(--color-action-primary)]/30 border-[#007acc]' : ''
                 }`}
               >
                 <div className="font-medium">{skill.name}</div>
                 {skill.category && (
-                  <div className="text-[#969696]">{skill.category}</div>
+                  <div className="text-[var(--color-text-secondary)]">{skill.category}</div>
                 )}
               </button>
             ))}
@@ -216,8 +216,8 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
             ) && (
               <button
                 onClick={() => createNewSkill(skillSearch.trim())}
-                className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[#969696] border-t border-[#3e3e42] bg-[#3e3e42]/30 ${
-                  selectedIndex === skillResults.length ? 'bg-[#007acc]/30 border-[#007acc]' : ''
+                className={`w-full text-left px-2 py-1 text-xs hover:bg-[#3e3e42] transition-colors text-[var(--color-text-secondary)] border-t border-[var(--color-border)] bg-[#3e3e42]/30 ${
+                  selectedIndex === skillResults.length ? 'bg-[var(--color-action-primary)]/30 border-[#007acc]' : ''
                 }`}
                 disabled={isCreatingSkill}
               >

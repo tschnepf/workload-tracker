@@ -16,7 +16,7 @@ import { useUpdatePerson } from '@/hooks/usePeople';
 import Toast from '@/components/ui/Toast';
 import Layout from '@/components/layout/Layout';
 import { setSettings } from '@/store/auth';
-import { setColorScheme } from '@/theme/themeManager';
+import { setColorScheme, COLOR_SCHEME_OPTIONS } from '@/theme/themeManager';
 import { base64UrlToUint8Array, isWebPushSupported } from '@/utils/push';
 
 const defaultNotificationMatrix = (): NotificationChannelMatrix => ({
@@ -357,12 +357,9 @@ const Profile: React.FC = () => {
                 await setSettings({ colorScheme: v });
               }}
             >
-              <option value="default">Default</option>
-              <option value="light">Light</option>
-              <option value="navy">Navy</option>
-              <option value="triad">Triad</option>
-              <option value="midnight">Midnight</option>
-              <option value="sky">Sky</option>
+              {COLOR_SCHEME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </div>
         </div>

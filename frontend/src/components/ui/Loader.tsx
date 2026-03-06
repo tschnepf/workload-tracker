@@ -26,8 +26,11 @@ const Loader: React.FC<LoaderProps> = ({ message = 'Loading...', full = false, i
   return (
     <div role="status" aria-live="polite" aria-busy="true" className={containerClasses}>
       <div className="flex items-center space-x-3">
-        <div className="animate-spin motion-reduce:animate-none rounded-full h-6 w-6 border-b-2 border-[#007acc]" aria-hidden="true"></div>
-        <div className="text-[#969696]">{sanitizeMessage(message)}</div>
+        <div
+          className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--color-border)] border-b-[var(--color-action-primary)] motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        <div className="text-[var(--color-text-secondary)]">{sanitizeMessage(message)}</div>
       </div>
     </div>
   );

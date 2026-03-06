@@ -2,7 +2,7 @@ import React, { useState, Suspense } from 'react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { darkTheme } from '../../theme/tokens';
+import PageState from '../ui/PageState';
 
 const FindAvailableTool = React.lazy(() => import('./tools/FindAvailableTool'));
 const BalanceWorkloadTool = React.lazy(() => import('./tools/BalanceWorkloadTool'));
@@ -17,10 +17,8 @@ const QuickActionsPanel: React.FC = () => {
   const close = () => setOpenAction(null);
 
   return (
-    <Card className="bg-transparent border-[#3e3e42]">
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: darkTheme.spacing.md
-      }}>
+    <Card variant="surface" padding="md">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button onClick={() => open('find')}>
           Find Available
         </Button>
@@ -34,19 +32,19 @@ const QuickActionsPanel: React.FC = () => {
       </div>
 
       <Modal isOpen={openAction === 'find'} onClose={close} title="Find Available" width={1000}>
-        <Suspense fallback={<div>Loading tool...</div>}>
+        <Suspense fallback={<PageState isLoading />}>
           <FindAvailableTool onClose={close} />
         </Suspense>
       </Modal>
 
       <Modal isOpen={openAction === 'balance'} onClose={close} title="Balance Workload" width={1000}>
-        <Suspense fallback={<div>Loading tool...</div>}>
+        <Suspense fallback={<PageState isLoading />}>
           <BalanceWorkloadTool onClose={close} />
         </Suspense>
       </Modal>
 
       <Modal isOpen={openAction === 'milestone'} onClose={close} title="Milestone Review" width={1100}>
-        <Suspense fallback={<div>Loading tool...</div>}>
+        <Suspense fallback={<PageState isLoading />}>
           <MilestoneReviewTool onClose={close} />
         </Suspense>
       </Modal>

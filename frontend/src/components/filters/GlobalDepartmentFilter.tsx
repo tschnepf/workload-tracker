@@ -5,6 +5,7 @@ import type { Department } from '@/types/models';
 import { useDepartmentFilter, type DepartmentFilterOp } from '@/hooks/useDepartmentFilter';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
+import Select from '@/components/ui/Select';
 
 const INPUT_ID = 'global-dept-filter-input';
 const LIVE_ID = 'global-dept-filter-live';
@@ -187,14 +188,14 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
             return (
               <div
                 key={`${filter.op}-${filter.departmentId}`}
-                className="flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)] text-xs sm:text-sm text-[var(--text)] shrink-0"
+                className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)] sm:text-sm"
               >
-                <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{filter.op}</span>
+                <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]">{filter.op}</span>
                 <span className="max-w-[160px] truncate">{name}</span>
                 <button
                   onClick={() => removeDepartmentFilter(filter.departmentId)}
                   aria-label={`Remove ${filter.op.toUpperCase()} ${name}`}
-                  className="text-[var(--muted)] hover:text-[var(--text)] focus:outline-none"
+                  className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none"
                 >
                   ×
                 </button>
@@ -204,7 +205,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           <button
             onClick={handleClear}
             aria-label="Clear department filters"
-            className="px-2 py-1 text-xs border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
+            className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
           >
             Clear
           </button>
@@ -212,18 +213,19 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
       )}
 
       {/* Combobox */}
-      <div className="flex items-center gap-2">
-        <select
+      <div className="flex min-w-0 items-center gap-2">
+        <Select
           aria-label="Department filter operation"
           value={selectedOp}
-          onChange={(e) => setSelectedOp(e.target.value as DepartmentFilterOp)}
-          className="h-10 bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+          onChange={(e) => setSelectedOp((e.target as HTMLSelectElement).value as DepartmentFilterOp)}
+          size="sm"
+          className="w-[78px] sm:w-[86px]"
         >
           <option value="and">AND</option>
           <option value="or">OR</option>
           <option value="not">NOT</option>
-        </select>
-        <div className={`relative ${expand ? 'min-w-[120px] flex-1 max-w-[240px]' : 'w-[80px] max-w-[120px] shrink-0 sm:w-[160px] sm:max-w-[200px]'}`}>
+        </Select>
+        <div className={`relative ${expand ? 'min-w-[180px] flex-1 max-w-[320px]' : 'w-[140px] max-w-[200px] shrink-0 sm:w-[220px] sm:max-w-[260px]'}`}>
         <input
           id={INPUT_ID}
           ref={inputRef}
@@ -239,7 +241,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          className={`h-10 w-full bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] rounded px-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus)] relative z-50 ${expand ? '' : 'min-w-[60px]'}`}
+          className={`relative z-50 h-10 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-0 ${expand ? '' : 'min-w-[100px]'}`}
         />
         {open && dropdownRect &&
           createPortal(
@@ -250,10 +252,10 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
               style={{ ...listboxStyle, left: dropdownRect.left, top: dropdownRect.top, width: dropdownRect.width }}
             >
               {error && (
-                <div style={{ padding: 8, color: '#ef4444' }}>Error: {error}</div>
+                <div style={{ padding: 8, color: 'var(--color-state-danger)' }}>Error: {error}</div>
               )}
               {!error && results.length === 0 && (
-                <div style={{ padding: 8, color: 'var(--muted)' }}>No results</div>
+                <div style={{ padding: 8, color: 'var(--color-text-secondary)' }}>No results</div>
               )}
               {!error && results.map((dep, idx) => (
                 <div
@@ -262,7 +264,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
                   aria-selected={idx === highlightIndex}
                   onMouseEnter={() => setHighlightIndex(idx)}
                   onMouseDown={(e) => { e.preventDefault(); handleSelect(dep); }}
-                  className={`px-2 py-1 cursor-pointer text-[var(--text)] ${idx === highlightIndex ? 'bg-[var(--surfaceHover)]' : ''}`}
+                  className={`px-2 py-1 cursor-pointer text-[var(--color-text-primary)] ${idx === highlightIndex ? 'bg-[var(--color-surface-overlay)]' : ''}`}
                 >
                   {dep.name}
                 </div>
@@ -270,7 +272,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
               {!showAll && filtered.length > LIMITED && (
                 <div className="p-2 flex justify-center">
                   <button
-                    className="px-2 py-1 text-xs border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
+                    className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
                     onMouseDown={(e) => { e.preventDefault(); setShowAll(true); }}
                   >
                     Show more
@@ -295,7 +297,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           <button
             onClick={handleCopyLink}
             aria-label="Copy link to current filter"
-            className="px-2 py-1 text-xs border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text)]"
+            className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
           >
             Copy link
           </button>

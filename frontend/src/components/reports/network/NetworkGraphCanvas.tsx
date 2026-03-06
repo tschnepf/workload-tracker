@@ -17,19 +17,55 @@ type Props = {
   className?: string;
 };
 
-const NODE_COLORS: Record<string, string> = {
-  person: '#3b82f6',
-  project: '#14b8a6',
-  client: '#f59e0b',
+type ThemeGraphColors = {
+  node: Record<string, string>;
+  edgeNeutral: string;
+  edgeHighlight: string;
+  edgeMuted: string;
+  label: string;
+  tooltipBg: string;
+  tooltipBorder: string;
+  nodeRing: string;
+  nodeDim: string;
 };
 
-function edgeColor(fromType: string): string {
-  if (fromType === 'client') return '#f59e0b';
-  if (fromType === 'project') return '#14b8a6';
-  return '#64748b';
+function readCssVar(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
 }
 
-function drawAccessibleNodeHover(context: CanvasRenderingContext2D, data: any, settings: any) {
+function getThemeGraphColors(): ThemeGraphColors {
+  return {
+    node: {
+      person: readCssVar('--chart-person', 'dodgerblue'),
+      project: readCssVar('--chart-project', 'mediumturquoise'),
+      client: readCssVar('--chart-client', 'orange'),
+    },
+    edgeNeutral: readCssVar('--chart-neutral', 'slategray'),
+    edgeHighlight: readCssVar('--chart-accent-b', 'mediumseagreen'),
+    edgeMuted: readCssVar('--color-border-subtle', 'slategray'),
+    label: readCssVar('--color-text-primary', 'white'),
+    tooltipBg: readCssVar('--color-surface-elevated', 'black'),
+    tooltipBorder: readCssVar('--color-focus-ring', 'deepskyblue'),
+    nodeRing: readCssVar('--color-focus-ring', 'deepskyblue'),
+    nodeDim: readCssVar('--color-border-subtle', 'black'),
+  };
+}
+
+const NODE_COLORS: Record<string, string> = {
+  person: 'dodgerblue',
+  project: 'mediumturquoise',
+  client: 'orange',
+};
+
+function edgeColor(fromType: string, colors: ThemeGraphColors): string {
+  if (fromType === 'client') return colors.node.client;
+  if (fromType === 'project') return colors.node.project;
+  return colors.edgeNeutral;
+}
+
+function drawAccessibleNodeHover(context: CanvasRenderingContext2D, data: any, settings: any, colors: ThemeGraphColors) {
   const label = String(data?.label || '');
   if (!label) return;
 
@@ -62,21 +98,21 @@ function drawAccessibleNodeHover(context: CanvasRenderingContext2D, data: any, s
   context.lineTo(boxX, boxY + radius);
   context.arcTo(boxX, boxY, boxX + radius, boxY, radius);
   context.closePath();
-  context.fillStyle = 'rgba(2, 6, 23, 0.96)';
+  context.fillStyle = colors.tooltipBg;
   context.fill();
-  context.strokeStyle = 'rgba(34, 211, 238, 0.95)';
+  context.strokeStyle = colors.tooltipBorder;
   context.lineWidth = 1;
   context.stroke();
 
   context.textAlign = 'left';
   context.textBaseline = 'middle';
-  context.fillStyle = '#f8fafc';
+  context.fillStyle = colors.label;
   context.fillText(label, boxX + padX, boxY + (boxHeight / 2));
 
   // Add a subtle ring around the hovered node for clearer focus.
   context.beginPath();
   context.arc(Number(data.x || 0), Number(data.y || 0), nodeSize + 2, 0, Math.PI * 2);
-  context.strokeStyle = 'rgba(34, 211, 238, 0.95)';
+  context.strokeStyle = colors.nodeRing;
   context.lineWidth = 2;
   context.stroke();
 
@@ -102,6 +138,7 @@ const NetworkGraphCanvas: React.FC<Props> = ({
   React.useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const themeColors = getThemeGraphColors();
 
     const graph = new Graph();
     const nodeTypeById = new Map<string, string>();
@@ -116,7 +153,7 @@ const NetworkGraphCanvas: React.FC<Props> = ({
         label: node.label,
         kind: type,
         size: type === 'project' ? 7 : type === 'client' ? 8 : 6,
-        color: NODE_COLORS[type] || NODE_COLORS.person,
+        color: themeColors.node[type] || themeColors.node.person || NODE_COLORS[type] || NODE_COLORS.person,
         x: Math.cos((index / Math.max(1, safeNodes.length)) * Math.PI * 2),
         y: Math.sin((index / Math.max(1, safeNodes.length)) * Math.PI * 2),
       });
@@ -140,7 +177,7 @@ const NetworkGraphCanvas: React.FC<Props> = ({
       const normScore = (Number(edge.score || 0) - minScore) / scoreSpan;
       graph.addEdgeWithKey(edge.id, edge.source, edge.target, {
         size: 0.5 + (normScore * 2.2),
-        color: edgeColor(sourceType),
+        color: edgeColor(sourceType, themeColors),
       });
     });
 
@@ -163,13 +200,13 @@ const NetworkGraphCanvas: React.FC<Props> = ({
 
     const renderer = new Sigma(graph, container, {
       renderEdgeLabels: false,
-      defaultNodeColor: '#3b82f6',
-      defaultEdgeColor: '#64748b',
-      labelColor: { color: '#f8fafc' },
+      defaultNodeColor: themeColors.node.person,
+      defaultEdgeColor: themeColors.edgeNeutral,
+      labelColor: { color: themeColors.label },
       labelFont: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
       labelWeight: '600',
       labelSize: 13,
-      defaultDrawNodeHover: drawAccessibleNodeHover,
+      defaultDrawNodeHover: (context, data, settings) => drawAccessibleNodeHover(context, data, settings, themeColors),
       labelRenderedSizeThreshold: 5,
       labelDensity: 1,
       labelGridCellSize: 120,
@@ -212,6 +249,7 @@ const NetworkGraphCanvas: React.FC<Props> = ({
     const renderer = sigmaRef.current;
     const graph = graphRef.current;
     if (!renderer || !graph) return;
+    const themeColors = getThemeGraphColors();
 
     const activeNode = hoveredNodeId || focusedNodeId;
     const neighbors = new Set<string>();
@@ -235,16 +273,16 @@ const NetworkGraphCanvas: React.FC<Props> = ({
       if (neighbors.has(node)) {
         return { ...data, size: Number(data.size || 6) * 1.2, zIndex: 5, forceLabel: true };
       }
-      return { ...data, color: '#334155', label: '' };
+      return { ...data, color: themeColors.edgeMuted, label: '' };
     });
 
     renderer.setSetting('edgeReducer', (edge, data) => {
       if (!activeNode) return data;
       const ext = graph.extremities(edge);
       if (ext[0] === activeNode || ext[1] === activeNode) {
-        return { ...data, color: '#22d3ee', size: Number(data.size || 1) * 1.7, zIndex: 5 };
+        return { ...data, color: themeColors.edgeHighlight, size: Number(data.size || 1) * 1.7, zIndex: 5 };
       }
-      return { ...data, color: '#0f172a', hidden: !(neighbors.has(ext[0]) || neighbors.has(ext[1])) };
+      return { ...data, color: themeColors.nodeDim, hidden: !(neighbors.has(ext[0]) || neighbors.has(ext[1])) };
     });
     renderer.refresh();
   }, [focusedNodeId, hoveredNodeId]);
@@ -280,7 +318,7 @@ const NetworkGraphCanvas: React.FC<Props> = ({
   }, [resetNonce]);
 
   return (
-    <div className={`relative h-[70vh] min-h-[420px] rounded-lg border border-[var(--border)] bg-[#0b1220] overflow-hidden ${className || ''}`}>
+    <div className={`relative h-[70vh] min-h-[420px] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] ${className || ''}`}>
       <div ref={containerRef} className="absolute inset-0" />
     </div>
   );

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
-import { darkTheme } from '../../../theme/tokens';
 import { peopleApi } from '../../../services/api';
+import InlineAlert from '@/components/ui/InlineAlert';
+import PanelHeader from '@/components/ui/PanelHeader';
 
 interface Props { onClose: () => void }
 
@@ -22,46 +23,48 @@ const CapacityReportTool: React.FC<Props> = () => {
   }, []);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: darkTheme.spacing.md }}>
-      <div style={{ borderRight: `1px solid ${darkTheme.colors.border.secondary}`, paddingRight: darkTheme.spacing.md }}>
-        <div style={{ color: darkTheme.colors.text.secondary, marginBottom: darkTheme.spacing.sm }}>Summary</div>
-        <div style={{ fontSize: darkTheme.typography.fontSize.sm, color: darkTheme.colors.text.muted }}>
+    <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_2fr]">
+      <div className="space-y-2 border-b border-[var(--color-border)] pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
+        <PanelHeader title="Summary" />
+        <div className="text-sm text-[var(--color-text-secondary)]">
           Team capacity vs allocation across upcoming weeks.
         </div>
       </div>
       <div>
         {loading ? (
-          <div style={{ color: darkTheme.colors.text.muted }}>Loading heatmap...</div>
+          <InlineAlert tone="info">Loading heatmap...</InlineAlert>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
               <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: darkTheme.spacing.xs }}>Person</th>
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="px-2 py-1 text-left text-sm text-[var(--color-text-primary)]">Person</th>
                   {heatmap[0]?.weekKeys?.map((wk: string) => (
-                    <th key={wk} style={{ textAlign: 'center', padding: darkTheme.spacing.xs, fontWeight: 500 }}>{wk.slice(5)}</th>
+                    <th key={wk} className="px-2 py-1 text-center text-sm font-medium text-[var(--color-text-primary)]">{wk.slice(5)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {heatmap.map((row: any) => (
                   <tr key={row.id}>
-                    <td style={{ padding: darkTheme.spacing.xs }}>{row.name}</td>
+                    <td className="px-2 py-1 text-[var(--color-text-primary)]">{row.name}</td>
                     {row.weekKeys.map((wk: string) => {
                       const h = row.weekTotals[wk] || 0;
                       const pct = row.weeklyCapacity ? (h / row.weeklyCapacity) * 100 : 0;
-                      let bg = darkTheme.colors.background.tertiary;
-                      if (pct > 100) bg = darkTheme.colors.semantic.error;
-                      else if (pct > 85) bg = darkTheme.colors.semantic.warning;
-                      else if (pct > 70) bg = darkTheme.colors.brand.primary;
-                      else bg = darkTheme.colors.semantic.success;
+                      let bg = 'var(--color-surface)';
+                      if (pct > 100) bg = 'color-mix(in srgb, var(--color-state-danger) 25%, transparent)';
+                      else if (pct > 85) bg = 'color-mix(in srgb, var(--color-state-warning) 25%, transparent)';
+                      else if (pct > 70) bg = 'color-mix(in srgb, var(--color-action-primary) 25%, transparent)';
+                      else bg = 'color-mix(in srgb, var(--color-state-success) 25%, transparent)';
                       return (
-                        <td key={wk} title={`${h}h`} style={{
-                          padding: darkTheme.spacing.xs,
-                          textAlign: 'center',
-                          color: darkTheme.colors.text.primary,
-                          background: bg + '33'
-                        }}>{Math.round(h)}</td>
+                        <td
+                          key={wk}
+                          title={`${h}h`}
+                          className="px-2 py-1 text-center text-[var(--color-text-primary)]"
+                          style={{ background: bg }}
+                        >
+                          {Math.round(h)}
+                        </td>
                       );
                     })}
                   </tr>

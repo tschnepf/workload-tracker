@@ -12,6 +12,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.core.management import call_command
 
+from core.backup_config import resolve_backups_dir
 from core.backup_utils import meta_path_for
 
 try:  # pragma: no cover - defensive import
@@ -169,7 +170,7 @@ class Command(BaseCommand):
         if not _psql_ok(env):
             raise CommandError("Cannot connect to database with provided credentials")
 
-        backups_dir = os.path.abspath(str(getattr(settings, "BACKUPS_DIR", "/backups")))
+        backups_dir = os.path.abspath(resolve_backups_dir())
         path_in = os.path.abspath(os.path.join(backups_dir, os.path.basename(opts["path"])) if not os.path.isabs(opts["path"]) else opts["path"])
         # Ensure within BACKUPS_DIR
         if not path_in.startswith(backups_dir + os.sep):

@@ -1,4 +1,8 @@
 import React from 'react';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Skeleton from '@/components/ui/Skeleton';
 
 export interface PageStateProps {
   isLoading?: boolean;
@@ -28,7 +32,9 @@ const PageState: React.FC<PageStateProps> = ({
     if (skeleton) return <>{skeleton}</>;
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-[var(--muted)]">Loading...</div>
+        <div className="w-full max-w-xl px-6">
+          <Skeleton rows={5} className="h-4 mb-3" />
+        </div>
       </div>
     );
   }
@@ -37,16 +43,14 @@ const PageState: React.FC<PageStateProps> = ({
     if (errorState) return <>{errorState}</>;
     const message = typeof error === 'string' ? error : (error.message || 'Something went wrong');
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <div className="text-red-400 text-sm">{message}</div>
+      <div className="flex flex-col items-center justify-center h-64 gap-3 px-4">
+        <InlineAlert tone="error" className="max-w-xl">
+          {message}
+        </InlineAlert>
         {onRetry ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="px-3 py-1.5 rounded-md border border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--text)] hover:bg-[var(--surfaceHover)]"
-          >
+          <Button type="button" variant="ghost" onClick={onRetry}>
             Retry
-          </button>
+          </Button>
         ) : null}
       </div>
     );
@@ -55,9 +59,7 @@ const PageState: React.FC<PageStateProps> = ({
   if (isEmpty) {
     if (emptyState) return <>{emptyState}</>;
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-[var(--muted)]">No data available.</div>
-      </div>
+      <EmptyState title="No data available." />
     );
   }
 
@@ -65,4 +67,3 @@ const PageState: React.FC<PageStateProps> = ({
 };
 
 export default PageState;
-

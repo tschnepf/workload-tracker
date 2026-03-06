@@ -86,22 +86,22 @@ const DefaultErrorFallback: React.FC<ErrorBoundaryState & { level?: string; onRe
   return (
     <div className={`
       flex items-center justify-center p-6 rounded-lg border-2 border-dashed border-red-500/30 bg-red-500/10
-      ${level === 'page' ? 'min-h-screen bg-[#1e1e1e]' : 'min-h-[200px]'}
+      ${level === 'page' ? 'min-h-screen bg-[var(--color-bg)]' : 'min-h-[200px]'}
     `}>
       <div className="text-center max-w-md">
         <div className="text-red-400 text-lg font-semibold mb-2">
           {getErrorTitle()}
         </div>
         
-        <div className="text-[#969696] text-sm mb-4">
+        <div className="text-[var(--color-text-secondary)] text-sm mb-4">
           {getErrorDescription()}
         </div>
 
         {process.env.NODE_ENV === 'development' && error && (
-          <details className="text-left mb-4 p-3 bg-[#2d2d30] rounded text-xs">
-            <summary className="cursor-pointer text-[#cccccc] mb-2">Error Details</summary>
+          <details className="text-left mb-4 p-3 bg-[var(--color-surface-elevated)] rounded text-xs">
+            <summary className="cursor-pointer text-[var(--color-text-primary)] mb-2">Error Details</summary>
             <div className="text-red-300 mb-2 font-mono">{error.message}</div>
-            <div className="text-[#969696] font-mono text-xs overflow-auto max-h-32">
+            <div className="text-[var(--color-text-secondary)] font-mono text-xs overflow-auto max-h-32">
               {error.stack}
             </div>
           </details>
@@ -110,7 +110,7 @@ const DefaultErrorFallback: React.FC<ErrorBoundaryState & { level?: string; onRe
         <div className="flex gap-2 justify-center">
           <button 
             onClick={onRetry}
-            className="bg-[#007acc] hover:bg-[#005a99] text-white px-4 py-2 rounded text-sm transition-colors"
+            className="bg-[var(--color-action-primary)] hover:bg-[var(--color-action-primary-hover)] text-white px-4 py-2 rounded text-sm transition-colors"
           >
             Try Again
           </button>
@@ -118,7 +118,7 @@ const DefaultErrorFallback: React.FC<ErrorBoundaryState & { level?: string; onRe
           {level === 'page' && (
             <button 
               onClick={() => window.location.href = '/dashboard'}
-              className="bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] px-4 py-2 rounded text-sm transition-colors"
+              className="bg-[var(--color-surface)] hover:bg-[var(--surfaceHover)] text-[var(--color-text-primary)] px-4 py-2 rounded text-sm transition-colors"
             >
               Go to Dashboard
             </button>
@@ -126,7 +126,7 @@ const DefaultErrorFallback: React.FC<ErrorBoundaryState & { level?: string; onRe
         </div>
 
         {errorId && (
-          <div className="text-[#969696] text-xs mt-4">
+          <div className="text-[var(--color-text-secondary)] text-xs mt-4">
             Error ID: {errorId}
           </div>
         )}

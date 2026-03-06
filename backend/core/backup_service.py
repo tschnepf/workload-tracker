@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from django.conf import settings
 from django.core.management import call_command
+from django.utils import timezone as django_timezone
 
 from .backup_utils import (
     BackupInfo,
@@ -21,6 +22,8 @@ from .backup_utils import (
     meta_path_for,
     parse_filename,
 )
+from .backup_config import resolve_backups_dir
+from .backup_schedule import next_scheduled_run
 
 
 class BackupService:
@@ -36,7 +39,7 @@ class BackupService:
     CONFIRM_PHRASE = "I understand this will irreversibly overwrite data"
 
     def __init__(self, backups_dir: Optional[str] = None) -> None:
-        self.backups_dir = os.path.abspath(backups_dir or getattr(settings, "BACKUPS_DIR", "/backups"))
+        self.backups_dir = os.path.abspath(backups_dir or resolve_backups_dir())
         self.incoming_dir = os.path.join(self.backups_dir, "incoming")
         os.makedirs(self.backups_dir, exist_ok=True)
         os.makedirs(self.incoming_dir, exist_ok=True)
@@ -117,15 +120,42 @@ class BackupService:
             newest = max(items, key=lambda i: i.createdAt or "")
             last_at = newest.createdAt
             last_size = newest.size
+        retention_daily = 7
+        retention_weekly = 4
+        retention_monthly = 12
+        automatic_enabled = True
+        last_auto_at = None
+        next_auto_at = None
+        try:
+            from .models import BackupAutomationSettings
+
+            backup_settings = BackupAutomationSettings.get_active()
+            retention_daily = int(getattr(backup_settings, 'retention_daily', retention_daily) or retention_daily)
+            retention_weekly = int(getattr(backup_settings, 'retention_weekly', retention_weekly) or retention_weekly)
+            retention_monthly = int(getattr(backup_settings, 'retention_monthly', retention_monthly) or retention_monthly)
+            automatic_enabled = bool(getattr(backup_settings, 'enabled', True))
+            last_auto_value = getattr(backup_settings, 'last_automatic_backup_at', None)
+            if last_auto_value is not None:
+                last_auto_at = last_auto_value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+            next_auto_value = next_scheduled_run(backup_settings, now_utc=django_timezone.now())
+            if next_auto_value is not None:
+                next_auto_at = next_auto_value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+        except Exception:  # nosec B110
+            pass
+
         return {
             "lastBackupAt": last_at,
             "lastBackupSize": last_size,
             "retentionOk": bool(items),
             "offsiteEnabled": bool(getattr(settings, 'BACKUP_OFFSITE_ENABLED', False)),
             "offsiteLastSyncAt": None,
-            "policy": "daily=7 weekly=4 monthly=12",
+            "policy": f"daily={retention_daily} weekly={retention_weekly} monthly={retention_monthly}",
             "encryptionEnabled": bool(getattr(settings, 'BACKUP_ENCRYPTION_ENABLED', False)),
             "encryptionProvider": getattr(settings, 'BACKUP_ENCRYPTION_PROVIDER', None),
+            "lastAutomaticBackupAt": last_auto_at,
+            "nextAutomaticBackupAt": next_auto_at,
+            "automaticBackupsEnabled": automatic_enabled,
+            "backupsDir": self.backups_dir,
         }
 
     # -------- Validation --------

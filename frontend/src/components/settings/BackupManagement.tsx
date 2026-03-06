@@ -164,11 +164,11 @@ const BackupManagement: React.FC = () => {
           {(error as any)?.message || 'Failed to load backups'}
         </div>
       ) : items.length === 0 ? (
-        <div className="text-[#969696]">No backups found.</div>
+        <div className="text-[var(--color-text-secondary)]">No backups found.</div>
       ) : (
         <div className="overflow-auto">
           <table className="min-w-full text-sm text-left">
-            <thead className="text-[#969696]">
+            <thead className="text-[var(--color-text-secondary)]">
               <tr>
                 <th className="py-2 pr-4">Date</th>
                 <th className="py-2 pr-4">Filename</th>
@@ -177,18 +177,18 @@ const BackupManagement: React.FC = () => {
                 <th className="py-2 pr-4">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-[#cccccc]">
+            <tbody className="text-[var(--color-text-primary)]">
               {items.map((b) => {
                 const dt = b.createdAt ? new Date(b.createdAt) : null;
                 const when = dt ? dt.toLocaleString() : '-';
                 return (
-                  <tr key={b.id} className="border-t border-[#3e3e42]">
+                  <tr key={b.id} className="border-t border-[var(--color-border)]">
                     <td className="py-2 pr-4 whitespace-nowrap">{when}</td>
                     <td className="py-2 pr-4">
                       <div className="font-mono break-all">{b.filename}</div>
                     </td>
                     <td className="py-2 pr-4 whitespace-nowrap">{formatBytes(b.size)}</td>
-                    <td className="py-2 pr-4">{b.description || <span className="text-[#969696]">-</span>}</td>
+                    <td className="py-2 pr-4">{b.description || <span className="text-[var(--color-text-secondary)]">-</span>}</td>
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-2">
                         <Button

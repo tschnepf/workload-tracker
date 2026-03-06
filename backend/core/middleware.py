@@ -8,6 +8,7 @@ from django.conf import settings
 from django.db import connections
 
 from core.request_context import set_current_request_id, reset_request_id
+from core.backup_config import resolve_backups_dir
 
 try:
     import sentry_sdk
@@ -42,7 +43,7 @@ class RequestIDLogMiddleware:
         # Detect restore/maintenance lock early to avoid DB-dependent work
         has_restore_lock = False
         try:
-            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
+            lock_path = os.path.join(resolve_backups_dir(), '.restore.lock')
             has_restore_lock = os.path.exists(lock_path)
         except Exception:
             has_restore_lock = False
@@ -211,7 +212,7 @@ class ReadOnlyModeMiddleware:
         path = request.path or ''
         try:
             in_read_only = bool(getattr(settings, 'READ_ONLY_MODE', False))
-            lock_path = os.path.join(getattr(settings, 'BACKUPS_DIR', '/backups'), '.restore.lock')
+            lock_path = os.path.join(resolve_backups_dir(), '.restore.lock')
             has_restore_lock = os.path.exists(lock_path)
         except Exception:
             in_read_only = False
