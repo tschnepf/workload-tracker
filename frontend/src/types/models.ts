@@ -155,6 +155,7 @@ export interface Deliverable {
 }
 
 export type ProjectTaskScope = 'project' | 'deliverable';
+export type ProjectTaskCompletionMode = 'percent' | 'binary';
 
 export interface ProjectTaskTemplate {
   id?: number;
@@ -165,6 +166,7 @@ export interface ProjectTaskTemplate {
   departmentName?: string;
   name: string;
   description?: string;
+  completionMode?: ProjectTaskCompletionMode;
   sortOrder?: number;
   isActive?: boolean;
   createdAt?: string;
@@ -188,6 +190,7 @@ export interface ProjectTask {
   departmentName?: string;
   name: string;
   description?: string;
+  completionMode?: ProjectTaskCompletionMode;
   completionPercent: number;
   assigneeIds?: number[];
   assigneeNames?: string[];

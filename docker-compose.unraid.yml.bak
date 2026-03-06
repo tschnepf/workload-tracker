@@ -1,0 +1,294 @@
+services:
+  db:
+    image: postgres:17.6
+    command: >
+      postgres
+      -c max_connections=${POSTGRES_MAX_CONNECTIONS:-200}
+      -c superuser_reserved_connections=${POSTGRES_SUPERUSER_RESERVED_CONNECTIONS:-5}
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_v17:/var/lib/postgresql/data
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      # Use discrete DB_* vars instead of DATABASE_URL.
+      # The image's URL parser is brittle for some password characters.
+      - DB_HOST=db
+      - DB_PORT=${POSTGRES_PORT:-5432}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - AUTH_TYPE=${PGBOUNCER_AUTH_TYPE:-scram-sha-256}
+      - POOL_MODE=${PGBOUNCER_POOL_MODE:-transaction}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1500}
+      - DEFAULT_POOL_SIZE=${PGBOUNCER_DEFAULT_POOL_SIZE:-60}
+      - RESERVE_POOL_SIZE=${PGBOUNCER_RESERVE_POOL_SIZE:-20}
+      - MAX_DB_CONNECTIONS=${PGBOUNCER_MAX_DB_CONNECTIONS:-120}
+      - LISTEN_PORT=${PGBOUNCER_PORT:-6432}
+      - IGNORE_STARTUP_PARAMETERS=${PGBOUNCER_IGNORE_STARTUP_PARAMETERS:-extra_float_digits,options}
+      - SERVER_RESET_QUERY=${PGBOUNCER_SERVER_RESET_QUERY:-DISCARD ALL}
+      - ADMIN_USERS=${PGBOUNCER_ADMIN_USERS:-postgres}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: Dockerfile
+      target: production
+    env_file:
+      - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+    environment:
+      - DEBUG=false
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - ASYNC_JOBS=true
+      - HOST_IP=${HOST_IP:-}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - DB_WAIT_TIMEOUT_SECS=120
+      - DB_WAIT_SLEEP_SECS=1
+      - DB_SCHEMA=${DB_SCHEMA:-public}
+      - DB_CONN_MAX_AGE=${DB_CONN_MAX_AGE:-0}
+      - DB_CONN_HEALTH_CHECKS=${DB_CONN_HEALTH_CHECKS:-true}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COOKIE_REFRESH_AUTH=${COOKIE_REFRESH_AUTH:-true}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+      - RUN_MIGRATIONS_ON_START=${RUN_MIGRATIONS_ON_START:-true}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT:-true}
+      - SILK_ENABLED=${SILK_ENABLED:-false}
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups:rw
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gthread --threads 4 --max-requests 1000 --max-requests-jitter 50
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "X-Forwarded-Proto: https", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    ports:
+      - "8000:8000"  # Host Nginx (Unraid) proxies to this
+    networks:
+      default: {}
+      proxynet:
+        aliases:
+          - wt-backend
+
+  worker:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: Dockerfile
+      target: production
+    env_file:
+      - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+    environment:
+      - RUN_MIGRATIONS_ON_START=false
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - DB_WAIT_TIMEOUT_SECS=120
+      - DB_WAIT_SLEEP_SECS=1
+      - DB_CONN_MAX_AGE=${DB_CONN_MAX_AGE:-0}
+      - DB_CONN_HEALTH_CHECKS=${DB_CONN_HEALTH_CHECKS:-true}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COLLECT_STATIC=false
+    command: celery -A config worker -l info --concurrency=2
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  worker_db:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: Dockerfile
+      target: production
+    env_file:
+      - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+    environment:
+      - RUN_MIGRATIONS_ON_START=false
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - DB_WAIT_TIMEOUT_SECS=120
+      - DB_WAIT_SLEEP_SECS=1
+      - DB_CONN_MAX_AGE=${DB_CONN_MAX_AGE:-0}
+      - DB_CONN_HEALTH_CHECKS=${DB_CONN_HEALTH_CHECKS:-true}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COLLECT_STATIC=false
+    command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  worker_beat:
+    build:
+      context: /mnt/user/appdata/workload-tracker/backend
+      dockerfile: Dockerfile
+      target: production
+    env_file:
+      - /boot/config/plugins/compose.manager/projects/workload-tracker/.env
+    environment:
+      - DEBUG=false
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - ASYNC_JOBS=true
+      - RUN_MIGRATIONS_ON_START=false
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:${PGBOUNCER_PORT:-6432}/${POSTGRES_DB}
+      - DB_ADMIN_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+      - POSTGRES_HOST=pgbouncer
+      - POSTGRES_PORT=${PGBOUNCER_PORT:-6432}
+      - DB_CONN_MAX_AGE=${DB_CONN_MAX_AGE:-0}
+      - DB_CONN_HEALTH_CHECKS=${DB_CONN_HEALTH_CHECKS:-true}
+      - DISABLE_SERVER_SIDE_CURSORS=${DISABLE_SERVER_SIDE_CURSORS:-true}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - BACKUPS_DIR=/backups
+      - COLLECT_STATIC=false
+    command: ["celery", "-A", "config", "beat", "-l", "INFO"]
+    volumes:
+      - /mnt/user/appdata/workload-tracker/backups:/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: /mnt/user/appdata/workload-tracker/frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        # Point the frontend at the backend API directly when not using a reverse proxy.
+        # Override via .env on Unraid: FRONTEND_API_URL=http://<unraid-ip>:8000/api
+        VITE_API_URL: ${FRONTEND_API_URL:-/api}
+        VITE_OPENAPI_MIGRATION_ENABLED: "true"
+        # When not using HTTPS, disable cookie-based refresh and use localStorage tokens instead.
+        # Override via .env on Unraid: FRONTEND_COOKIE_REFRESH_AUTH=false
+        VITE_COOKIE_REFRESH_AUTH: ${FRONTEND_COOKIE_REFRESH_AUTH:-"true"}
+        VITE_PWA_ENABLED: ${VITE_PWA_ENABLED:-"true"}
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: npx serve -s /app/_built -l 3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    ports:
+      - "3000:3000"  # Host Nginx (Unraid) proxies to this
+    networks:
+      default: {}
+      proxynet:
+        aliases:
+          - wt-frontend
+
+volumes:
+  postgres_data_v17:
+  redis_data:
+  static_volume:
+  media_volume:
+  frontend_build:
+  beat_state:
+
+networks:
+  proxynet:
+    external: true
+    name: proxynet

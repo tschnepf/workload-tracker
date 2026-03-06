@@ -3881,6 +3881,80 @@
                 }
             }
         },
+        "/api/core/task_progress_colors/": {
+            "get": {
+                "operationId": "core_task_progress_colors_retrieve",
+                "tags": [
+                    "core"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskProgressColorSettings"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "core_task_progress_colors_update",
+                "tags": [
+                    "core"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskProgressColorSettingsRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskProgressColorSettingsRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskProgressColorSettingsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskProgressColorSettings"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/core/utilization_scheme/": {
             "get": {
                 "operationId": "core_utilization_scheme_retrieve",
@@ -16664,6 +16738,14 @@
                     "label"
                 ]
             },
+            "CompletionModeEnum": {
+                "enum": [
+                    "percent",
+                    "binary"
+                ],
+                "type": "string",
+                "description": "* `percent` - 0-100 Percent\n* `binary` - Complete/Incomplete"
+            },
             "CoverageBlock": {
                 "type": "object",
                 "properties": {
@@ -20217,6 +20299,9 @@
                     "description": {
                         "type": "string"
                     },
+                    "completionMode": {
+                        "$ref": "#/components/schemas/CompletionModeEnum"
+                    },
                     "completionPercent": {
                         "type": "integer"
                     },
@@ -20247,6 +20332,9 @@
                     },
                     "description": {
                         "type": "string"
+                    },
+                    "completionMode": {
+                        "$ref": "#/components/schemas/CompletionModeEnum"
                     },
                     "sortOrder": {
                         "type": "integer"
@@ -22714,6 +22802,9 @@
                     "description": {
                         "type": "string"
                     },
+                    "completionMode": {
+                        "$ref": "#/components/schemas/CompletionModeEnum"
+                    },
                     "completionPercent": {
                         "type": "integer"
                     },
@@ -22813,6 +22904,9 @@
                     "description": {
                         "type": "string"
                     },
+                    "completionMode": {
+                        "$ref": "#/components/schemas/CompletionModeEnum"
+                    },
                     "sortOrder": {
                         "type": "integer"
                     },
@@ -22861,6 +22955,9 @@
                     },
                     "description": {
                         "type": "string"
+                    },
+                    "completionMode": {
+                        "$ref": "#/components/schemas/CompletionModeEnum"
                     },
                     "sortOrder": {
                         "type": "integer"
@@ -23741,6 +23838,95 @@
                     "key",
                     "label",
                     "values"
+                ]
+            },
+            "TaskProgressColorRange": {
+                "type": "object",
+                "properties": {
+                    "minPercent": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 0
+                    },
+                    "maxPercent": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 0
+                    },
+                    "colorHex": {
+                        "type": "string",
+                        "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "colorHex",
+                    "maxPercent",
+                    "minPercent"
+                ]
+            },
+            "TaskProgressColorRangeRequest": {
+                "type": "object",
+                "properties": {
+                    "minPercent": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 0
+                    },
+                    "maxPercent": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 0
+                    },
+                    "colorHex": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "colorHex",
+                    "maxPercent",
+                    "minPercent"
+                ]
+            },
+            "TaskProgressColorSettings": {
+                "type": "object",
+                "properties": {
+                    "ranges": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskProgressColorRange"
+                        }
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "ranges",
+                    "updatedAt"
+                ]
+            },
+            "TaskProgressColorSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "ranges": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskProgressColorRangeRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "ranges"
                 ]
             },
             "TeamOverviewItem": {

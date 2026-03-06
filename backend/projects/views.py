@@ -189,6 +189,18 @@ class ProjectTaskTemplateViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_active=True)
         return qs
 
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        old_mode = getattr(instance, 'completion_mode', None)
+        updated = serializer.save()
+        new_mode = getattr(updated, 'completion_mode', None)
+        if old_mode == new_mode or not new_mode:
+            return
+        ProjectTask.objects.filter(template_id=updated.id).update(
+            completion_mode=new_mode,
+            updated_at=timezone.now(),
+        )
+
 
 class ProjectTaskDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]

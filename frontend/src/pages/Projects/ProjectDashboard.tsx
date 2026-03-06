@@ -427,18 +427,21 @@ const ProjectDashboard: React.FC = () => {
   }, [staffingTimeline?.people]);
 
   const projectMembers = useMemo(() => {
-    const map = new Map<number, string>();
+    const map = new Map<number, { name: string; departmentId: number | null }>();
     const today = new Date().toISOString().slice(0, 10);
     assignments.forEach((assignment) => {
       const startOk = !assignment.startDate || assignment.startDate <= today;
       const endOk = !assignment.endDate || assignment.endDate >= today;
       if (!startOk || !endOk) return;
       if (assignment.person && assignment.personName) {
-        map.set(assignment.person, assignment.personName);
+        map.set(assignment.person, {
+          name: assignment.personName,
+          departmentId: assignment.personDepartmentId ?? null,
+        });
       }
     });
     return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
+      .map(([id, meta]) => ({ id, name: meta.name, departmentId: meta.departmentId }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [assignments]);
   const memberNameById = useMemo(
@@ -1006,6 +1009,7 @@ const ProjectDashboard: React.FC = () => {
                           ) : (
                             section.tasks.map((task) => {
                               const taskId = task.id ?? 0;
+                              const isBinaryTask = task.completionMode === 'binary';
                               const taskColor = getTaskProgressColor(task.completionPercent);
                               const percentValue = taskDraftPercent[taskId] ?? String(task.completionPercent ?? 0);
                               const assignedNames = (task.assigneeNames && task.assigneeNames.length > 0)
@@ -1015,7 +1019,10 @@ const ProjectDashboard: React.FC = () => {
                                   .filter((name): name is string => Boolean(name));
                               const pickerSearch = taskAssigneeSearch[taskId] || '';
                               const normalizedPickerSearch = pickerSearch.trim().toLowerCase();
-                              const availableMembers = projectMembers.filter((member) => !(task.assigneeIds || []).includes(member.id));
+                              const availableMembers = projectMembers.filter((member) => (
+                                !(task.assigneeIds || []).includes(member.id)
+                                && (member.departmentId == null || Number(member.departmentId) === Number(task.departmentId))
+                              ));
                               const filteredAvailableMembers = normalizedPickerSearch
                                 ? availableMembers.filter((member) => member.name.toLowerCase().includes(normalizedPickerSearch))
                                 : availableMembers;
@@ -1033,34 +1040,49 @@ const ProjectDashboard: React.FC = () => {
                                       </div>
                                     </div>
                                     {canManageTaskTracking && task.id ? (
-                                      editingTaskPercentId === task.id ? (
-                                        <div className="flex items-center gap-1">
+                                      isBinaryTask ? (
+                                        <label className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)]">
                                           <input
-                                            type="number"
-                                            min={0}
-                                            max={100}
-                                            step={5}
-                                            autoFocus
-                                            value={percentValue}
-                                            onChange={(e) => {
-                                              const nextValue = e.currentTarget.value;
-                                              setTaskDraftPercent((prev) => ({ ...prev, [taskId]: nextValue }));
-                                            }}
-                                            onBlur={() => { void commitDashboardTaskPercent(task, percentValue); }}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter') {
-                                                e.currentTarget.blur();
-                                              }
-                                              if (e.key === 'Escape') {
-                                                setTaskDraftPercent((prev) => ({ ...prev, [taskId]: String(task.completionPercent ?? 0) }));
-                                                setEditingTaskPercentId(null);
-                                              }
-                                            }}
+                                            type="checkbox"
+                                            checked={(task.completionPercent ?? 0) >= 100}
                                             disabled={updatingTaskId === task.id}
-                                            className="w-14 px-1 py-0.5 text-[11px] text-right bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                            onChange={(e) => {
+                                              if (!task.id) return;
+                                              const nextPercent = e.currentTarget.checked ? 100 : 0;
+                                              void handleTaskUpdate(task.id, { completionPercent: nextPercent });
+                                            }}
+                                            className="h-3.5 w-3.5 accent-[var(--primary)]"
                                           />
-                                          <span className="text-[11px] text-[var(--muted)]">%</span>
-                                        </div>
+                                          Complete
+                                        </label>
+                                      ) : editingTaskPercentId === task.id ? (
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              max={100}
+                                              step={5}
+                                              autoFocus
+                                              value={percentValue}
+                                              onChange={(e) => {
+                                                const nextValue = e.currentTarget.value;
+                                                setTaskDraftPercent((prev) => ({ ...prev, [taskId]: nextValue }));
+                                              }}
+                                              onBlur={() => { void commitDashboardTaskPercent(task, percentValue); }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.currentTarget.blur();
+                                                }
+                                                if (e.key === 'Escape') {
+                                                  setTaskDraftPercent((prev) => ({ ...prev, [taskId]: String(task.completionPercent ?? 0) }));
+                                                  setEditingTaskPercentId(null);
+                                                }
+                                              }}
+                                              disabled={updatingTaskId === task.id}
+                                              className="w-14 px-1 py-0.5 text-[11px] text-right bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                            />
+                                            <span className="text-[11px] text-[var(--muted)]">%</span>
+                                          </div>
                                       ) : (
                                         <button
                                           type="button"
@@ -1078,7 +1100,19 @@ const ProjectDashboard: React.FC = () => {
                                         </button>
                                       )
                                     ) : (
-                                      <div className="text-[11px]" style={{ color: taskColor }}>{task.completionPercent}%</div>
+                                      isBinaryTask ? (
+                                        <label className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)]">
+                                          <input
+                                            type="checkbox"
+                                            disabled
+                                            checked={(task.completionPercent ?? 0) >= 100}
+                                            className="h-3.5 w-3.5 accent-[var(--primary)]"
+                                          />
+                                          Complete
+                                        </label>
+                                      ) : (
+                                        <div className="text-[11px]" style={{ color: taskColor }}>{task.completionPercent}%</div>
+                                      )
                                     )}
                                   </div>
                                   <div className="mt-1 h-5 rounded bg-[var(--surfaceOverlay)] overflow-hidden">

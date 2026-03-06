@@ -15,6 +15,10 @@ const scopeOptions: Array<{ value: 'project' | 'deliverable'; label: string }> =
   { value: 'project', label: 'Project' },
   { value: 'deliverable', label: 'Deliverable' },
 ];
+const completionModeOptions: Array<{ value: 'percent' | 'binary'; label: string }> = [
+  { value: 'percent', label: '0-100%' },
+  { value: 'binary', label: 'Complete/Incomplete' },
+];
 
 const sortColorRanges = (ranges: TaskProgressColorRange[]): TaskProgressColorRange[] =>
   [...ranges].sort((a, b) => (a.minPercent - b.minPercent) || (a.maxPercent - b.maxPercent));
@@ -43,6 +47,8 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
   const [savingColors, setSavingColors] = useState(false);
   const [colorError, setColorError] = useState<string | null>(null);
   const [verticalFilter, setVerticalFilter] = useState<number | null>(null);
+  const [departmentFilter, setDepartmentFilter] = useState<number | null>(null);
+  const [expandedVerticalIds, setExpandedVerticalIds] = useState<Record<number, boolean>>({});
   const [scopeFilter, setScopeFilter] = useState<'all' | 'project' | 'deliverable'>('all');
 
   const hasDepartments = departments.length > 0;
@@ -80,7 +86,10 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
         setVerticals(fetchedVerticals);
         setRows([]);
         setDirty(false);
-        if (firstVerticalId != null) setVerticalFilter(firstVerticalId);
+        if (firstVerticalId != null) {
+          setVerticalFilter(firstVerticalId);
+          setExpandedVerticalIds((prev) => ({ ...prev, [firstVerticalId]: true }));
+        }
         return;
       }
       const sortedTemplates = [...templates].sort((a, b) => {
@@ -89,7 +98,10 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
         if (aOrder !== bOrder) return aOrder - bOrder;
         return (a.name || '').localeCompare(b.name || '');
       });
-      setRows(sortedTemplates.map((t) => ({ ...t, _key: String(t.id) })));
+      const filteredTemplates = departmentFilter == null
+        ? sortedTemplates
+        : sortedTemplates.filter((template) => Number(template.departmentId) === departmentFilter);
+      setRows(filteredTemplates.map((t) => ({ ...t, _key: String(t.id) })));
       setVerticals(fetchedVerticals);
       setDirty(false);
     } catch (e: any) {
@@ -97,7 +109,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [scopeFilter, verticalFilter]);
+  }, [departmentFilter, scopeFilter, verticalFilter]);
 
   useEffect(() => { load(); }, [load]);
   const canReorderRows = useMemo(
@@ -273,17 +285,18 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
 
   const addRow = () => {
     if (verticalFilter == null) return;
-    const defaultVerticalId = verticals[0]?.id ?? 0;
-    const defaultDeptId = departments[0]?.id ?? 0;
-    const resolvedVerticalId = verticalFilter ?? defaultVerticalId;
+    if (departmentFilter == null) return;
+    const resolvedVerticalId = verticalFilter;
+    const resolvedDepartmentId = departmentFilter;
     const next: EditableTemplate = {
       _key: `new-${Date.now()}`,
       _isNew: true,
       verticalId: resolvedVerticalId || 0,
       scope: scopeFilter === 'all' ? 'project' : scopeFilter,
-      departmentId: defaultDeptId || 0,
+      departmentId: resolvedDepartmentId || 0,
       name: '',
       description: '',
+      completionMode: 'percent',
       sortOrder: rows.length + 1,
       isActive: true,
     };
@@ -324,6 +337,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
           departmentId: row.departmentId,
           name: (row.name || '').trim(),
           description: row.description || '',
+          completionMode: (row.completionMode as 'percent' | 'binary') || 'percent',
           sortOrder: row.sortOrder ?? 0,
           isActive: row.isActive ?? true,
         };
@@ -344,15 +358,6 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
     }
   };
 
-  const departmentOptions = useMemo(
-    () =>
-      (departments || []).map((d) => (
-        <option key={d.id} value={d.id ?? 0}>
-          {d.name}
-        </option>
-      )),
-    [departments]
-  );
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
     departments.forEach((dept) => {
@@ -365,6 +370,45 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
     () => verticals.find((v) => v.id === verticalFilter) ?? null,
     [verticals, verticalFilter]
   );
+  const selectedDepartment = useMemo(
+    () => departments.find((d) => d.id === departmentFilter) ?? null,
+    [departments, departmentFilter]
+  );
+  const sortedDepartments = useMemo(
+    () => [...departments]
+      .filter((department) => department.vertical != null)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    [departments]
+  );
+  const departmentsByVertical = useMemo(() => {
+    const map = new Map<number, Department[]>();
+    sortedDepartments.forEach((department) => {
+      const verticalId = Number(department.vertical);
+      if (!Number.isFinite(verticalId) || verticalId <= 0) return;
+      const list = map.get(verticalId) || [];
+      list.push(department);
+      map.set(verticalId, list);
+    });
+    return map;
+  }, [sortedDepartments]);
+  const departmentsForSelectedVertical = useMemo(
+    () => (verticalFilter != null ? (departmentsByVertical.get(verticalFilter) || []) : []),
+    [departmentsByVertical, verticalFilter]
+  );
+
+  useEffect(() => {
+    if (verticalFilter == null) {
+      setDepartmentFilter(null);
+      return;
+    }
+    setDepartmentFilter((prev) => {
+      if (prev != null && departmentsForSelectedVertical.some((department) => department.id === prev)) {
+        return prev;
+      }
+      const firstDepartment = departmentsForSelectedVertical.find((department) => department.id != null)?.id ?? null;
+      return firstDepartment;
+    });
+  }, [departmentsForSelectedVertical, verticalFilter]);
 
   const sortedVerticals = useMemo(
     () => [...verticals].sort((a, b) => (a.name || '').localeCompare(b.name || '')),
@@ -406,7 +450,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
       <div className="flex gap-4 items-start">
         <aside className="w-56 shrink-0 rounded border border-[#3e3e42] bg-[#252526] p-2">
           <div className="text-[#cccccc] font-semibold text-sm px-2 py-1">Verticals</div>
-          <div className="text-[#969696] text-[11px] px-2 pb-2">Select a vertical to view/edit its task templates.</div>
+          <div className="text-[#969696] text-[11px] px-2 pb-2">Select a vertical, then a department to manage templates.</div>
           <div className="space-y-1">
             {sortedVerticals.map((vertical) => {
               const verticalId = vertical.id;
@@ -414,40 +458,80 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
               const enabled = vertical.taskTrackingEnabled !== false;
               const isSelected = verticalFilter === verticalId;
               const isUpdating = Boolean(updatingVerticalIds[verticalId]);
+              const isExpanded = Boolean(expandedVerticalIds[verticalId]);
+              const verticalDepartments = departmentsByVertical.get(verticalId) || [];
               return (
                 <div
                   key={verticalId}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setVerticalFilter(verticalId)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setVerticalFilter(verticalId);
-                    }
-                  }}
-                  className={`rounded border px-2 py-1.5 cursor-pointer ${
+                  className={`rounded border px-2 py-1.5 ${
                     isSelected
                       ? 'border-[var(--primary)] bg-[var(--primary)]/10'
                       : 'border-[#3e3e42] bg-[#1f1f1f]'
                   }`}
                 >
-                  <div className="w-full text-left text-xs text-[#d4d4d4] truncate">
-                    {vertical.name}
-                  </div>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className={`text-[11px] ${enabled ? 'text-emerald-300' : 'text-[#969696]'}`}>
-                      {enabled ? 'Enabled' : 'Disabled'}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center min-w-0 flex-1 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedVerticalIds((prev) => ({ ...prev, [verticalId]: !isExpanded }))}
+                        className="h-5 w-5 shrink-0 rounded border border-[#3e3e42] text-[#a9acb3] hover:text-white hover:border-[#5a5f68] text-[11px]"
+                        aria-label={isExpanded ? `Collapse ${vertical.name}` : `Expand ${vertical.name}`}
+                      >
+                        {isExpanded ? '▾' : '▸'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVerticalFilter(verticalId);
+                          if (!isExpanded) setExpandedVerticalIds((prev) => ({ ...prev, [verticalId]: true }));
+                        }}
+                        className="min-w-0 text-left text-xs text-[#d4d4d4] truncate hover:text-white"
+                      >
+                        {vertical.name}
+                      </button>
+                    </div>
                     <input
                       type="checkbox"
                       checked={enabled}
                       disabled={loading || saving || isUpdating}
-                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => { void setVerticalTaskTracking(verticalId, e.currentTarget.checked); }}
                       className="h-4 w-4 accent-[var(--primary)]"
                     />
                   </div>
+                  <div className={`mt-1 text-[11px] ${enabled ? 'text-emerald-300' : 'text-[#969696]'}`}>
+                    {enabled ? 'Enabled' : 'Disabled'}
+                  </div>
+                  {isExpanded ? (
+                    <div className="mt-1.5 pl-4 space-y-1">
+                      {verticalDepartments.length === 0 ? (
+                        <div className="text-[10px] text-[#7f7f88]">No departments for this vertical.</div>
+                      ) : (
+                        verticalDepartments.map((department) => {
+                          const departmentId = department.id;
+                          if (!departmentId) return null;
+                          const isDepartmentSelected = isSelected && departmentFilter === departmentId;
+                          return (
+                            <button
+                              key={departmentId}
+                              type="button"
+                              onClick={() => {
+                                setVerticalFilter(verticalId);
+                                setDepartmentFilter(departmentId);
+                                setExpandedVerticalIds((prev) => ({ ...prev, [verticalId]: true }));
+                              }}
+                              className={`block w-full text-left text-[11px] rounded px-2 py-1 border ${
+                                isDepartmentSelected
+                                  ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[#e5f0ff]'
+                                  : 'border-transparent text-[#b9b9c0] hover:border-[#3e3e42] hover:bg-[#252526]'
+                              }`}
+                            >
+                              {department.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -459,7 +543,9 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
             <div>
               <div className="text-[#cccccc] font-semibold">Project Task Templates</div>
               <div className="text-[#969696] text-sm">
-                {selectedVertical ? `Showing templates for ${selectedVertical.name}` : 'Select a vertical to manage templates.'}
+                {selectedVertical && selectedDepartment
+                  ? `Showing templates for ${selectedVertical.name} / ${selectedDepartment.name}`
+                  : 'Select a vertical and department to manage templates.'}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -484,8 +570,8 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
               >
                 {reorderMode ? 'Done Reordering' : 'Reorder'}
               </button>
-              <Button variant="ghost" onClick={addRow} disabled={!hasDepartments || !hasVerticals || loading || saving || verticalFilter == null}>Add Row</Button>
-              <Button disabled={!dirty || saving || loading || !hasDepartments || !hasVerticals || verticalFilter == null} onClick={save}>
+              <Button variant="ghost" onClick={addRow} disabled={!hasDepartments || !hasVerticals || loading || saving || verticalFilter == null || departmentFilter == null}>Add Row</Button>
+              <Button disabled={!dirty || saving || loading || !hasDepartments || !hasVerticals || verticalFilter == null || departmentFilter == null} onClick={save}>
                 {saving ? 'Saving…' : 'Save'}
               </Button>
             </div>
@@ -496,6 +582,12 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
           )}
           {!hasDepartments && (
             <div className="text-amber-300 text-sm mb-2">Create at least one department before adding templates.</div>
+          )}
+          {hasDepartments && selectedVertical && departmentsForSelectedVertical.length === 0 && (
+            <div className="text-amber-300 text-sm mb-2">No departments are assigned to {selectedVertical.name}.</div>
+          )}
+          {hasDepartments && verticalFilter != null && departmentFilter == null && (
+            <div className="text-amber-300 text-sm mb-2">Select a department under the chosen vertical to manage templates.</div>
           )}
           {!canReorderRows && rows.length > 0 && (
             <div className="text-[var(--muted)] text-xs mb-2">Save new rows before using drag-and-drop reorder.</div>
@@ -514,7 +606,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                 <thead className="text-[#cbd5e1]">
                   <tr>
                     <th className="py-1.5 pr-4 text-left">Scope</th>
-                    <th className="py-1.5 pr-4 text-left">Department</th>
+                    <th className="py-1.5 pr-4 text-left">Completion Type</th>
                     <th className="py-1.5 pr-4 text-left">Task Name</th>
                     <th className="py-1.5 pr-4 text-left">Description</th>
                     <th className="py-1.5 pr-4 text-left">Active</th>
@@ -537,11 +629,13 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       </td>
                       <td className="py-1.5 pr-4">
                         <select
-                          value={row.departmentId}
+                          value={(row.completionMode as 'percent' | 'binary') || 'percent'}
                           className="h-7 bg-[#1f1f1f] border border-[#3e3e42] text-[#cccccc] rounded px-2 text-xs"
-                          onChange={(e) => updateRow(row._key, { departmentId: Number(e.currentTarget.value) })}
+                          onChange={(e) => updateRow(row._key, { completionMode: e.currentTarget.value as 'percent' | 'binary' })}
                         >
-                          {departmentOptions}
+                          {completionModeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
                         </select>
                       </td>
                       <td className="py-1.5 pr-4">

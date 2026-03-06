@@ -98,6 +98,17 @@ const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
         return (a.name || '').localeCompare(b.name || '');
       });
   }, [taskTracking]);
+  const tasksByDepartment = React.useMemo(() => {
+    const map = new Map<number, ProjectTask[]>();
+    allTasks.forEach((task) => {
+      const departmentId = Number(task.departmentId);
+      if (!Number.isFinite(departmentId) || departmentId <= 0) return;
+      const list = map.get(departmentId) || [];
+      list.push(task);
+      map.set(departmentId, list);
+    });
+    return map;
+  }, [allTasks]);
 
   const addAssignmentButton = (
     <button
@@ -151,48 +162,53 @@ const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
               <div className="text-base font-semibold text-[var(--text)]">{deptName}</div>
             </div>
             <div className="p-2 space-y-2">
-              {items.map((assignment) => (
-                <div key={assignment.id}>
-                  <AssignmentRow
-                    assignment={assignment}
-                    isEditing={editingAssignmentId === assignment.id}
-                    editData={editData}
-                    showHours={false}
-                    onEdit={() => onEditAssignment(assignment)}
-                    onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
-                    onSave={() => assignment.id && onSaveEdit(assignment.id)}
-                    onCancel={onCancelEdit}
-                    onHoursChange={onHoursChange}
-                    getCurrentWeekHours={getCurrentWeekHours}
-                    onChangeAssignmentRole={onChangeAssignmentRole}
-                    personDepartmentId={
-                      (assignment as any).personDepartmentId
-                      ?? (getPersonDepartmentId && assignment.person != null ? getPersonDepartmentId(assignment.person) : undefined)
-                    }
-                    currentWeekKey={currentWeekKey}
-                    onUpdateWeekHours={onUpdateWeekHours}
-                    weekKeys={weekKeys}
-                    isCellSelected={isCellSelected}
-                    isEditingCell={isEditingCell}
-                    onCellSelect={onCellSelect}
-                    onCellMouseDown={onCellMouseDown}
-                    onCellMouseEnter={onCellMouseEnter}
-                    onEditStartCell={onEditStartCell}
-                    onEditSaveCell={onEditSaveCell}
-                    onEditCancelCell={onEditCancelCell}
-                    editingValue={editingValue}
-                    onEditValueChangeCell={onEditValueChangeCell}
-                    optimisticHours={optimisticHours}
-                    onSwapPlaceholder={onSwapPlaceholder}
-                    taskTrackingEnabled={Boolean(taskTracking?.enabled)}
-                    taskTrackingLoading={Boolean(taskTracking?.enabled && taskTrackingLoading)}
-                    assignmentTasks={allTasks}
-                    canManageTaskTracking={Boolean(canManageTaskTracking)}
-                    onTaskUpdate={onTaskUpdate}
-                    getTaskProgressColor={getTaskProgressColor}
-                  />
-                </div>
-              ))}
+              {items.map((assignment) => {
+                const assignmentDepartmentId =
+                  (assignment as any).personDepartmentId
+                  ?? (getPersonDepartmentId && assignment.person != null ? getPersonDepartmentId(assignment.person) : undefined);
+                const departmentScopedTasks = assignmentDepartmentId != null
+                  ? (tasksByDepartment.get(Number(assignmentDepartmentId)) || [])
+                  : [];
+                return (
+                  <div key={assignment.id}>
+                    <AssignmentRow
+                      assignment={assignment}
+                      isEditing={editingAssignmentId === assignment.id}
+                      editData={editData}
+                      showHours={false}
+                      onEdit={() => onEditAssignment(assignment)}
+                      onDelete={() => assignment.id && onDeleteAssignment(assignment.id)}
+                      onSave={() => assignment.id && onSaveEdit(assignment.id)}
+                      onCancel={onCancelEdit}
+                      onHoursChange={onHoursChange}
+                      getCurrentWeekHours={getCurrentWeekHours}
+                      onChangeAssignmentRole={onChangeAssignmentRole}
+                      personDepartmentId={assignmentDepartmentId}
+                      currentWeekKey={currentWeekKey}
+                      onUpdateWeekHours={onUpdateWeekHours}
+                      weekKeys={weekKeys}
+                      isCellSelected={isCellSelected}
+                      isEditingCell={isEditingCell}
+                      onCellSelect={onCellSelect}
+                      onCellMouseDown={onCellMouseDown}
+                      onCellMouseEnter={onCellMouseEnter}
+                      onEditStartCell={onEditStartCell}
+                      onEditSaveCell={onEditSaveCell}
+                      onEditCancelCell={onEditCancelCell}
+                      editingValue={editingValue}
+                      onEditValueChangeCell={onEditValueChangeCell}
+                      optimisticHours={optimisticHours}
+                      onSwapPlaceholder={onSwapPlaceholder}
+                      taskTrackingEnabled={Boolean(taskTracking?.enabled)}
+                      taskTrackingLoading={Boolean(taskTracking?.enabled && taskTrackingLoading)}
+                      assignmentTasks={departmentScopedTasks}
+                      canManageTaskTracking={Boolean(canManageTaskTracking)}
+                      onTaskUpdate={onTaskUpdate}
+                      getTaskProgressColor={getTaskProgressColor}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))

@@ -1172,6 +1172,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/core/task_progress_colors/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["core_task_progress_colors_retrieve"];
+        put: operations["core_task_progress_colors_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/core/utilization_scheme/": {
         parameters: {
             query?: never;
@@ -4505,6 +4521,12 @@ export interface components {
             /** Format: double */
             hours: number;
         };
+        /**
+         * @description * `percent` - 0-100 Percent
+         *     * `binary` - Complete/Incomplete
+         * @enum {string}
+         */
+        CompletionModeEnum: "percent" | "binary";
         CoverageBlock: {
             roleId: number;
             start: string;
@@ -5690,6 +5712,7 @@ export interface components {
             departmentId?: number;
             name?: string;
             description?: string;
+            completionMode?: components["schemas"]["CompletionModeEnum"];
             completionPercent?: number;
             assigneeIds?: number[];
         };
@@ -5699,6 +5722,7 @@ export interface components {
             departmentId?: number;
             name?: string;
             description?: string;
+            completionMode?: components["schemas"]["CompletionModeEnum"];
             sortOrder?: number;
             isActive?: boolean;
         };
@@ -6395,6 +6419,7 @@ export interface components {
             readonly departmentName: string;
             name: string;
             description?: string;
+            completionMode?: components["schemas"]["CompletionModeEnum"];
             completionPercent: number;
             assigneeIds?: number[];
             readonly assigneeNames: string[];
@@ -6419,6 +6444,7 @@ export interface components {
             readonly departmentName: string;
             name: string;
             description?: string;
+            completionMode?: components["schemas"]["CompletionModeEnum"];
             sortOrder?: number;
             isActive?: boolean;
             /** Format: date-time */
@@ -6432,6 +6458,7 @@ export interface components {
             departmentId: number;
             name: string;
             description?: string;
+            completionMode?: components["schemas"]["CompletionModeEnum"];
             sortOrder?: number;
             isActive?: boolean;
         };
@@ -6700,6 +6727,26 @@ export interface components {
             label: string;
             colorHex: string;
             values: number[];
+        };
+        TaskProgressColorRange: {
+            minPercent: number;
+            maxPercent: number;
+            colorHex: string;
+            label?: string;
+        };
+        TaskProgressColorRangeRequest: {
+            minPercent: number;
+            maxPercent: number;
+            colorHex: string;
+            label?: string;
+        };
+        TaskProgressColorSettings: {
+            ranges: components["schemas"]["TaskProgressColorRange"][];
+            /** Format: date-time */
+            readonly updatedAt: string;
+        };
+        TaskProgressColorSettingsRequest: {
+            ranges: components["schemas"]["TaskProgressColorRangeRequest"][];
         };
         TeamOverviewItem: {
             id: number;
@@ -8855,6 +8902,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QATaskSettings"];
+                };
+            };
+        };
+    };
+    core_task_progress_colors_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskProgressColorSettings"];
+                };
+            };
+        };
+    };
+    core_task_progress_colors_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskProgressColorSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TaskProgressColorSettingsRequest"];
+                "multipart/form-data": components["schemas"]["TaskProgressColorSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskProgressColorSettings"];
                 };
             };
         };

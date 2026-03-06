@@ -13,6 +13,7 @@ from .models import (
     ProjectTaskTemplate,
     ProjectTask,
     ProjectTaskScope,
+    TaskCompletionMode,
 )
 from .status_definitions import normalize_status_key, status_exists
 from verticals.models import Vertical
@@ -170,6 +171,7 @@ class ProjectTaskTemplateSerializer(serializers.ModelSerializer):
     verticalName = serializers.CharField(source='vertical.name', read_only=True)
     departmentId = serializers.PrimaryKeyRelatedField(source='department', queryset=Department.objects.all())
     departmentName = serializers.CharField(source='department.name', read_only=True)
+    completionMode = serializers.ChoiceField(source='completion_mode', choices=TaskCompletionMode.choices, required=False)
     sortOrder = serializers.IntegerField(source='sort_order', required=False)
     isActive = serializers.BooleanField(source='is_active', required=False)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
@@ -186,6 +188,7 @@ class ProjectTaskTemplateSerializer(serializers.ModelSerializer):
             'departmentName',
             'name',
             'description',
+            'completionMode',
             'sortOrder',
             'isActive',
             'createdAt',
@@ -195,6 +198,11 @@ class ProjectTaskTemplateSerializer(serializers.ModelSerializer):
     def validate_scope(self, value):
         if value not in {ProjectTaskScope.PROJECT, ProjectTaskScope.DELIVERABLE}:
             raise serializers.ValidationError('scope must be project or deliverable')
+        return value
+
+    def validate_completionMode(self, value):
+        if value not in {TaskCompletionMode.PERCENT, TaskCompletionMode.BINARY}:
+            raise serializers.ValidationError('completionMode must be percent or binary')
         return value
 
     def create(self, validated_data):
@@ -220,6 +228,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
     )
     departmentId = serializers.PrimaryKeyRelatedField(source='department', queryset=Department.objects.all())
     departmentName = serializers.CharField(source='department.name', read_only=True)
+    completionMode = serializers.ChoiceField(source='completion_mode', choices=TaskCompletionMode.choices, required=False)
     completionPercent = serializers.IntegerField(source='completion_percent')
     assigneeIds = serializers.PrimaryKeyRelatedField(
         source='assignees',
@@ -245,6 +254,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
             'departmentName',
             'name',
             'description',
+            'completionMode',
             'completionPercent',
             'assigneeIds',
             'assigneeNames',
@@ -282,6 +292,15 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('completionPercent must be an integer')
         if percent < 0 or percent > 100:
             raise serializers.ValidationError('completionPercent must be between 0 and 100')
+        completion_mode = None
+        if self.instance is not None:
+            completion_mode = getattr(self.instance, 'completion_mode', None)
+        if completion_mode is None:
+            completion_mode = self.initial_data.get('completionMode') or self.initial_data.get('completion_mode')
+        if completion_mode in {TaskCompletionMode.BINARY, 'binary'}:
+            if percent not in {0, 100}:
+                raise serializers.ValidationError('binary tasks only allow completionPercent of 0 or 100')
+            return percent
         if percent % 5 != 0:
             raise serializers.ValidationError('completionPercent must be in 5% increments')
         return percent

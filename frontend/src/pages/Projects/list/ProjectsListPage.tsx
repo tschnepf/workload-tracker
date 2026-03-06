@@ -239,7 +239,7 @@ const ProjectsList: React.FC = () => {
   const leadAssignmentsQuery = useQuery<Assignment[], Error>({
     queryKey: leadAssignmentsKey,
     queryFn: () => assignmentsApi.listAll(leadAssignmentsQueryFilters),
-    enabled: projects.length > 0 && (detailsPaneOpen || mobileDetailOpen),
+    enabled: projects.length > 0,
     staleTime: 30_000,
   });
   const leadAssignments = useMemo(() => leadAssignmentsQuery.data ?? [], [leadAssignmentsQuery.data]);

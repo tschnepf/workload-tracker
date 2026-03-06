@@ -310,6 +310,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
               ) : assignedTasks.length > 0 ? (
                 assignedTasks.map((task) => {
                   const taskId = task.id ?? 0;
+                  const isBinaryTask = task.completionMode === 'binary';
                   const taskColor = getTaskProgressColor?.(task.completionPercent ?? 0) || 'var(--muted)';
                   const draftValue = draftCompletionByTask[taskId] ?? String(task.completionPercent ?? 0);
                   const isSaving = Boolean(savingTaskIds[taskId]);
@@ -321,25 +322,46 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                       <div className="flex items-center gap-1 shrink-0">
                         {canManageTaskTracking ? (
                           <>
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={5}
-                              disabled={isSaving}
-                              value={draftValue}
-                              onChange={(e) => {
-                                const nextValue = e.currentTarget.value;
-                                setDraftCompletionByTask((prev) => ({ ...prev, [taskId]: nextValue }));
-                              }}
-                              onBlur={() => { void commitTaskPercent(task, draftValue); }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur();
-                              }}
-                              style={{ color: taskColor }}
-                              className="w-14 px-1 py-0.5 text-[10px] text-right bg-[var(--surface)] border border-[var(--border)] rounded appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-                            />
-                            <span className="text-[10px] text-[var(--muted)]">%</span>
+                            {isBinaryTask ? (
+                              <label className="inline-flex items-center gap-1 text-[10px] text-[var(--muted)]">
+                                <input
+                                  type="checkbox"
+                                  disabled={isSaving}
+                                  checked={(task.completionPercent ?? 0) >= 100}
+                                  onChange={(e) => {
+                                    if (!task.id || !onTaskUpdate) return;
+                                    const nextPercent = e.currentTarget.checked ? 100 : 0;
+                                    void withSavingTask(task.id, async () => {
+                                      await Promise.resolve(onTaskUpdate(task.id!, { completionPercent: nextPercent }));
+                                    });
+                                  }}
+                                  className="h-3.5 w-3.5 accent-[var(--primary)]"
+                                />
+                                Complete
+                              </label>
+                            ) : (
+                              <>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={5}
+                                  disabled={isSaving}
+                                  value={draftValue}
+                                  onChange={(e) => {
+                                    const nextValue = e.currentTarget.value;
+                                    setDraftCompletionByTask((prev) => ({ ...prev, [taskId]: nextValue }));
+                                  }}
+                                  onBlur={() => { void commitTaskPercent(task, draftValue); }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.currentTarget.blur();
+                                  }}
+                                  style={{ color: taskColor }}
+                                  className="w-14 px-1 py-0.5 text-[10px] text-right bg-[var(--surface)] border border-[var(--border)] rounded appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                />
+                                <span className="text-[10px] text-[var(--muted)]">%</span>
+                              </>
+                            )}
                             <button
                               type="button"
                               onClick={() => { void unassignTaskFromPerson(task); }}
@@ -353,7 +375,19 @@ const AssignmentRow: React.FC<AssignmentRowProps> = ({
                             </button>
                           </>
                         ) : (
-                          <span className="text-[10px]" style={{ color: taskColor }}>{task.completionPercent}%</span>
+                          isBinaryTask ? (
+                            <label className="inline-flex items-center gap-1 text-[10px] text-[var(--muted)]">
+                              <input
+                                type="checkbox"
+                                disabled
+                                checked={(task.completionPercent ?? 0) >= 100}
+                                className="h-3.5 w-3.5 accent-[var(--primary)]"
+                              />
+                              Complete
+                            </label>
+                          ) : (
+                            <span className="text-[10px]" style={{ color: taskColor }}>{task.completionPercent}%</span>
+                          )
                         )}
                       </div>
                     </div>

@@ -185,6 +185,11 @@ class ProjectTaskScope(models.TextChoices):
     DELIVERABLE = 'deliverable', 'Deliverable'
 
 
+class TaskCompletionMode(models.TextChoices):
+    PERCENT = 'percent', '0-100 Percent'
+    BINARY = 'binary', 'Complete/Incomplete'
+
+
 class ProjectTaskTemplate(models.Model):
     vertical = models.ForeignKey(
         'verticals.Vertical',
@@ -199,6 +204,11 @@ class ProjectTaskTemplate(models.Model):
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    completion_mode = models.CharField(
+        max_length=20,
+        choices=TaskCompletionMode.choices,
+        default=TaskCompletionMode.PERCENT,
+    )
     sort_order = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -243,6 +253,11 @@ class ProjectTask(models.Model):
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    completion_mode = models.CharField(
+        max_length=20,
+        choices=TaskCompletionMode.choices,
+        default=TaskCompletionMode.PERCENT,
+    )
     completion_percent = models.PositiveSmallIntegerField(
         default=0,
         validators=[MinValueValidator(0), MaxValueValidator(100)],

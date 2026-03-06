@@ -8,7 +8,13 @@ from assignments.models import Assignment
 from deliverables.models import Deliverable
 from departments.models import Department
 from people.models import Person
-from projects.models import Project, ProjectTask, ProjectTaskScope, ProjectTaskTemplate
+from projects.models import (
+    Project,
+    ProjectTask,
+    ProjectTaskScope,
+    ProjectTaskTemplate,
+    TaskCompletionMode,
+)
 from verticals.models import Vertical
 
 
@@ -53,6 +59,7 @@ class ProjectTaskTrackingApiTests(TestCase):
             'departmentId': self.department.id,
             'name': 'Kickoff',
             'description': 'Do kickoff',
+            'completionMode': TaskCompletionMode.PERCENT,
             'sortOrder': 1,
             'isActive': True,
         }
@@ -69,6 +76,7 @@ class ProjectTaskTrackingApiTests(TestCase):
         listing = self.client.get('/api/projects/task-templates/?vertical=%s&scope=project' % self.enabled_vertical.id)
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(listing.json().get('count'), 1)
+        self.assertEqual(listing.json().get('results', [])[0].get('completionMode'), TaskCompletionMode.PERCENT)
 
     def test_tasks_endpoint_respects_vertical_gating(self):
         project = self._create_project(vertical=self.disabled_vertical)
@@ -86,6 +94,7 @@ class ProjectTaskTrackingApiTests(TestCase):
             scope=ProjectTaskScope.PROJECT,
             department=self.department,
             name='Project Setup',
+            completion_mode=TaskCompletionMode.BINARY,
             sort_order=1,
             is_active=True,
         )
@@ -94,6 +103,7 @@ class ProjectTaskTrackingApiTests(TestCase):
             scope=ProjectTaskScope.DELIVERABLE,
             department=self.department,
             name='Deliverable Review',
+            completion_mode=TaskCompletionMode.PERCENT,
             sort_order=2,
             is_active=True,
         )
@@ -108,6 +118,10 @@ class ProjectTaskTrackingApiTests(TestCase):
                 deliverable__isnull=True,
             ).exists()
         )
+        self.assertEqual(
+            ProjectTask.objects.get(project=project, template=project_template).completion_mode,
+            TaskCompletionMode.BINARY,
+        )
         self.assertTrue(
             ProjectTask.objects.filter(
                 project=project,
@@ -115,6 +129,10 @@ class ProjectTaskTrackingApiTests(TestCase):
                 template=deliverable_template,
                 scope=ProjectTaskScope.DELIVERABLE,
             ).exists()
+        )
+        self.assertEqual(
+            ProjectTask.objects.get(project=project, deliverable=deliverable, template=deliverable_template).completion_mode,
+            TaskCompletionMode.PERCENT,
         )
 
     def test_sync_adds_missing_only(self):
@@ -186,12 +204,70 @@ class ProjectTaskTrackingApiTests(TestCase):
         self.assertEqual(task.completion_percent, 55)
         self.assertEqual(list(task.assignees.values_list('id', flat=True)), [self.member_person.id])
 
+    def test_binary_mode_patch_accepts_only_zero_or_hundred(self):
+        template = ProjectTaskTemplate.objects.create(
+            vertical=self.enabled_vertical,
+            scope=ProjectTaskScope.PROJECT,
+            department=self.department,
+            name='Binary Task',
+            completion_mode=TaskCompletionMode.BINARY,
+            is_active=True,
+        )
+        project = self._create_project(vertical=self.enabled_vertical)
+        task = ProjectTask.objects.get(project=project, template=template)
+
+        self.client.force_authenticate(self.admin)
+        invalid = self.client.patch(
+            f'/api/projects/tasks/{task.id}/',
+            {'completionPercent': 55},
+            format='json',
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn('completionPercent', invalid.json())
+
+        valid = self.client.patch(
+            f'/api/projects/tasks/{task.id}/',
+            {'completionPercent': 100},
+            format='json',
+        )
+        self.assertEqual(valid.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.completion_percent, 100)
+        self.assertEqual(task.completion_mode, TaskCompletionMode.BINARY)
+
+    def test_template_mode_change_propagates_to_existing_tasks_and_preserves_percent(self):
+        template = ProjectTaskTemplate.objects.create(
+            vertical=self.enabled_vertical,
+            scope=ProjectTaskScope.PROJECT,
+            department=self.department,
+            name='Propagated Mode Task',
+            completion_mode=TaskCompletionMode.PERCENT,
+            is_active=True,
+        )
+        project = self._create_project(vertical=self.enabled_vertical)
+        task = ProjectTask.objects.get(project=project, template=template)
+        task.completion_percent = 55
+        task.save(update_fields=['completion_percent'])
+
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(
+            f'/api/projects/task-templates/{template.id}/',
+            {'completionMode': TaskCompletionMode.BINARY},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        task.refresh_from_db()
+        self.assertEqual(task.completion_mode, TaskCompletionMode.BINARY)
+        self.assertEqual(task.completion_percent, 55)
+
     def test_project_member_can_read_tasks_non_member_denied(self):
         ProjectTaskTemplate.objects.create(
             vertical=self.enabled_vertical,
             scope=ProjectTaskScope.PROJECT,
             department=self.department,
             name='Visibility Task',
+            completion_mode=TaskCompletionMode.BINARY,
             is_active=True,
         )
         project = self._create_project(vertical=self.enabled_vertical)
@@ -200,6 +276,7 @@ class ProjectTaskTrackingApiTests(TestCase):
         self.client.force_authenticate(self.member_user)
         allowed = self.client.get(f'/api/projects/{project.id}/tasks/')
         self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed.json().get('projectTasks', [])[0].get('completionMode'), TaskCompletionMode.BINARY)
 
         self.client.force_authenticate(self.outsider_user)
         denied = self.client.get(f'/api/projects/{project.id}/tasks/')

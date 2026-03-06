@@ -5,7 +5,13 @@ from typing import Iterable
 from django.db import transaction
 
 from deliverables.models import Deliverable
-from projects.models import Project, ProjectTask, ProjectTaskScope, ProjectTaskTemplate
+from projects.models import (
+    Project,
+    ProjectTask,
+    ProjectTaskScope,
+    ProjectTaskTemplate,
+    TaskCompletionMode,
+)
 
 
 def project_task_tracking_enabled(project: Project | None) -> bool:
@@ -47,6 +53,7 @@ def ensure_project_scope_tasks(project: Project) -> int:
             department=template.department,
             name=template.name,
             description=template.description,
+            completion_mode=getattr(template, 'completion_mode', TaskCompletionMode.PERCENT),
             completion_percent=0,
         )
         created += 1
@@ -81,6 +88,7 @@ def ensure_deliverable_scope_tasks(deliverable: Deliverable) -> int:
             department=template.department,
             name=template.name,
             description=template.description,
+            completion_mode=getattr(template, 'completion_mode', TaskCompletionMode.PERCENT),
             completion_percent=0,
         )
         created += 1
