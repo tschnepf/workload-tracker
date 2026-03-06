@@ -200,6 +200,8 @@ services:
     cap_drop:
       - ALL
     command: celery -A config worker -l info --concurrency=2
+    healthcheck:
+      disable: true
     environment:
       # Workers never run migrations; backend owns migrations
       - RUN_MIGRATIONS_ON_START=false
@@ -251,6 +253,8 @@ services:
     cap_drop:
       - ALL
     command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
+    healthcheck:
+      disable: true
     environment:
       # Workers never run migrations; backend owns migrations
       - RUN_MIGRATIONS_ON_START=false
@@ -297,6 +301,8 @@ services:
     cap_drop:
       - ALL
     command: ["celery", "-A", "config", "beat", "-l", "INFO"]
+    healthcheck:
+      disable: true
     environment:
       # Workers never run migrations; backend owns migrations
       - RUN_MIGRATIONS_ON_START=false

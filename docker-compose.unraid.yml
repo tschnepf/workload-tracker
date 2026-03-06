@@ -147,6 +147,8 @@ services:
       - BACKUPS_DIR=/backups
       - COLLECT_STATIC=false
     command: celery -A config worker -l info --concurrency=2
+    healthcheck:
+      disable: true
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups
       - static_volume:/app/staticfiles
@@ -190,6 +192,8 @@ services:
       - BACKUPS_DIR=/backups
       - COLLECT_STATIC=false
     command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
+    healthcheck:
+      disable: true
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups
     read_only: true
@@ -231,6 +235,8 @@ services:
       - BACKUPS_DIR=/backups
       - COLLECT_STATIC=false
     command: ["celery", "-A", "config", "beat", "-l", "INFO"]
+    healthcheck:
+      disable: true
     volumes:
       - /mnt/user/appdata/workload-tracker/backups:/backups
     read_only: true

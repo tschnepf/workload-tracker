@@ -16,6 +16,11 @@ type PushPayload = {
   url?: string;
   tag?: string;
   timestamp?: string;
+  priority?: string;
+  projectId?: number;
+  entityType?: string;
+  entityId?: number;
+  actions?: Array<{ action: string; title: string }>;
 };
 
 self.skipWaiting();
@@ -76,6 +81,7 @@ self.addEventListener('push', (event) => {
   }
 
   const title = payload.title || 'Workload Tracker';
+  const notificationActions = Array.isArray(payload.actions) ? payload.actions.slice(0, 3) : undefined;
   const options: NotificationOptions = {
     body: payload.body || 'You have a new update.',
     tag: payload.tag || payload.type || 'generic',
@@ -83,10 +89,18 @@ self.addEventListener('push', (event) => {
       url: payload.url || '/my-work',
       type: payload.type || 'generic',
       timestamp: payload.timestamp || new Date().toISOString(),
+      projectId: payload.projectId ?? null,
+      entityType: payload.entityType ?? null,
+      entityId: payload.entityId ?? null,
+      priority: payload.priority || 'normal',
+      actions: Array.isArray(payload.actions) ? payload.actions : [],
     },
     badge: '/brand/icon-192.png',
     icon: '/brand/icon-192.png',
   };
+  if (notificationActions && notificationActions.length > 0) {
+    (options as any).actions = notificationActions;
+  }
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -94,6 +108,13 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = (event.notification?.data?.url as string) || '/my-work';
+  const action = event.action || 'open';
+  const actionData = {
+    action,
+    projectId: event.notification?.data?.projectId || null,
+    url: targetUrl,
+    type: event.notification?.data?.type || 'generic',
+  };
 
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
@@ -101,11 +122,17 @@ self.addEventListener('notificationclick', (event) => {
       if ('focus' in windowClient) {
         if (windowClient.url.includes(self.location.origin)) {
           await windowClient.focus();
-          windowClient.postMessage({ type: 'navigate', url: targetUrl });
+          windowClient.postMessage({ type: 'push-action', ...actionData });
+          if (action === 'open' || !event.action) {
+            windowClient.postMessage({ type: 'navigate', url: targetUrl });
+          }
           return;
         }
       }
     }
-    await self.clients.openWindow(targetUrl);
+    const opened = await self.clients.openWindow(targetUrl);
+    if (opened && 'postMessage' in opened) {
+      opened.postMessage({ type: 'push-action', ...actionData });
+    }
   })());
 });

@@ -47,7 +47,7 @@ from deliverables.models import Deliverable
 from .services import WorkloadRebalancingService
 from accounts.permissions import is_admin_or_manager
 from accounts.models import UserProfile
-from core.webpush import build_push_payload, queue_push_to_users
+from core.webpush import build_push_payload, queue_push_to_users, web_push_configured, web_push_event_enabled
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified
@@ -158,8 +158,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
     def _push_assignment_events_enabled(self) -> bool:
         return bool(
-            getattr(settings, 'WEB_PUSH_ENABLED', False)
-            and getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True)
+            web_push_configured()
+            and web_push_event_enabled('push_assignment_changes')
         )
 
     def _recipient_user_ids_for_persons(self, person_ids: list[int], actor_user_id: int | None = None) -> list[int]:
@@ -181,6 +181,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         tag: str,
         person_ids: list[int],
         actor_user_id: int | None = None,
+        project_id: int | None = None,
+        assignment_id: int | None = None,
     ) -> None:
         if not self._push_assignment_events_enabled():
             return
@@ -193,6 +195,10 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             body=body,
             url=url,
             tag=tag,
+            project_id=project_id,
+            entity_type='assignment',
+            entity_id=assignment_id,
+            priority='normal',
         )
         queue_push_to_users(recipient_ids, payload, preference_field='push_assignment_changes')
 
@@ -3810,10 +3816,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     event_type='assignment.created',
                     title='Assignment Added',
                     body=f"{person_name} was assigned to {project_name}.",
-                    url='/assignments',
+                    url=f"/assignments?projectId={assignment.project_id}&assignmentId={assignment.id}",
                     tag=f'assignment.created.{assignment.id}',
                     person_ids=[assignment.person_id],
                     actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+                    project_id=assignment.project_id,
+                    assignment_id=assignment.id,
                 )
             return Response(
                 self.get_serializer(assignment).data,
@@ -3861,10 +3869,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 event_type='assignment.updated',
                 title='Assignment Updated',
                 body=body,
-                url='/assignments',
+                url=f"/assignments?projectId={assignment.project_id}&assignmentId={assignment.id}",
                 tag=f'assignment.updated.{assignment.id}',
                 person_ids=recipient_person_ids,
                 actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+                project_id=assignment.project_id,
+                assignment_id=assignment.id,
             )
 
         return Response(self.get_serializer(assignment).data)
@@ -3889,10 +3899,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 event_type='assignment.removed',
                 title='Assignment Removed',
                 body=f"{person_name} was removed from {project_name}.",
-                url='/assignments',
+                url=f"/assignments?projectId={instance.project_id}&assignmentId={instance.id}",
                 tag=f'assignment.removed.{instance.id}',
                 person_ids=[person_id],
                 actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+                project_id=instance.project_id,
+                assignment_id=instance.id,
             )
         return response
     

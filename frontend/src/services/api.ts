@@ -89,6 +89,22 @@ export type SystemCapabilities = {
     enabled: boolean;
     pushEnabled: boolean;
     vapidPublicKey: string | null;
+    pushEvents?: {
+      preDeliverableReminders: boolean;
+      dailyDigest: boolean;
+      assignmentChanges: boolean;
+      deliverableDateChanges: boolean;
+    };
+    pushFeatures?: {
+      rateLimit: boolean;
+      weekendMute: boolean;
+      quietHours: boolean;
+      snooze: boolean;
+      digestWindow: boolean;
+      actions: boolean;
+      deepLinks: boolean;
+      subscriptionHealthcheck: boolean;
+    };
     offlineMode: 'shell';
   };
   integrations?: {
@@ -106,6 +122,20 @@ export type NotificationPreferences = {
   pushPreDeliverableReminders: boolean;
   pushDailyDigest: boolean;
   pushAssignmentChanges: boolean;
+  pushDeliverableDateChanges: boolean;
+  pushRateLimitEnabled: boolean;
+  pushWeekendMute: boolean;
+  pushQuietHoursEnabled: boolean;
+  pushQuietHoursStart: number;
+  pushQuietHoursEnd: number;
+  pushDigestWindowEnabled: boolean;
+  pushDigestWindow: 'instant' | 'morning' | 'evening';
+  pushTimezone: string;
+  pushSnoozeEnabled: boolean;
+  pushSnoozeUntil: string | null;
+  pushActionsEnabled: boolean;
+  pushDeepLinksEnabled: boolean;
+  pushSubscriptionCleanupEnabled: boolean;
 };
 
 export type PushSubscriptionItem = {
@@ -117,6 +147,35 @@ export type PushSubscriptionItem = {
   lastSeenAt: string;
   lastSuccessAt: string | null;
   lastError: string;
+};
+
+export type WebPushGlobalSettings = {
+  enabled: boolean;
+  pushRateLimitEnabled: boolean;
+  pushRateLimitPerHour: number;
+  pushWeekendMuteEnabled: boolean;
+  pushQuietHoursEnabled: boolean;
+  pushSnoozeEnabled: boolean;
+  pushDigestWindowEnabled: boolean;
+  pushActionsEnabled: boolean;
+  pushDeepLinksEnabled: boolean;
+  pushSubscriptionHealthcheckEnabled: boolean;
+  pushPreDeliverableRemindersEnabled: boolean;
+  pushDailyDigestEnabled: boolean;
+  pushAssignmentChangesEnabled: boolean;
+  pushDeliverableDateChangesEnabled: boolean;
+  pushDeliverableDateChangeScope: 'next_upcoming' | 'all_upcoming';
+  pushDeliverableDateChangeWithinTwoWeeksOnly: boolean;
+  updatedAt: string;
+};
+
+export type WebPushVapidKeysStatus = {
+  configured: boolean;
+  source: 'database' | 'environment' | 'none';
+  subject: string | null;
+  publicKeyMasked: string | null;
+  privateKeyMasked: string | null;
+  updatedAt: string | null;
 };
 
 // Delegate to shared error mapper to avoid duplication
@@ -644,6 +703,64 @@ export const qaTaskSettingsApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as QATaskSettings;
+  },
+};
+
+export const webPushGlobalSettingsApi = {
+  get: async (): Promise<WebPushGlobalSettings> => {
+    const res = await apiClient.GET('/core/web_push_settings/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as WebPushGlobalSettings;
+  },
+  update: async (
+    payload: Partial<Pick<
+      WebPushGlobalSettings,
+      | 'enabled'
+      | 'pushRateLimitEnabled'
+      | 'pushRateLimitPerHour'
+      | 'pushWeekendMuteEnabled'
+      | 'pushQuietHoursEnabled'
+      | 'pushSnoozeEnabled'
+      | 'pushDigestWindowEnabled'
+      | 'pushActionsEnabled'
+      | 'pushDeepLinksEnabled'
+      | 'pushSubscriptionHealthcheckEnabled'
+      | 'pushPreDeliverableRemindersEnabled'
+      | 'pushDailyDigestEnabled'
+      | 'pushAssignmentChangesEnabled'
+      | 'pushDeliverableDateChangesEnabled'
+      | 'pushDeliverableDateChangeScope'
+      | 'pushDeliverableDateChangeWithinTwoWeeksOnly'
+    >>
+  ): Promise<WebPushGlobalSettings> => {
+    const res = await apiClient.PUT('/core/web_push_settings/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as WebPushGlobalSettings;
+  },
+};
+
+export const webPushVapidKeysApi = {
+  get: async (): Promise<WebPushVapidKeysStatus> => {
+    const res = await apiClient.GET('/core/web_push_vapid_keys/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as WebPushVapidKeysStatus;
+  },
+  generate: async (payload?: { subject?: string }): Promise<WebPushVapidKeysStatus> => {
+    const res = await apiClient.POST('/core/web_push_vapid_keys/' as any, { body: (payload || {}) as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as WebPushVapidKeysStatus;
   },
 };
 
@@ -2495,5 +2612,11 @@ export const authApi = {
   },
   testPush: async (): Promise<{ queued: boolean; detail: string }> => {
     return fetchApi<{ queued: boolean; detail: string }>('/auth/push/test/', { method: 'POST' });
+  },
+  pushAction: async (data: { action: 'acknowledge' | 'mute_project_24h'; projectId?: number | null }): Promise<void> => {
+    await fetchApi<void>('/auth/push/action/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };

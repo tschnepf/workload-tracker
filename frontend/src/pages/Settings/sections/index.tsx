@@ -6,6 +6,7 @@ import UtilizationSection, { UTILIZATION_SECTION_ID } from './UtilizationSection
 import DepartmentRolesSection, { DEPARTMENT_ROLES_SECTION_ID } from './DepartmentRolesSection';
 import ProjectStatusesSection, { PROJECT_STATUSES_SECTION_ID } from './ProjectStatusesSection';
 import PreDeliverablesSection, { PRE_DELIVERABLES_SECTION_ID } from './PreDeliverablesSection';
+import PushNotificationsSection, { PUSH_NOTIFICATIONS_SECTION_ID } from './PushNotificationsSection';
 import AutoHoursSection, { AUTO_HOURS_SECTION_ID } from './AutoHoursSection';
 import CalendarFeedsSection, { CALENDAR_FEEDS_SECTION_ID } from './CalendarFeedsSection';
 import AdminUsersSection, { ADMIN_USERS_SECTION_ID } from './AdminUsersSection';
@@ -67,6 +68,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     requiresAdmin: true,
     allowManager: true,
     component: PreDeliverablesSection,
+  },
+  {
+    id: PUSH_NOTIFICATIONS_SECTION_ID,
+    title: 'Mobile',
+    requiresAdmin: true,
+    component: PushNotificationsSection,
   },
   {
     id: DELIVERABLE_TASK_TEMPLATES_SECTION_ID,

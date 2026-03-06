@@ -12,6 +12,7 @@ from .models import (
     QATaskSettings,
     NetworkGraphSettings,
     TaskProgressColorSettings,
+    WebPushGlobalSettings,
     _normalize_task_progress_ranges,
 )
 from projects.models import Project
@@ -182,6 +183,118 @@ class QATaskSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = QATaskSettings
         fields = ['defaultDaysBefore', 'updatedAt']
+
+
+class WebPushGlobalSettingsSerializer(serializers.ModelSerializer):
+    enabled = serializers.BooleanField()
+    pushRateLimitEnabled = serializers.BooleanField(
+        source='push_rate_limit_enabled',
+        required=False,
+    )
+    pushRateLimitPerHour = serializers.IntegerField(
+        source='push_rate_limit_per_hour',
+        min_value=1,
+        max_value=50,
+        required=False,
+    )
+    pushWeekendMuteEnabled = serializers.BooleanField(
+        source='push_weekend_mute_enabled',
+        required=False,
+    )
+    pushQuietHoursEnabled = serializers.BooleanField(
+        source='push_quiet_hours_enabled',
+        required=False,
+    )
+    pushSnoozeEnabled = serializers.BooleanField(
+        source='push_snooze_enabled',
+        required=False,
+    )
+    pushDigestWindowEnabled = serializers.BooleanField(
+        source='push_digest_window_enabled',
+        required=False,
+    )
+    pushActionsEnabled = serializers.BooleanField(
+        source='push_actions_enabled',
+        required=False,
+    )
+    pushDeepLinksEnabled = serializers.BooleanField(
+        source='push_deep_links_enabled',
+        required=False,
+    )
+    pushSubscriptionHealthcheckEnabled = serializers.BooleanField(
+        source='push_subscription_healthcheck_enabled',
+        required=False,
+    )
+    pushPreDeliverableRemindersEnabled = serializers.BooleanField(
+        source='push_pre_deliverable_reminders_enabled',
+        required=False,
+    )
+    pushDailyDigestEnabled = serializers.BooleanField(
+        source='push_daily_digest_enabled',
+        required=False,
+    )
+    pushAssignmentChangesEnabled = serializers.BooleanField(
+        source='push_assignment_changes_enabled',
+        required=False,
+    )
+    pushDeliverableDateChangesEnabled = serializers.BooleanField(
+        source='push_deliverable_date_changes_enabled',
+        required=False,
+    )
+    pushDeliverableDateChangeScope = serializers.ChoiceField(
+        source='push_deliverable_date_change_scope',
+        choices=[choice[0] for choice in WebPushGlobalSettings.DELIVERABLE_SCOPE_CHOICES],
+        required=False,
+    )
+    pushDeliverableDateChangeWithinTwoWeeksOnly = serializers.BooleanField(
+        source='push_deliverable_date_change_within_two_weeks_only',
+        required=False,
+    )
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = WebPushGlobalSettings
+        fields = [
+            'enabled',
+            'pushRateLimitEnabled',
+            'pushRateLimitPerHour',
+            'pushWeekendMuteEnabled',
+            'pushQuietHoursEnabled',
+            'pushSnoozeEnabled',
+            'pushDigestWindowEnabled',
+            'pushActionsEnabled',
+            'pushDeepLinksEnabled',
+            'pushSubscriptionHealthcheckEnabled',
+            'pushPreDeliverableRemindersEnabled',
+            'pushDailyDigestEnabled',
+            'pushAssignmentChangesEnabled',
+            'pushDeliverableDateChangesEnabled',
+            'pushDeliverableDateChangeScope',
+            'pushDeliverableDateChangeWithinTwoWeeksOnly',
+            'updatedAt',
+        ]
+
+
+class WebPushVapidKeysStatusSerializer(serializers.Serializer):
+    configured = serializers.BooleanField()
+    source = serializers.ChoiceField(choices=['database', 'environment', 'none'])
+    subject = serializers.CharField(allow_null=True, required=False)
+    publicKeyMasked = serializers.CharField(allow_null=True, required=False)
+    privateKeyMasked = serializers.CharField(allow_null=True, required=False)
+    updatedAt = serializers.DateTimeField(allow_null=True, required=False)
+
+
+class WebPushVapidKeysGenerateSerializer(serializers.Serializer):
+    subject = serializers.CharField(required=False, allow_blank=False, max_length=255)
+
+    def validate_subject(self, value: str):
+        val = str(value or '').strip()
+        if not val:
+            raise serializers.ValidationError('subject cannot be blank')
+        lower = val.lower()
+        if lower.startswith('mailto:') or lower.startswith('https://') or lower.startswith('http://'):
+            return val
+        raise serializers.ValidationError("subject must start with 'mailto:', 'https://', or 'http://'")
 
 
 class NetworkGraphSettingsSerializer(serializers.ModelSerializer):

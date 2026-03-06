@@ -6,7 +6,9 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from people.models import Person
+from projects.models import Project
 from integrations.models import AuthMethodPolicy
+from core.models import NotificationPreference, WebPushGlobalSettings, WebPushProjectMute
 
 
 class AuthEndpointsTests(TestCase):
@@ -135,6 +137,20 @@ class AuthEndpointsTests(TestCase):
         self.assertIn('pushPreDeliverableReminders', response.data)
         self.assertIn('pushDailyDigest', response.data)
         self.assertIn('pushAssignmentChanges', response.data)
+        self.assertIn('pushDeliverableDateChanges', response.data)
+        self.assertIn('pushRateLimitEnabled', response.data)
+        self.assertIn('pushWeekendMute', response.data)
+        self.assertIn('pushQuietHoursEnabled', response.data)
+        self.assertIn('pushQuietHoursStart', response.data)
+        self.assertIn('pushQuietHoursEnd', response.data)
+        self.assertIn('pushDigestWindowEnabled', response.data)
+        self.assertIn('pushDigestWindow', response.data)
+        self.assertIn('pushTimezone', response.data)
+        self.assertIn('pushSnoozeEnabled', response.data)
+        self.assertIn('pushSnoozeUntil', response.data)
+        self.assertIn('pushActionsEnabled', response.data)
+        self.assertIn('pushDeepLinksEnabled', response.data)
+        self.assertIn('pushSubscriptionCleanupEnabled', response.data)
 
         payload = {
             'emailPreDeliverableReminders': True,
@@ -144,12 +160,161 @@ class AuthEndpointsTests(TestCase):
             'pushPreDeliverableReminders': True,
             'pushDailyDigest': True,
             'pushAssignmentChanges': False,
+            'pushDeliverableDateChanges': True,
+            'pushRateLimitEnabled': False,
+            'pushWeekendMute': True,
+            'pushQuietHoursEnabled': True,
+            'pushQuietHoursStart': 21,
+            'pushQuietHoursEnd': 7,
+            'pushDigestWindowEnabled': True,
+            'pushDigestWindow': 'evening',
+            'pushTimezone': 'America/Phoenix',
+            'pushSnoozeEnabled': True,
+            'pushSnoozeUntil': None,
+            'pushActionsEnabled': False,
+            'pushDeepLinksEnabled': False,
+            'pushSubscriptionCleanupEnabled': False,
         }
         response = self.client.put('/api/auth/notification-preferences/', payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['webPushEnabled'])
         self.assertTrue(response.data['pushDailyDigest'])
         self.assertFalse(response.data['pushAssignmentChanges'])
+        self.assertTrue(response.data['pushDeliverableDateChanges'])
+        self.assertFalse(response.data['pushRateLimitEnabled'])
+        self.assertTrue(response.data['pushWeekendMute'])
+        self.assertTrue(response.data['pushQuietHoursEnabled'])
+        self.assertEqual(response.data['pushQuietHoursStart'], 21)
+        self.assertEqual(response.data['pushQuietHoursEnd'], 7)
+        self.assertTrue(response.data['pushDigestWindowEnabled'])
+        self.assertEqual(response.data['pushDigestWindow'], 'evening')
+        self.assertEqual(response.data['pushTimezone'], 'America/Phoenix')
+        self.assertTrue(response.data['pushSnoozeEnabled'])
+        self.assertFalse(response.data['pushActionsEnabled'])
+        self.assertFalse(response.data['pushDeepLinksEnabled'])
+        self.assertFalse(response.data['pushSubscriptionCleanupEnabled'])
+
+    def test_notification_preferences_respect_global_push_event_availability(self):
+        cfg = WebPushGlobalSettings.get_active()
+        cfg.push_rate_limit_enabled = False
+        cfg.push_weekend_mute_enabled = False
+        cfg.push_quiet_hours_enabled = False
+        cfg.push_snooze_enabled = False
+        cfg.push_digest_window_enabled = False
+        cfg.push_actions_enabled = False
+        cfg.push_deep_links_enabled = False
+        cfg.push_subscription_healthcheck_enabled = False
+        cfg.push_pre_deliverable_reminders_enabled = False
+        cfg.push_daily_digest_enabled = False
+        cfg.push_assignment_changes_enabled = False
+        cfg.push_deliverable_date_changes_enabled = False
+        cfg.save(update_fields=[
+            'push_rate_limit_enabled',
+            'push_weekend_mute_enabled',
+            'push_quiet_hours_enabled',
+            'push_snooze_enabled',
+            'push_digest_window_enabled',
+            'push_actions_enabled',
+            'push_deep_links_enabled',
+            'push_subscription_healthcheck_enabled',
+            'push_pre_deliverable_reminders_enabled',
+            'push_daily_digest_enabled',
+            'push_assignment_changes_enabled',
+            'push_deliverable_date_changes_enabled',
+            'updated_at',
+        ])
+
+        self._auth(self.user)
+        payload = {
+            'emailPreDeliverableReminders': True,
+            'reminderDaysBefore': 2,
+            'dailyDigest': True,
+            'webPushEnabled': True,
+            'pushPreDeliverableReminders': True,
+            'pushDailyDigest': True,
+            'pushAssignmentChanges': True,
+            'pushDeliverableDateChanges': True,
+            'pushRateLimitEnabled': True,
+            'pushWeekendMute': True,
+            'pushQuietHoursEnabled': True,
+            'pushQuietHoursStart': 22,
+            'pushQuietHoursEnd': 7,
+            'pushDigestWindowEnabled': True,
+            'pushDigestWindow': 'evening',
+            'pushTimezone': 'America/Phoenix',
+            'pushSnoozeEnabled': True,
+            'pushSnoozeUntil': '2026-03-06T12:00:00Z',
+            'pushActionsEnabled': True,
+            'pushDeepLinksEnabled': True,
+            'pushSubscriptionCleanupEnabled': True,
+        }
+        response = self.client.put('/api/auth/notification-preferences/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['pushPreDeliverableReminders'])
+        self.assertFalse(response.data['pushDailyDigest'])
+        self.assertFalse(response.data['pushAssignmentChanges'])
+        self.assertFalse(response.data['pushDeliverableDateChanges'])
+        self.assertFalse(response.data['pushRateLimitEnabled'])
+        self.assertFalse(response.data['pushWeekendMute'])
+        self.assertFalse(response.data['pushQuietHoursEnabled'])
+        self.assertFalse(response.data['pushDigestWindowEnabled'])
+        self.assertEqual(response.data['pushDigestWindow'], 'instant')
+        self.assertFalse(response.data['pushSnoozeEnabled'])
+        self.assertIsNone(response.data['pushSnoozeUntil'])
+        self.assertFalse(response.data['pushActionsEnabled'])
+        self.assertFalse(response.data['pushDeepLinksEnabled'])
+        self.assertFalse(response.data['pushSubscriptionCleanupEnabled'])
+
+    def test_push_action_endpoint_ack_and_project_mute(self):
+        project = Project.objects.create(name='Muted Project')
+        self._auth(self.user)
+
+        ack_response = self.client.post(
+            '/api/auth/push/action/',
+            {'action': 'acknowledge'},
+            format='json',
+        )
+        self.assertEqual(ack_response.status_code, status.HTTP_200_OK)
+
+        mute_response = self.client.post(
+            '/api/auth/push/action/',
+            {'action': 'mute_project_24h', 'projectId': project.id},
+            format='json',
+        )
+        self.assertEqual(mute_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            WebPushProjectMute.objects.filter(
+                user=self.user,
+                project=project,
+            ).exists()
+        )
+
+    def test_push_action_endpoint_respects_global_and_user_action_toggles(self):
+        self._auth(self.user)
+
+        cfg = WebPushGlobalSettings.get_active()
+        cfg.push_actions_enabled = False
+        cfg.save(update_fields=['push_actions_enabled', 'updated_at'])
+
+        globally_disabled = self.client.post(
+            '/api/auth/push/action/',
+            {'action': 'acknowledge'},
+            format='json',
+        )
+        self.assertEqual(globally_disabled.status_code, status.HTTP_403_FORBIDDEN)
+
+        cfg.push_actions_enabled = True
+        cfg.save(update_fields=['push_actions_enabled', 'updated_at'])
+        pref, _ = NotificationPreference.objects.get_or_create(user=self.user)
+        pref.push_actions_enabled = False
+        pref.save(update_fields=['push_actions_enabled', 'updated_at'])
+
+        user_disabled = self.client.post(
+            '/api/auth/push/action/',
+            {'action': 'acknowledge'},
+            format='json',
+        )
+        self.assertEqual(user_disabled.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_push_subscription_crud(self):
         self._auth(self.user)

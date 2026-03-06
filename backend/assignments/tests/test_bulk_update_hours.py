@@ -125,7 +125,13 @@ class BulkUpdateHoursTests(TestCase):
         self.assertEqual(body.get('code'), 'PRE_HIRE_WEEK_LOCKED')
         self.assertEqual(body.get('detail'), 'Cannot assign hours before employee hire week')
 
-    @override_settings(WEB_PUSH_ENABLED=True, WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED=True)
+    @override_settings(
+        WEB_PUSH_ENABLED=True,
+        WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED=True,
+        WEB_PUSH_VAPID_PUBLIC_KEY='public',
+        WEB_PUSH_VAPID_PRIVATE_KEY='private',
+        WEB_PUSH_SUBJECT='mailto:test@example.com',
+    )
     @patch('assignments.views.queue_push_to_users')
     def test_bulk_update_hours_queues_assignment_push_summary(self, queue_mock):
         payload = {

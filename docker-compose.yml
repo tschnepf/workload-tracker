@@ -107,6 +107,12 @@ services:
       # Retired flags: all endpoints migrated to typed client
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     networks:
       - tracker-network
     command: npm run dev -- --host 0.0.0.0 --port 3000
@@ -150,6 +156,8 @@ services:
       - BQE_COMPANY_ID=${BQE_COMPANY_ID:-}
       - BQE_REDIRECT_URI=${BQE_REDIRECT_URI:-http://localhost:8000/api/integrations/bqe/connect/callback}
     command: celery -A config worker -l info --concurrency=2
+    healthcheck:
+      disable: true
     mem_limit: 512m
     cpus: 0.50
     networks:
@@ -192,6 +200,8 @@ services:
       - BQE_COMPANY_ID=${BQE_COMPANY_ID:-}
       - BQE_REDIRECT_URI=${BQE_REDIRECT_URI:-http://localhost:8000/api/integrations/bqe/connect/callback}
     command: celery -A config worker -l info --concurrency=1 -Q db_maintenance
+    healthcheck:
+      disable: true
     mem_limit: 256m
     cpus: 0.25
     networks:
@@ -235,6 +245,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+    healthcheck:
+      disable: true
     networks:
       - tracker-network
 

@@ -10,7 +10,13 @@ from celery import shared_task
 import os
 from django.db.models import Prefetch
 from django.conf import settings
-from core.webpush import build_push_payload, send_push_to_users
+from core.webpush import (
+    build_push_payload,
+    flush_due_deferred_push_notifications,
+    run_web_push_subscription_health_check,
+    send_push_to_users,
+    web_push_event_enabled,
+)
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=2, retry_kwargs={"max_retries": 3}, soft_time_limit=120)
@@ -303,14 +309,18 @@ def send_pre_deliverable_reminders(self):
             if (
                 getattr(pref, 'web_push_enabled', False)
                 and getattr(pref, 'push_pre_deliverable_reminders', True)
-                and bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
+                and web_push_event_enabled('push_pre_deliverable_reminders')
             ):
                 payload = build_push_payload(
                     event_type='pred.reminder',
                     title='Pre-Deliverable Reminder',
                     body=f"{getattr(it.deliverable.project, 'name', 'Project')} • {it.generated_date}",
-                    url='/deliverables/calendar',
+                    url=f"/deliverables/calendar?project={it.deliverable.project_id}&deliverable={it.deliverable_id}&preItem={it.id}",
                     tag=f"pred.reminder.{it.id}",
+                    project_id=getattr(it.deliverable, 'project_id', None),
+                    entity_type='pre_deliverable',
+                    entity_id=getattr(it, 'id', None),
+                    priority='normal',
                 )
                 try:
                     send_push_to_users_task.delay(
@@ -354,14 +364,15 @@ def send_daily_digest(self):
         if (
             getattr(pref, 'web_push_enabled', False)
             and getattr(pref, 'push_daily_digest', False)
-            and bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
+            and web_push_event_enabled('push_daily_digest')
         ):
             payload = build_push_payload(
                 event_type='pred.digest',
                 title='Daily Pre-Deliverables Digest',
                 body=f"{len(items)} upcoming item(s).",
-                url='/deliverables/calendar',
+                url='/deliverables/calendar?mine_only=1',
                 tag='pred.digest',
+                priority='normal',
             )
             try:
                 send_push_to_users_task.delay(
@@ -383,6 +394,17 @@ def send_daily_digest(self):
 def send_push_to_users_task(self, user_ids: List[int], payload: Dict[str, Any], preference_field: str | None = None) -> Dict[str, Any]:
     sent = send_push_to_users(user_ids, payload, preference_field=preference_field)
     return {'sent': sent, 'userCount': len(set(user_ids or []))}
+
+
+@shared_task(bind=True, soft_time_limit=60)
+def flush_deferred_push_notifications_task(self, max_rows: int = 1000) -> Dict[str, Any]:
+    result = flush_due_deferred_push_notifications(max_rows=max_rows)
+    return result
+
+
+@shared_task(bind=True, soft_time_limit=60)
+def web_push_subscription_health_check_task(self) -> Dict[str, Any]:
+    return run_web_push_subscription_health_check()
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=2, retry_kwargs={"max_retries": 1}, soft_time_limit=600)

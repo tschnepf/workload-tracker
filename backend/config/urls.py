@@ -33,6 +33,13 @@ from rest_framework.response import Response
 from deliverables.ics_views import deliverables_ics
 from assignments.views import AssignmentsPageSnapshotView
 from core.views import UiBootstrapView, PeoplePageSnapshotView, SkillsPageSnapshotView, SettingsPageSnapshotView
+from core.webpush import (
+    web_push_globally_enabled,
+    web_push_keys_configured,
+    web_push_event_capabilities,
+    web_push_feature_capabilities,
+    web_push_public_key,
+)
 
 def health_check(request):
     """Health check endpoint for Docker and monitoring"""
@@ -115,6 +122,30 @@ def readiness_check(request):
                     'enabled': serializers.BooleanField(),
                     'pushEnabled': serializers.BooleanField(),
                     'vapidPublicKey': serializers.CharField(allow_null=True, required=False),
+                    'pushEvents': inline_serializer(
+                        name='CapabilitiesPwaPushEvents',
+                        fields={
+                            'preDeliverableReminders': serializers.BooleanField(),
+                            'dailyDigest': serializers.BooleanField(),
+                            'assignmentChanges': serializers.BooleanField(),
+                            'deliverableDateChanges': serializers.BooleanField(),
+                        },
+                        required=False,
+                    ),
+                    'pushFeatures': inline_serializer(
+                        name='CapabilitiesPwaPushFeatures',
+                        fields={
+                            'rateLimit': serializers.BooleanField(),
+                            'weekendMute': serializers.BooleanField(),
+                            'quietHours': serializers.BooleanField(),
+                            'snooze': serializers.BooleanField(),
+                            'digestWindow': serializers.BooleanField(),
+                            'actions': serializers.BooleanField(),
+                            'deepLinks': serializers.BooleanField(),
+                            'subscriptionHealthcheck': serializers.BooleanField(),
+                        },
+                        required=False,
+                    ),
                     'offlineMode': serializers.CharField(),
                 },
             ),
@@ -128,6 +159,7 @@ def capabilities_view(request):
 
     Returns booleans and simple settings for aggregate endpoints, async jobs, and cache TTL hints.
     """
+    push_enabled = bool(web_push_globally_enabled() and web_push_keys_configured())
     caps = {
         'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
         'aggregates': {
@@ -144,8 +176,10 @@ def capabilities_view(request):
         'personalDashboard': True,
         'pwa': {
             'enabled': bool(getattr(settings, 'PWA_ENABLED', True)),
-            'pushEnabled': bool(getattr(settings, 'WEB_PUSH_ENABLED', False)),
-            'vapidPublicKey': getattr(settings, 'WEB_PUSH_VAPID_PUBLIC_KEY', '') or None,
+            'pushEnabled': push_enabled,
+            'vapidPublicKey': web_push_public_key(),
+            'pushEvents': web_push_event_capabilities(),
+            'pushFeatures': web_push_feature_capabilities(),
             'offlineMode': 'shell',
         },
     }

@@ -23,6 +23,9 @@ from .serializers import (
     CalendarFeedSettingsSerializer,
     DeliverablePhaseMappingSettingsSerializer,
     QATaskSettingsSerializer,
+    WebPushGlobalSettingsSerializer,
+    WebPushVapidKeysStatusSerializer,
+    WebPushVapidKeysGenerateSerializer,
     NetworkGraphSettingsSerializer,
     TaskProgressColorSettingsSerializer,
 )
@@ -34,12 +37,23 @@ from .models import (
     DeliverablePhaseMappingSettings,
     DeliverablePhaseDefinition,
     QATaskSettings,
+    WebPushGlobalSettings,
+    WebPushVapidKeys,
     TaskProgressColorSettings,
     NetworkGraphSettings,
     AutoHoursRoleSetting,
     AutoHoursGlobalSettings,
     AutoHoursTemplate,
     AutoHoursTemplateRoleSetting,
+)
+from .webpush import (
+    web_push_globally_enabled,
+    web_push_keys_configured,
+    web_push_event_capabilities,
+    web_push_feature_capabilities,
+    web_push_public_key,
+    web_push_vapid_status,
+    generate_vapid_keypair,
 )
 from .cache_keys import build_aggregate_cache_key
 from accounts.permissions import IsAdminOrManager, is_admin_user, is_manager_user
@@ -87,6 +101,7 @@ class UiPageSnapshotThrottle(ScopedRateThrottle):
 
 
 def _build_capabilities_payload():
+    push_enabled = bool(web_push_globally_enabled() and web_push_keys_configured())
     caps = {
         'asyncJobs': os.getenv('ASYNC_JOBS', 'false').lower() == 'true',
         'aggregates': {
@@ -103,8 +118,10 @@ def _build_capabilities_payload():
         'personalDashboard': True,
         'pwa': {
             'enabled': bool(getattr(settings, 'PWA_ENABLED', True)),
-            'pushEnabled': bool(getattr(settings, 'WEB_PUSH_ENABLED', False)),
-            'vapidPublicKey': getattr(settings, 'WEB_PUSH_VAPID_PUBLIC_KEY', '') or None,
+            'pushEnabled': push_enabled,
+            'vapidPublicKey': web_push_public_key(),
+            'pushEvents': web_push_event_capabilities(),
+            'pushFeatures': web_push_feature_capabilities(),
             'offlineMode': 'shell',
         },
     }
@@ -897,6 +914,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'project-statuses', 'title': 'Project Status and Colors', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'project-templates', 'title': 'Project Manloader Template', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'push-notifications', 'title': 'Mobile', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'project-task-templates', 'title': 'Project Task Templates', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
         {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
@@ -947,6 +965,14 @@ class SettingsPageSnapshotView(APIView):
                 return {'networkGraphSettings': NetworkGraphSettingsSerializer(NetworkGraphSettings.get_active()).data}
             except Exception:
                 return {'networkGraphSettings': None}
+        if section_id == 'push-notifications':
+            try:
+                return {
+                    'webPushSettings': WebPushGlobalSettingsSerializer(WebPushGlobalSettings.get_active()).data,
+                    'webPushVapidKeys': web_push_vapid_status(),
+                }
+            except Exception:
+                return {'webPushSettings': None, 'webPushVapidKeys': None}
         if section_id == 'integrations':
             return {'integrations': {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}}
         return {}
@@ -2665,6 +2691,56 @@ class QATaskSettingsView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(QATaskSettingsSerializer(obj).data)
+
+
+class WebPushGlobalSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=WebPushGlobalSettingsSerializer)
+    def get(self, request):
+        obj = WebPushGlobalSettings.get_active()
+        return Response(WebPushGlobalSettingsSerializer(obj).data)
+
+    @extend_schema(request=WebPushGlobalSettingsSerializer, responses=WebPushGlobalSettingsSerializer)
+    def put(self, request):
+        obj = WebPushGlobalSettings.get_active()
+        ser = WebPushGlobalSettingsSerializer(instance=obj, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(WebPushGlobalSettingsSerializer(obj).data)
+
+
+class WebPushVapidKeysView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=WebPushVapidKeysStatusSerializer)
+    def get(self, request):
+        return Response(web_push_vapid_status())
+
+    @extend_schema(request=WebPushVapidKeysGenerateSerializer, responses=WebPushVapidKeysStatusSerializer)
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        ser = WebPushVapidKeysGenerateSerializer(data=payload)
+        ser.is_valid(raise_exception=True)
+
+        obj = WebPushVapidKeys.get_active()
+        fallback_subject = str(obj.subject or getattr(settings, 'WEB_PUSH_SUBJECT', '') or '').strip()
+        subject = str(ser.validated_data.get('subject') or fallback_subject).strip()
+        if not subject:
+            return Response(
+                {'detail': "subject is required and must start with 'mailto:', 'https://', or 'http://'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        lowered = subject.lower()
+        if not (lowered.startswith('mailto:') or lowered.startswith('https://') or lowered.startswith('http://')):
+            return Response(
+                {'detail': "subject must start with 'mailto:', 'https://', or 'http://'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        public_key, private_key = generate_vapid_keypair()
+        obj.set_values(public_key=public_key, private_key=private_key, subject=subject)
+        return Response(web_push_vapid_status(), status=status.HTTP_200_OK)
 
 
 class NetworkGraphSettingsView(APIView):

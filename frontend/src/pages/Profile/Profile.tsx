@@ -40,7 +40,53 @@ const Profile: React.FC = () => {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushServerEnabled, setPushServerEnabled] = useState(false);
   const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+  const [pushEventAvailability, setPushEventAvailability] = useState({
+    preDeliverableReminders: true,
+    dailyDigest: true,
+    assignmentChanges: true,
+    deliverableDateChanges: true,
+  });
+  const [pushFeatureAvailability, setPushFeatureAvailability] = useState({
+    rateLimit: true,
+    weekendMute: true,
+    quietHours: true,
+    snooze: true,
+    digestWindow: true,
+    actions: true,
+    deepLinks: true,
+    subscriptionHealthcheck: true,
+  });
   const [pushSubscriptions, setPushSubscriptions] = useState<PushSubscriptionItem[]>([]);
+  const browserTimezone = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch {
+      return '';
+    }
+  }, []);
+  const defaultNotificationPrefs = useMemo<NotificationPreferences>(() => ({
+    emailPreDeliverableReminders: true,
+    reminderDaysBefore: 1,
+    dailyDigest: false,
+    webPushEnabled: false,
+    pushPreDeliverableReminders: true,
+    pushDailyDigest: false,
+    pushAssignmentChanges: true,
+    pushDeliverableDateChanges: true,
+    pushRateLimitEnabled: true,
+    pushWeekendMute: false,
+    pushQuietHoursEnabled: false,
+    pushQuietHoursStart: 22,
+    pushQuietHoursEnd: 7,
+    pushDigestWindowEnabled: true,
+    pushDigestWindow: 'instant',
+    pushTimezone: browserTimezone,
+    pushSnoozeEnabled: true,
+    pushSnoozeUntil: null,
+    pushActionsEnabled: true,
+    pushDeepLinksEnabled: true,
+    pushSubscriptionCleanupEnabled: true,
+  }), [browserTimezone]);
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
 
@@ -73,9 +119,30 @@ const Profile: React.FC = () => {
           systemApi.getCapabilities(),
         ]);
         if (cancelled) return;
-        setNotificationPrefs(prefs);
+        setNotificationPrefs({
+          ...defaultNotificationPrefs,
+          ...prefs,
+          pushTimezone: (prefs as any)?.pushTimezone || browserTimezone || '',
+          pushSnoozeUntil: (prefs as any)?.pushSnoozeUntil || null,
+        });
         setPushServerEnabled(Boolean(caps?.pwa?.enabled && caps?.pwa?.pushEnabled));
         setVapidPublicKey(caps?.pwa?.vapidPublicKey || null);
+        setPushEventAvailability({
+          preDeliverableReminders: Boolean(caps?.pwa?.pushEvents?.preDeliverableReminders ?? true),
+          dailyDigest: Boolean(caps?.pwa?.pushEvents?.dailyDigest ?? true),
+          assignmentChanges: Boolean(caps?.pwa?.pushEvents?.assignmentChanges ?? true),
+          deliverableDateChanges: Boolean(caps?.pwa?.pushEvents?.deliverableDateChanges ?? true),
+        });
+        setPushFeatureAvailability({
+          rateLimit: Boolean(caps?.pwa?.pushFeatures?.rateLimit ?? true),
+          weekendMute: Boolean(caps?.pwa?.pushFeatures?.weekendMute ?? true),
+          quietHours: Boolean(caps?.pwa?.pushFeatures?.quietHours ?? true),
+          snooze: Boolean(caps?.pwa?.pushFeatures?.snooze ?? true),
+          digestWindow: Boolean(caps?.pwa?.pushFeatures?.digestWindow ?? true),
+          actions: Boolean(caps?.pwa?.pushFeatures?.actions ?? true),
+          deepLinks: Boolean(caps?.pwa?.pushFeatures?.deepLinks ?? true),
+          subscriptionHealthcheck: Boolean(caps?.pwa?.pushFeatures?.subscriptionHealthcheck ?? true),
+        });
       } catch {
         if (!cancelled) {
           setToast({ message: 'Failed to load notification preferences', type: 'error' });
@@ -103,7 +170,7 @@ const Profile: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [defaultNotificationPrefs, browserTimezone]);
 
   useEffect(() => {
     if (!notificationPrefs?.webPushEnabled) return;
@@ -115,6 +182,22 @@ const Profile: React.FC = () => {
   }, [notificationPrefs?.webPushEnabled, pushSupported, pushServerEnabled, vapidPublicKey]);
 
   const canEditName = !!auth.person?.id;
+  const hasGlobalPushEventRestriction = (
+    !pushEventAvailability.preDeliverableReminders
+    || !pushEventAvailability.dailyDigest
+    || !pushEventAvailability.assignmentChanges
+    || !pushEventAvailability.deliverableDateChanges
+  );
+  const hasGlobalPushFeatureRestriction = (
+    !pushFeatureAvailability.rateLimit
+    || !pushFeatureAvailability.weekendMute
+    || !pushFeatureAvailability.quietHours
+    || !pushFeatureAvailability.snooze
+    || !pushFeatureAvailability.digestWindow
+    || !pushFeatureAvailability.actions
+    || !pushFeatureAvailability.deepLinks
+    || !pushFeatureAvailability.subscriptionHealthcheck
+  );
 
   async function saveNotificationPrefs(next: NotificationPreferences) {
     setNotificationBusy(true);
@@ -256,6 +339,16 @@ const Profile: React.FC = () => {
                   Push is currently disabled by server configuration.
                 </div>
               ) : null}
+              {hasGlobalPushEventRestriction ? (
+                <div className="text-xs text-amber-300">
+                  Some push event types are disabled by an administrator and cannot be enabled here.
+                </div>
+              ) : null}
+              {hasGlobalPushFeatureRestriction ? (
+                <div className="text-xs text-amber-300">
+                  Some push behavior features are disabled by an administrator and are unavailable here.
+                </div>
+              ) : null}
               <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                 <input
                   type="checkbox"
@@ -300,7 +393,7 @@ const Profile: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={notificationPrefs.pushPreDeliverableReminders}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.preDeliverableReminders}
                   onChange={async (e) => {
                     const next = { ...notificationPrefs, pushPreDeliverableReminders: (e.target as HTMLInputElement).checked };
                     try {
@@ -317,7 +410,7 @@ const Profile: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={notificationPrefs.pushDailyDigest}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.dailyDigest}
                   onChange={async (e) => {
                     const next = { ...notificationPrefs, pushDailyDigest: (e.target as HTMLInputElement).checked };
                     try {
@@ -334,7 +427,7 @@ const Profile: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={notificationPrefs.pushAssignmentChanges}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.assignmentChanges}
                   onChange={async (e) => {
                     const next = { ...notificationPrefs, pushAssignmentChanges: (e.target as HTMLInputElement).checked };
                     try {
@@ -345,6 +438,308 @@ const Profile: React.FC = () => {
                   }}
                 />
                 Push assignment changes
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushDeliverableDateChanges}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.deliverableDateChanges}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushDeliverableDateChanges: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update deliverable date-change push preference', type: 'error' });
+                    }
+                  }}
+                />
+                Push deliverable date changes
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushRateLimitEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.rateLimit}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushRateLimitEnabled: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update rate-limit preference', type: 'error' });
+                    }
+                  }}
+                />
+                Use push rate limiting and bundling
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushWeekendMute}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.weekendMute}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushWeekendMute: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update weekend mute setting', type: 'error' });
+                    }
+                  }}
+                />
+                Mute push notifications on weekends
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushQuietHoursEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.quietHours}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushQuietHoursEnabled: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update quiet hours setting', type: 'error' });
+                    }
+                  }}
+                />
+                Enable quiet hours
+              </label>
+
+              <div className="flex items-center gap-2 text-sm text-[var(--text)] pl-6">
+                <span className="text-xs text-[var(--muted)]">Quiet hours:</span>
+                <select
+                  value={notificationPrefs.pushQuietHoursStart}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.quietHours || !notificationPrefs.pushQuietHoursEnabled}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushQuietHoursStart: Number((e.target as HTMLSelectElement).value) };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update quiet hours start', type: 'error' });
+                    }
+                  }}
+                  className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1"
+                >
+                  {Array.from({ length: 24 }).map((_, hour) => (
+                    <option key={`quiet-start-${hour}`} value={hour}>{hour.toString().padStart(2, '0')}:00</option>
+                  ))}
+                </select>
+                <span>to</span>
+                <select
+                  value={notificationPrefs.pushQuietHoursEnd}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.quietHours || !notificationPrefs.pushQuietHoursEnabled}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushQuietHoursEnd: Number((e.target as HTMLSelectElement).value) };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update quiet hours end', type: 'error' });
+                    }
+                  }}
+                  className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1"
+                >
+                  {Array.from({ length: 24 }).map((_, hour) => (
+                    <option key={`quiet-end-${hour}`} value={hour}>{hour.toString().padStart(2, '0')}:00</option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushDigestWindowEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.digestWindow}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushDigestWindowEnabled: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update digest window preference', type: 'error' });
+                    }
+                  }}
+                />
+                Enable digest-window scheduling for non-urgent push
+              </label>
+
+              <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <span className="text-xs text-[var(--muted)]">Non-urgent delivery:</span>
+                <select
+                  value={notificationPrefs.pushDigestWindow}
+                  disabled={
+                    notificationBusy
+                    || !notificationPrefs.webPushEnabled
+                    || !pushFeatureAvailability.digestWindow
+                    || !notificationPrefs.pushDigestWindowEnabled
+                  }
+                  onChange={async (e) => {
+                    const next = {
+                      ...notificationPrefs,
+                      pushDigestWindow: ((e.target as HTMLSelectElement).value || 'instant') as NotificationPreferences['pushDigestWindow'],
+                    };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update digest window setting', type: 'error' });
+                    }
+                  }}
+                  className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1"
+                >
+                  <option value="instant">Send instantly</option>
+                  <option value="morning">Morning digest</option>
+                  <option value="evening">Evening digest</option>
+                </select>
+              </div>
+
+              <div className="text-xs text-[var(--muted)]">
+                Timezone: {notificationPrefs.pushTimezone || browserTimezone || 'Server default'}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushSnoozeEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.snooze}
+                  onChange={async (e) => {
+                    const next = {
+                      ...notificationPrefs,
+                      pushSnoozeEnabled: (e.target as HTMLInputElement).checked,
+                      pushSnoozeUntil: (e.target as HTMLInputElement).checked ? notificationPrefs.pushSnoozeUntil : null,
+                    };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update snooze preference', type: 'error' });
+                    }
+                  }}
+                />
+                Enable manual snooze controls
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.snooze || !notificationPrefs.pushSnoozeEnabled}
+                  onClick={async () => {
+                    const next = {
+                      ...notificationPrefs,
+                      pushSnoozeUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                    };
+                    try {
+                      await saveNotificationPrefs(next);
+                      setToast({ message: 'Push snoozed for 1 hour', type: 'info' });
+                    } catch {
+                      setToast({ message: 'Failed to snooze push notifications', type: 'error' });
+                    }
+                  }}
+                >
+                  Snooze 1 Hour
+                </Button>
+                <Button
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.snooze || !notificationPrefs.pushSnoozeEnabled}
+                  onClick={async () => {
+                    const endOfDay = new Date();
+                    endOfDay.setHours(23, 59, 59, 999);
+                    const next = { ...notificationPrefs, pushSnoozeUntil: endOfDay.toISOString() };
+                    try {
+                      await saveNotificationPrefs(next);
+                      setToast({ message: 'Push snoozed until end of day', type: 'info' });
+                    } catch {
+                      setToast({ message: 'Failed to snooze push notifications', type: 'error' });
+                    }
+                  }}
+                >
+                  Snooze Today
+                </Button>
+                <Button
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.snooze || !notificationPrefs.pushSnoozeEnabled}
+                  onClick={async () => {
+                    const endOfWeek = new Date();
+                    const daysUntilSunday = (7 - endOfWeek.getDay()) % 7;
+                    endOfWeek.setDate(endOfWeek.getDate() + daysUntilSunday);
+                    endOfWeek.setHours(23, 59, 59, 999);
+                    const next = { ...notificationPrefs, pushSnoozeUntil: endOfWeek.toISOString() };
+                    try {
+                      await saveNotificationPrefs(next);
+                      setToast({ message: 'Push snoozed until end of week', type: 'info' });
+                    } catch {
+                      setToast({ message: 'Failed to snooze push notifications', type: 'error' });
+                    }
+                  }}
+                >
+                  Snooze This Week
+                </Button>
+                <Button
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.snooze || !notificationPrefs.pushSnoozeEnabled || !notificationPrefs.pushSnoozeUntil}
+                  onClick={async () => {
+                    const next = { ...notificationPrefs, pushSnoozeUntil: null };
+                    try {
+                      await saveNotificationPrefs(next);
+                      setToast({ message: 'Push snooze cleared', type: 'success' });
+                    } catch {
+                      setToast({ message: 'Failed to clear push snooze', type: 'error' });
+                    }
+                  }}
+                >
+                  Clear Snooze
+                </Button>
+              </div>
+              {notificationPrefs.pushSnoozeUntil ? (
+                <div className="text-xs text-amber-300">
+                  Snoozed until {new Date(notificationPrefs.pushSnoozeUntil).toLocaleString()}.
+                </div>
+              ) : null}
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushActionsEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.actions}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushActionsEnabled: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update push action preference', type: 'error' });
+                    }
+                  }}
+                />
+                Enable notification action buttons
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushDeepLinksEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.deepLinks}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushDeepLinksEnabled: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update deep-link preference', type: 'error' });
+                    }
+                  }}
+                />
+                Open push notifications at deep links
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.pushSubscriptionCleanupEnabled}
+                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushFeatureAvailability.subscriptionHealthcheck}
+                  onChange={async (e) => {
+                    const next = { ...notificationPrefs, pushSubscriptionCleanupEnabled: (e.target as HTMLInputElement).checked };
+                    try {
+                      await saveNotificationPrefs(next);
+                    } catch {
+                      setToast({ message: 'Failed to update subscription cleanup preference', type: 'error' });
+                    }
+                  }}
+                />
+                Allow automatic cleanup of stale push subscriptions
               </label>
 
               <div className="flex items-center gap-2 pt-2">

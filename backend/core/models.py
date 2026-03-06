@@ -1,9 +1,13 @@
-from django.db import models
-from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.conf import settings
+import base64
+import hashlib
 import secrets
 import re
+
+from cryptography.fernet import Fernet
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db import models
 
 
 def default_auto_hours_phase_keys():
@@ -11,6 +15,13 @@ def default_auto_hours_phase_keys():
 
 
 _TASK_PROGRESS_COLOR_HEX_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+
+
+def _storage_cipher() -> Fernet:
+    seed = (settings.SECRET_KEY or 'workload-tracker').encode('utf-8')
+    digest = hashlib.sha256(seed).digest()
+    key = base64.urlsafe_b64encode(digest)
+    return Fernet(key)
 
 
 def _normalize_task_progress_ranges(raw_ranges):
@@ -472,6 +483,15 @@ class AutoHoursTemplateRoleSetting(models.Model):
 
 
 class NotificationPreference(models.Model):
+    PUSH_DIGEST_WINDOW_INSTANT = 'instant'
+    PUSH_DIGEST_WINDOW_MORNING = 'morning'
+    PUSH_DIGEST_WINDOW_EVENING = 'evening'
+    PUSH_DIGEST_WINDOW_CHOICES = (
+        (PUSH_DIGEST_WINDOW_INSTANT, 'Instant'),
+        (PUSH_DIGEST_WINDOW_MORNING, 'Morning digest'),
+        (PUSH_DIGEST_WINDOW_EVENING, 'Evening digest'),
+    )
+
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='notification_preferences')
     email_pre_deliverable_reminders = models.BooleanField(default=True)
     reminder_days_before = models.PositiveIntegerField(default=1)
@@ -480,11 +500,171 @@ class NotificationPreference(models.Model):
     push_pre_deliverable_reminders = models.BooleanField(default=True)
     push_daily_digest = models.BooleanField(default=False)
     push_assignment_changes = models.BooleanField(default=True)
+    push_deliverable_date_changes = models.BooleanField(default=True)
+    push_rate_limit_enabled = models.BooleanField(default=True)
+    push_weekend_mute = models.BooleanField(default=False)
+    push_quiet_hours_enabled = models.BooleanField(default=False)
+    push_quiet_hours_start = models.PositiveSmallIntegerField(
+        default=22,
+        validators=[MinValueValidator(0), MaxValueValidator(23)],
+    )
+    push_quiet_hours_end = models.PositiveSmallIntegerField(
+        default=7,
+        validators=[MinValueValidator(0), MaxValueValidator(23)],
+    )
+    push_digest_window = models.CharField(
+        max_length=20,
+        choices=PUSH_DIGEST_WINDOW_CHOICES,
+        default=PUSH_DIGEST_WINDOW_INSTANT,
+    )
+    push_digest_window_enabled = models.BooleanField(default=True)
+    push_timezone = models.CharField(max_length=64, blank=True, default='')
+    push_snooze_enabled = models.BooleanField(default=True)
+    push_snooze_until = models.DateTimeField(null=True, blank=True)
+    push_actions_enabled = models.BooleanField(default=True)
+    push_deep_links_enabled = models.BooleanField(default=True)
+    push_subscription_cleanup_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:  # pragma: no cover
         return f"NotifPrefs({self.user_id})"
+
+
+class WebPushGlobalSettings(models.Model):
+    """Singleton runtime controls for web push delivery."""
+
+    DELIVERABLE_SCOPE_NEXT_UPCOMING = 'next_upcoming'
+    DELIVERABLE_SCOPE_ALL_UPCOMING = 'all_upcoming'
+    DELIVERABLE_SCOPE_CHOICES = (
+        (DELIVERABLE_SCOPE_NEXT_UPCOMING, 'Next upcoming deliverable only'),
+        (DELIVERABLE_SCOPE_ALL_UPCOMING, 'All upcoming deliverables'),
+    )
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    enabled = models.BooleanField(default=True)
+    push_rate_limit_enabled = models.BooleanField(default=True)
+    push_rate_limit_per_hour = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+    )
+    push_weekend_mute_enabled = models.BooleanField(default=True)
+    push_quiet_hours_enabled = models.BooleanField(default=True)
+    push_snooze_enabled = models.BooleanField(default=True)
+    push_digest_window_enabled = models.BooleanField(default=True)
+    push_actions_enabled = models.BooleanField(default=True)
+    push_deep_links_enabled = models.BooleanField(default=True)
+    push_subscription_healthcheck_enabled = models.BooleanField(default=True)
+    push_pre_deliverable_reminders_enabled = models.BooleanField(default=True)
+    push_daily_digest_enabled = models.BooleanField(default=True)
+    push_assignment_changes_enabled = models.BooleanField(default=True)
+    push_deliverable_date_changes_enabled = models.BooleanField(default=True)
+    push_deliverable_date_change_scope = models.CharField(
+        max_length=20,
+        choices=DELIVERABLE_SCOPE_CHOICES,
+        default=DELIVERABLE_SCOPE_NEXT_UPCOMING,
+    )
+    push_deliverable_date_change_within_two_weeks_only = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Web Push Global Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"WebPushGlobalSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(
+            key='default',
+            defaults={
+                'enabled': bool(getattr(settings, 'WEB_PUSH_ENABLED', True)),
+                'push_rate_limit_enabled': bool(getattr(settings, 'WEB_PUSH_RATE_LIMIT_ENABLED', True)),
+                'push_rate_limit_per_hour': int(getattr(settings, 'WEB_PUSH_RATE_LIMIT_PER_HOUR', 3) or 3),
+                'push_weekend_mute_enabled': bool(getattr(settings, 'WEB_PUSH_WEEKEND_MUTE_ENABLED', True)),
+                'push_quiet_hours_enabled': bool(getattr(settings, 'WEB_PUSH_QUIET_HOURS_ENABLED', True)),
+                'push_snooze_enabled': bool(getattr(settings, 'WEB_PUSH_SNOOZE_ENABLED', True)),
+                'push_digest_window_enabled': bool(getattr(settings, 'WEB_PUSH_DIGEST_WINDOW_ENABLED', True)),
+                'push_actions_enabled': bool(getattr(settings, 'WEB_PUSH_ACTIONS_ENABLED', True)),
+                'push_deep_links_enabled': bool(getattr(settings, 'WEB_PUSH_DEEP_LINKS_ENABLED', True)),
+                'push_subscription_healthcheck_enabled': bool(getattr(settings, 'WEB_PUSH_SUBSCRIPTION_HEALTHCHECK_ENABLED', True)),
+                'push_pre_deliverable_reminders_enabled': bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)),
+                'push_daily_digest_enabled': bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)),
+                'push_assignment_changes_enabled': bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True)),
+                'push_deliverable_date_changes_enabled': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True)),
+                'push_deliverable_date_change_scope': str(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_SCOPE', cls.DELIVERABLE_SCOPE_NEXT_UPCOMING) or cls.DELIVERABLE_SCOPE_NEXT_UPCOMING),
+                'push_deliverable_date_change_within_two_weeks_only': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_WITHIN_TWO_WEEKS_ONLY', False)),
+            },
+        )
+        if obj.push_deliverable_date_change_scope not in {
+            cls.DELIVERABLE_SCOPE_NEXT_UPCOMING,
+            cls.DELIVERABLE_SCOPE_ALL_UPCOMING,
+        }:
+            obj.push_deliverable_date_change_scope = cls.DELIVERABLE_SCOPE_NEXT_UPCOMING
+            obj.save(update_fields=['push_deliverable_date_change_scope', 'updated_at'])
+        normalized_rate = max(1, min(50, int(getattr(obj, 'push_rate_limit_per_hour', 3) or 3)))
+        if int(getattr(obj, 'push_rate_limit_per_hour', 3) or 3) != normalized_rate:
+            obj.push_rate_limit_per_hour = normalized_rate
+            obj.save(update_fields=['push_rate_limit_per_hour', 'updated_at'])
+        return obj
+
+
+class WebPushVapidKeys(models.Model):
+    """Singleton encrypted storage for web push VAPID keys."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    encrypted_public_key = models.BinaryField(default=b'', blank=True)
+    encrypted_private_key = models.BinaryField(default=b'', blank=True)
+    subject = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Web Push VAPID Keys'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"WebPushVapidKeys({self.key})"
+
+    @staticmethod
+    def _cipher() -> Fernet:
+        return _storage_cipher()
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(
+            key='default',
+            defaults={'subject': str(getattr(settings, 'WEB_PUSH_SUBJECT', '') or '').strip()},
+        )
+        return obj
+
+    def set_values(self, *, public_key: str, private_key: str, subject: str) -> None:
+        self.encrypted_public_key = self._cipher().encrypt(str(public_key).strip().encode('utf-8'))
+        self.encrypted_private_key = self._cipher().encrypt(str(private_key).strip().encode('utf-8'))
+        self.subject = str(subject).strip()
+        self.save(update_fields=['encrypted_public_key', 'encrypted_private_key', 'subject', 'updated_at'])
+
+    def _decrypt_value(self, value: bytes | memoryview | bytearray | None) -> str:
+        if not value:
+            return ''
+        raw = self._cipher().decrypt(bytes(value))
+        return raw.decode('utf-8')
+
+    def get_public_key(self) -> str:
+        try:
+            return self._decrypt_value(self.encrypted_public_key)
+        except Exception:
+            return ''
+
+    def get_private_key(self) -> str:
+        try:
+            return self._decrypt_value(self.encrypted_private_key)
+        except Exception:
+            return ''
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.get_public_key() and self.get_private_key() and str(self.subject or '').strip())
 
 
 class NotificationLog(models.Model):
@@ -521,6 +701,64 @@ class WebPushSubscription(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"WebPushSubscription({self.user_id}, active={self.is_active})"
+
+
+class WebPushProjectMute(models.Model):
+    """User-scoped temporary mute settings for project-specific push events."""
+
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='web_push_project_mutes')
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='web_push_user_mutes')
+    muted_until = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-muted_until', '-id']
+        unique_together = [['user', 'project']]
+        indexes = [
+            models.Index(fields=['user', 'muted_until'], name='idx_push_mute_user_until'),
+            models.Index(fields=['project', 'muted_until'], name='idx_push_mute_proj_until'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"WebPushProjectMute(user={self.user_id}, project={self.project_id})"
+
+
+class WebPushDeferredNotification(models.Model):
+    """Deferred non-urgent push events used for digest windows and bundling."""
+
+    REASON_QUIET_HOURS = 'quiet_hours'
+    REASON_WEEKEND = 'weekend'
+    REASON_SNOOZE = 'snooze'
+    REASON_RATE_LIMIT = 'rate_limit'
+    REASON_DIGEST_WINDOW = 'digest_window'
+    REASON_CHOICES = (
+        (REASON_QUIET_HOURS, 'Quiet hours'),
+        (REASON_WEEKEND, 'Weekend mute'),
+        (REASON_SNOOZE, 'Snoozed'),
+        (REASON_RATE_LIMIT, 'Rate limited'),
+        (REASON_DIGEST_WINDOW, 'Digest window'),
+    )
+
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='deferred_web_push_notifications')
+    event_type = models.CharField(max_length=120, blank=True, default='')
+    project_id = models.IntegerField(null=True, blank=True)
+    reason = models.CharField(max_length=40, choices=REASON_CHOICES)
+    payload = models.JSONField(default=dict)
+    deliver_after = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['deliver_after', 'id']
+        indexes = [
+            models.Index(fields=['deliver_after'], name='idx_push_def_deliver_after'),
+            models.Index(fields=['user', 'deliver_after'], name='idx_push_def_user_deliver'),
+            models.Index(fields=['project_id', 'deliver_after'], name='idx_push_def_project_deliver'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"WebPushDeferredNotification(user={self.user_id}, reason={self.reason})"
 
 
 class UtilizationScheme(models.Model):

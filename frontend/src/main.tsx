@@ -28,6 +28,29 @@ if (import.meta.env.PROD && pwaEnabled && 'serviceWorker' in navigator) {
     const data = event?.data || {}
     if (data.type === 'navigate' && typeof data.url === 'string') {
       window.location.assign(data.url)
+      return
+    }
+    if (data.type === 'push-action') {
+      const action = String(data.action || 'open')
+      if (action === 'open') {
+        if (typeof data.url === 'string' && data.url) {
+          window.location.assign(data.url)
+        }
+        return
+      }
+      void import('@/services/api').then(({ authApi }) => {
+        if (action === 'acknowledge') {
+          return authApi.pushAction({ action: 'acknowledge' })
+        }
+        if (action === 'mute_project_24h') {
+          const projectId = Number(data.projectId || 0)
+          if (projectId > 0) {
+            return authApi.pushAction({ action: 'mute_project_24h', projectId })
+          }
+        }
+      }).catch(() => {
+        // best effort
+      })
     }
   })
 }

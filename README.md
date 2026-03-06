@@ -352,7 +352,12 @@ Set at minimum:
 - `COOKIE_REFRESH_AUTH=true`
 - `SECURE_SSL_REDIRECT=true`
 - `PWA_ENABLED=true` (installable app shell)
-- `WEB_PUSH_ENABLED=true` only after setting `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT`
+- `WEB_PUSH_ENABLED=true` (global default; runtime toggle in Settings UI)
+- `WEB_PUSH_RATE_LIMIT_PER_HOUR=3` (default per-user hourly push cap; overflow is bundled)
+- Optional kill-switch defaults: `WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED`, `WEB_PUSH_REMINDER_EVENTS_ENABLED`, `WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED`
+- Optional fallback only: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
+- Runtime push delivery, global push event category toggles, and VAPID key generation are managed in admin UI: `Settings` -> `Mobile`
+- Per-user quiet hours, weekend mute, snooze, and digest-window controls are managed in `Profile` -> `Notifications`.
 
 Notes:
 - Service workers and web push require HTTPS in production.

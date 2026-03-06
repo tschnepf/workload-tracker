@@ -26,17 +26,26 @@ from .serializers import (
     NotificationPreferencesSerializer,
     PushSubscriptionUpsertSerializer,
     PushSubscriptionItemSerializer,
+    PushActionSerializer,
 )
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
-from core.models import NotificationPreference, WebPushSubscription
+from core.models import NotificationPreference, WebPushProjectMute, WebPushSubscription
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
-from core.webpush import build_push_payload, queue_push_to_users, web_push_configured
+from django.utils import timezone
+from datetime import timedelta
+from core.webpush import (
+    build_push_payload,
+    queue_push_to_users,
+    web_push_configured,
+    web_push_event_enabled,
+    web_push_feature_enabled,
+)
 
 
 class HotEndpointThrottle(UserRateThrottle):
@@ -460,9 +469,78 @@ class UpdateUserRoleView(APIView):
 class NotificationPreferencesView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _apply_global_push_availability(pref: NotificationPreference) -> bool:
+        changed = False
+        if not web_push_event_enabled('push_pre_deliverable_reminders') and pref.push_pre_deliverable_reminders:
+            pref.push_pre_deliverable_reminders = False
+            changed = True
+        if not web_push_event_enabled('push_daily_digest') and pref.push_daily_digest:
+            pref.push_daily_digest = False
+            changed = True
+        if not web_push_event_enabled('push_assignment_changes') and pref.push_assignment_changes:
+            pref.push_assignment_changes = False
+            changed = True
+        if not web_push_event_enabled('push_deliverable_date_changes') and pref.push_deliverable_date_changes:
+            pref.push_deliverable_date_changes = False
+            changed = True
+        if not web_push_feature_enabled('push_rate_limit_enabled') and pref.push_rate_limit_enabled:
+            pref.push_rate_limit_enabled = False
+            changed = True
+        if not web_push_feature_enabled('push_weekend_mute_enabled') and pref.push_weekend_mute:
+            pref.push_weekend_mute = False
+            changed = True
+        if not web_push_feature_enabled('push_quiet_hours_enabled') and pref.push_quiet_hours_enabled:
+            pref.push_quiet_hours_enabled = False
+            changed = True
+        if not web_push_feature_enabled('push_digest_window_enabled'):
+            if pref.push_digest_window_enabled:
+                pref.push_digest_window_enabled = False
+                changed = True
+            if pref.push_digest_window != NotificationPreference.PUSH_DIGEST_WINDOW_INSTANT:
+                pref.push_digest_window = NotificationPreference.PUSH_DIGEST_WINDOW_INSTANT
+                changed = True
+        if not web_push_feature_enabled('push_snooze_enabled'):
+            if pref.push_snooze_enabled:
+                pref.push_snooze_enabled = False
+                changed = True
+            if pref.push_snooze_until is not None:
+                pref.push_snooze_until = None
+                changed = True
+        if not web_push_feature_enabled('push_actions_enabled') and pref.push_actions_enabled:
+            pref.push_actions_enabled = False
+            changed = True
+        if not web_push_feature_enabled('push_deep_links_enabled') and pref.push_deep_links_enabled:
+            pref.push_deep_links_enabled = False
+            changed = True
+        if not web_push_feature_enabled('push_subscription_healthcheck_enabled') and pref.push_subscription_cleanup_enabled:
+            pref.push_subscription_cleanup_enabled = False
+            changed = True
+        return changed
+
     @extend_schema(responses=NotificationPreferencesSerializer)
     def get(self, request):
         pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        if self._apply_global_push_availability(pref):
+            pref.save(
+                update_fields=[
+                    'push_pre_deliverable_reminders',
+                    'push_daily_digest',
+                    'push_assignment_changes',
+                    'push_deliverable_date_changes',
+                    'push_rate_limit_enabled',
+                    'push_weekend_mute',
+                    'push_quiet_hours_enabled',
+                    'push_digest_window_enabled',
+                    'push_digest_window',
+                    'push_snooze_enabled',
+                    'push_snooze_until',
+                    'push_actions_enabled',
+                    'push_deep_links_enabled',
+                    'push_subscription_cleanup_enabled',
+                    'updated_at',
+                ]
+            )
         return Response(NotificationPreferencesSerializer.from_model(pref))
 
     @extend_schema(request=NotificationPreferencesSerializer, responses=NotificationPreferencesSerializer)
@@ -481,6 +559,27 @@ class NotificationPreferencesView(APIView):
         )
         pref.push_daily_digest = data.get('pushDailyDigest', pref.push_daily_digest)
         pref.push_assignment_changes = data.get('pushAssignmentChanges', pref.push_assignment_changes)
+        pref.push_deliverable_date_changes = data.get(
+            'pushDeliverableDateChanges',
+            pref.push_deliverable_date_changes,
+        )
+        pref.push_rate_limit_enabled = data.get('pushRateLimitEnabled', pref.push_rate_limit_enabled)
+        pref.push_weekend_mute = data.get('pushWeekendMute', pref.push_weekend_mute)
+        pref.push_quiet_hours_enabled = data.get('pushQuietHoursEnabled', pref.push_quiet_hours_enabled)
+        pref.push_quiet_hours_start = data.get('pushQuietHoursStart', pref.push_quiet_hours_start)
+        pref.push_quiet_hours_end = data.get('pushQuietHoursEnd', pref.push_quiet_hours_end)
+        pref.push_digest_window_enabled = data.get('pushDigestWindowEnabled', pref.push_digest_window_enabled)
+        pref.push_digest_window = data.get('pushDigestWindow', pref.push_digest_window)
+        pref.push_timezone = (data.get('pushTimezone', pref.push_timezone) or '').strip()
+        pref.push_snooze_enabled = data.get('pushSnoozeEnabled', pref.push_snooze_enabled)
+        pref.push_snooze_until = data.get('pushSnoozeUntil', pref.push_snooze_until)
+        pref.push_actions_enabled = data.get('pushActionsEnabled', pref.push_actions_enabled)
+        pref.push_deep_links_enabled = data.get('pushDeepLinksEnabled', pref.push_deep_links_enabled)
+        pref.push_subscription_cleanup_enabled = data.get(
+            'pushSubscriptionCleanupEnabled',
+            pref.push_subscription_cleanup_enabled,
+        )
+        self._apply_global_push_availability(pref)
         pref.save(
             update_fields=[
                 'email_pre_deliverable_reminders',
@@ -490,6 +589,20 @@ class NotificationPreferencesView(APIView):
                 'push_pre_deliverable_reminders',
                 'push_daily_digest',
                 'push_assignment_changes',
+                'push_deliverable_date_changes',
+                'push_rate_limit_enabled',
+                'push_weekend_mute',
+                'push_quiet_hours_enabled',
+                'push_quiet_hours_start',
+                'push_quiet_hours_end',
+                'push_digest_window_enabled',
+                'push_digest_window',
+                'push_timezone',
+                'push_snooze_enabled',
+                'push_snooze_until',
+                'push_actions_enabled',
+                'push_deep_links_enabled',
+                'push_subscription_cleanup_enabled',
                 'updated_at',
             ]
         )
@@ -568,6 +681,43 @@ class PushTestView(APIView):
         )
         queue_push_to_users([request.user.id], payload, preference_field=None)
         return Response({'queued': True, 'detail': 'Test notification queued'})
+
+
+class PushActionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=PushActionSerializer, responses={200: None})
+    def post(self, request):
+        if not web_push_feature_enabled('push_actions_enabled'):
+            return Response({'detail': 'Push actions are disabled globally'}, status=status.HTTP_403_FORBIDDEN)
+
+        pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        if not bool(getattr(pref, 'push_actions_enabled', True)):
+            return Response({'detail': 'Push actions are disabled for this user'}, status=status.HTTP_403_FORBIDDEN)
+
+        ser = PushActionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        action = ser.validated_data['action']
+        project_id = ser.validated_data.get('projectId')
+
+        if action == 'acknowledge':
+            return Response(status=status.HTTP_200_OK)
+
+        if action == 'mute_project_24h':
+            if not project_id:
+                return Response({'detail': 'projectId is required for mute_project_24h'}, status=status.HTTP_400_BAD_REQUEST)
+            muted_until = timezone.now() + timedelta(hours=24)
+            try:
+                WebPushProjectMute.objects.update_or_create(
+                    user=request.user,
+                    project_id=int(project_id),
+                    defaults={'muted_until': muted_until},
+                )
+            except Exception:
+                return Response({'detail': 'Invalid projectId'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'mutedUntil': muted_until}, status=status.HTTP_200_OK)
+
+        return Response({'detail': 'Unsupported action'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AdminAuditLogsView(APIView):

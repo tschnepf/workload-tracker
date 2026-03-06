@@ -288,9 +288,28 @@ FEATURES.update({
 
 # PWA / Web Push rollout flags
 PWA_ENABLED = os.getenv('PWA_ENABLED', 'true').lower() == 'true'
-WEB_PUSH_ENABLED = os.getenv('WEB_PUSH_ENABLED', 'false').lower() == 'true'
+# Bootstrap default for WebPushGlobalSettings.get_active().
+# Runtime enable/disable is controlled from the admin Settings UI.
+WEB_PUSH_ENABLED = os.getenv('WEB_PUSH_ENABLED', 'true').lower() == 'true'
+WEB_PUSH_RATE_LIMIT_PER_HOUR = int(os.getenv('WEB_PUSH_RATE_LIMIT_PER_HOUR', '3'))
 WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED = os.getenv('WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', 'true').lower() == 'true'
 WEB_PUSH_REMINDER_EVENTS_ENABLED = os.getenv('WEB_PUSH_REMINDER_EVENTS_ENABLED', 'true').lower() == 'true'
+WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED = os.getenv(
+    'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED',
+    'true',
+).lower() == 'true'
+WEB_PUSH_DELIVERABLE_DATE_CHANGE_SCOPE = os.getenv(
+    'WEB_PUSH_DELIVERABLE_DATE_CHANGE_SCOPE',
+    'next_upcoming',
+)
+WEB_PUSH_DELIVERABLE_DATE_CHANGE_WITHIN_TWO_WEEKS_ONLY = os.getenv(
+    'WEB_PUSH_DELIVERABLE_DATE_CHANGE_WITHIN_TWO_WEEKS_ONLY',
+    'false',
+).lower() == 'true'
+WEB_PUSH_MORNING_DIGEST_HOUR = int(os.getenv('WEB_PUSH_MORNING_DIGEST_HOUR', '8'))
+WEB_PUSH_EVENING_DIGEST_HOUR = int(os.getenv('WEB_PUSH_EVENING_DIGEST_HOUR', '18'))
+WEB_PUSH_SUBSCRIPTION_STALE_DAYS = int(os.getenv('WEB_PUSH_SUBSCRIPTION_STALE_DAYS', '45'))
+WEB_PUSH_SUBSCRIPTION_DELETE_INACTIVE_DAYS = int(os.getenv('WEB_PUSH_SUBSCRIPTION_DELETE_INACTIVE_DAYS', '90'))
 WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv('WEB_PUSH_VAPID_PUBLIC_KEY', '')
 WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv('WEB_PUSH_VAPID_PRIVATE_KEY', '')
 WEB_PUSH_SUBJECT = os.getenv('WEB_PUSH_SUBJECT', '')
@@ -703,6 +722,14 @@ CELERY_BEAT_SCHEDULE['azure-daily-reconcile'] = {
 CELERY_BEAT_SCHEDULE['network-graph-weekly-snapshot-scheduler'] = {
     'task': 'assignments.tasks.network_graph_weekly_snapshot_scheduler_task',
     'schedule': timedelta(minutes=int(os.getenv('NETWORK_GRAPH_SNAPSHOT_SCHEDULER_INTERVAL_MINUTES', '15'))),
+}
+CELERY_BEAT_SCHEDULE['web-push-deferred-flush'] = {
+    'task': 'core.tasks.flush_deferred_push_notifications_task',
+    'schedule': timedelta(minutes=int(os.getenv('WEB_PUSH_DEFERRED_FLUSH_INTERVAL_MINUTES', '10'))),
+}
+CELERY_BEAT_SCHEDULE['web-push-subscription-healthcheck'] = {
+    'task': 'core.tasks.web_push_subscription_health_check_task',
+    'schedule': timedelta(hours=int(os.getenv('WEB_PUSH_SUBSCRIPTION_HEALTHCHECK_HOURS', '6'))),
 }
 
 # CSP rollout configuration

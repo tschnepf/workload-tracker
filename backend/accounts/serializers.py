@@ -247,6 +247,24 @@ class NotificationPreferencesSerializer(serializers.Serializer):
     pushPreDeliverableReminders = serializers.BooleanField(required=False, default=True)
     pushDailyDigest = serializers.BooleanField(required=False, default=False)
     pushAssignmentChanges = serializers.BooleanField(required=False, default=True)
+    pushDeliverableDateChanges = serializers.BooleanField(required=False, default=True)
+    pushRateLimitEnabled = serializers.BooleanField(required=False, default=True)
+    pushWeekendMute = serializers.BooleanField(required=False, default=False)
+    pushQuietHoursEnabled = serializers.BooleanField(required=False, default=False)
+    pushQuietHoursStart = serializers.IntegerField(min_value=0, max_value=23, required=False, default=22)
+    pushQuietHoursEnd = serializers.IntegerField(min_value=0, max_value=23, required=False, default=7)
+    pushDigestWindowEnabled = serializers.BooleanField(required=False, default=True)
+    pushDigestWindow = serializers.ChoiceField(
+        choices=['instant', 'morning', 'evening'],
+        required=False,
+        default='instant',
+    )
+    pushTimezone = serializers.CharField(required=False, allow_blank=True, max_length=64, default='')
+    pushSnoozeEnabled = serializers.BooleanField(required=False, default=True)
+    pushSnoozeUntil = serializers.DateTimeField(required=False, allow_null=True)
+    pushActionsEnabled = serializers.BooleanField(required=False, default=True)
+    pushDeepLinksEnabled = serializers.BooleanField(required=False, default=True)
+    pushSubscriptionCleanupEnabled = serializers.BooleanField(required=False, default=True)
 
     @staticmethod
     def from_model(p: NotificationPreference):
@@ -258,7 +276,26 @@ class NotificationPreferencesSerializer(serializers.Serializer):
             'pushPreDeliverableReminders': p.push_pre_deliverable_reminders,
             'pushDailyDigest': p.push_daily_digest,
             'pushAssignmentChanges': p.push_assignment_changes,
+            'pushDeliverableDateChanges': p.push_deliverable_date_changes,
+            'pushRateLimitEnabled': p.push_rate_limit_enabled,
+            'pushWeekendMute': p.push_weekend_mute,
+            'pushQuietHoursEnabled': p.push_quiet_hours_enabled,
+            'pushQuietHoursStart': p.push_quiet_hours_start,
+            'pushQuietHoursEnd': p.push_quiet_hours_end,
+            'pushDigestWindowEnabled': p.push_digest_window_enabled,
+            'pushDigestWindow': p.push_digest_window,
+            'pushTimezone': p.push_timezone,
+            'pushSnoozeEnabled': p.push_snooze_enabled,
+            'pushSnoozeUntil': p.push_snooze_until,
+            'pushActionsEnabled': p.push_actions_enabled,
+            'pushDeepLinksEnabled': p.push_deep_links_enabled,
+            'pushSubscriptionCleanupEnabled': p.push_subscription_cleanup_enabled,
         }
+
+
+class PushActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=['acknowledge', 'mute_project_24h'])
+    projectId = serializers.IntegerField(required=False, allow_null=True)
 
 
 class PushSubscriptionUpsertSerializer(serializers.Serializer):

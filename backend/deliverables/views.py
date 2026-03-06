@@ -15,6 +15,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import http_date
 from datetime import datetime
 from collections import defaultdict
+from typing import List
 import json
 import re
 import logging
@@ -26,6 +27,7 @@ from .serializers import (
     PreDeliverableItemSerializer,
 )
 from assignments.models import Assignment
+from accounts.models import UserProfile
 from assignments.lead_utils import is_lead_role_name, resolve_assignment_role_name
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
@@ -39,6 +41,13 @@ from .services import PreDeliverableService
 from accounts.permissions import is_admin_or_manager, IsAdminOrManager
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from projects.change_log import record_project_change
+from core.webpush import (
+    build_push_payload,
+    queue_push_to_users,
+    web_push_configured,
+    web_push_deliverable_date_change_options,
+    web_push_event_enabled,
+)
 try:
     from core.tasks import backfill_pre_deliverables_async  # type: ignore
 except Exception:
@@ -96,6 +105,125 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 changes[key] = {'from': before.get(key), 'to': after.get(key)}
         return changes
 
+    def _deliverable_push_date_label(self, value) -> str:
+        if not value:
+            return 'no date'
+        return value.isoformat()
+
+    def _next_upcoming_deliverable_id(self, project_id: int) -> int | None:
+        row = (
+            Deliverable.objects
+            .filter(project_id=project_id, date__isnull=False, date__gte=_date.today())
+            .order_by('date', 'id')
+            .values('id')
+            .first()
+        )
+        if not row:
+            return None
+        try:
+            return int(row['id'])
+        except Exception:
+            return None
+
+    def _recipient_user_ids_for_project(self, project_id: int, actor_user_id: int | None = None) -> List[int]:
+        person_ids = list(
+            Assignment.objects.filter(
+                project_id=project_id,
+                is_active=True,
+                person_id__isnull=False,
+            ).values_list('person_id', flat=True).distinct()
+        )
+        if not person_ids:
+            return []
+        qs = UserProfile.objects.filter(person_id__in=person_ids, user__is_active=True)
+        if actor_user_id:
+            qs = qs.exclude(user_id=actor_user_id)
+        return list(qs.values_list('user_id', flat=True).distinct())
+
+    def _should_push_deliverable_date_change(
+        self,
+        *,
+        deliverable: Deliverable,
+        old_date,
+        new_date,
+        next_upcoming_before_id: int | None,
+    ) -> bool:
+        if not web_push_configured():
+            return False
+        if not web_push_event_enabled('push_deliverable_date_changes'):
+            return False
+
+        options = web_push_deliverable_date_change_options()
+        if not bool(options.get('enabled', True)):
+            return False
+
+        scope = str(options.get('scope') or '')
+        if scope not in {'next_upcoming', 'all_upcoming'}:
+            scope = 'next_upcoming'
+        if scope == 'next_upcoming':
+            next_upcoming_after_id = self._next_upcoming_deliverable_id(deliverable.project_id)
+            if deliverable.id not in {next_upcoming_before_id, next_upcoming_after_id}:
+                return False
+
+        today = _date.today()
+        reference_dates = [d for d in (old_date, new_date) if d is not None]
+        if not reference_dates:
+            return False
+        if not any(d >= today for d in reference_dates):
+            return False
+        if bool(options.get('withinTwoWeeksOnly', False)):
+            max_date = today + timedelta(days=14)
+            if not any(today <= d <= max_date for d in reference_dates):
+                return False
+
+        return True
+
+    def _queue_deliverable_date_change_push(
+        self,
+        *,
+        deliverable: Deliverable,
+        old_date,
+        new_date,
+        actor_user_id: int | None,
+        next_upcoming_before_id: int | None,
+    ) -> None:
+        if not self._should_push_deliverable_date_change(
+            deliverable=deliverable,
+            old_date=old_date,
+            new_date=new_date,
+            next_upcoming_before_id=next_upcoming_before_id,
+        ):
+            return
+
+        recipient_ids = self._recipient_user_ids_for_project(
+            deliverable.project_id,
+            actor_user_id=actor_user_id,
+        )
+        if not recipient_ids:
+            return
+
+        project_name = getattr(getattr(deliverable, 'project', None), 'name', None) or 'Project'
+        deliverable_name = (deliverable.description or '').strip() or f"Deliverable {deliverable.id}"
+        old_label = self._deliverable_push_date_label(old_date)
+        new_label = self._deliverable_push_date_label(new_date)
+
+        payload = build_push_payload(
+            event_type='deliverable.date_changed',
+            title='Deliverable Date Changed',
+            body=f"{project_name} • {deliverable_name}: {old_label} -> {new_label}",
+            url=f"/deliverables/calendar?project={deliverable.project_id}&deliverable={deliverable.id}",
+            tag=f"deliverable.date_changed.{deliverable.id}",
+            project_id=deliverable.project_id,
+            entity_type='deliverable',
+            entity_id=deliverable.id,
+            priority='normal',
+        )
+        queue_push_to_users(
+            recipient_ids,
+            payload,
+            preference_field='push_deliverable_date_changes',
+        )
+
     def perform_create(self, serializer):
         instance = serializer.save()
         record_project_change(
@@ -117,6 +245,10 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         new_date = serializer.validated_data.get('date', old_date)
+        date_changed = ('date' in serializer.validated_data and old_date != new_date)
+        next_upcoming_before_id = None
+        if date_changed and instance.project_id:
+            next_upcoming_before_id = self._next_upcoming_deliverable_id(instance.project_id)
 
         do_realloc = (
             settings.FEATURES.get('AUTO_REALLOCATION') and
@@ -218,6 +350,14 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                             'changes': changes,
                         },
                     )
+                if date_changed:
+                    self._queue_deliverable_date_change_push(
+                        deliverable=instance,
+                        old_date=old_date,
+                        new_date=new_date,
+                        actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+                        next_upcoming_before_id=next_upcoming_before_id,
+                    )
 
             realloc_summary = {
                 'deltaWeeks': dw,
@@ -255,6 +395,14 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     'deliverable': self._deliverable_log_payload(instance),
                     'changes': changes,
                 },
+            )
+        if date_changed:
+            self._queue_deliverable_date_change_push(
+                deliverable=instance,
+                old_date=old_date,
+                new_date=new_date,
+                actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
+                next_upcoming_before_id=next_upcoming_before_id,
             )
         return Response(self.get_serializer(instance).data)
 
