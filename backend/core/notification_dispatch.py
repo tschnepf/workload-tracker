@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Iterable, Any
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -28,20 +27,6 @@ def _normalized_user_ids(user_ids: Iterable[int]) -> list[int]:
     return sorted({int(uid) for uid in user_ids if uid is not None})
 
 
-def _event_mobile_push_enabled_by_env(event_key: str) -> bool:
-    if event_key in {'pred.reminder', 'pred.digest', 'deliverable.reminder'}:
-        return bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
-    if event_key in {
-        'assignment.created',
-        'assignment.removed',
-        'assignment.bulk_updated',
-    }:
-        return bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True))
-    if event_key == 'deliverable.date_changed':
-        return bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True))
-    return True
-
-
 def _build_global_availability() -> dict[str, dict[str, bool]]:
     cfg = WebPushGlobalSettings.get_active()
     legacy_matrix = legacy_global_matrix_from_settings(cfg)
@@ -54,10 +39,6 @@ def _build_global_availability() -> dict[str, dict[str, bool]]:
         global_matrix,
         mobile_push_globally_enabled=bool(getattr(cfg, 'enabled', True)),
     )
-
-    for event_key in EVENT_KEYS:
-        if not _event_mobile_push_enabled_by_env(event_key):
-            availability[event_key]['mobilePush'] = False
 
     return availability
 

@@ -70,12 +70,6 @@ export const settingsSections: SettingsSectionDefinition[] = [
     component: PreDeliverablesSection,
   },
   {
-    id: PUSH_NOTIFICATIONS_SECTION_ID,
-    title: 'Notifications',
-    requiresAdmin: true,
-    component: PushNotificationsSection,
-  },
-  {
     id: DELIVERABLE_TASK_TEMPLATES_SECTION_ID,
     title: 'Project Task Templates',
     requiresAdmin: true,
@@ -95,6 +89,12 @@ export const settingsSections: SettingsSectionDefinition[] = [
     requiresAdmin: true,
     separatorBefore: true,
     component: AdminUsersSection,
+  },
+  {
+    id: PUSH_NOTIFICATIONS_SECTION_ID,
+    title: 'Notifications',
+    requiresAdmin: true,
+    component: PushNotificationsSection,
   },
   {
     id: UTILIZATION_SECTION_ID,

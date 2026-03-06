@@ -286,6 +286,36 @@ class AuthEndpointsTests(TestCase):
         self.assertFalse(response.data['pushDeepLinksEnabled'])
         self.assertFalse(response.data['pushSubscriptionCleanupEnabled'])
 
+    def test_notification_matrix_cells_can_be_reenabled_when_globally_available(self):
+        self._auth(self.user)
+        initial = self.client.get('/api/auth/notification-preferences/')
+        self.assertEqual(initial.status_code, status.HTTP_200_OK)
+        self.assertTrue(initial.data['effectiveChannelAvailability']['pred.reminder']['email'])
+
+        disable_payload = dict(initial.data)
+        disable_payload['notificationChannelMatrix'] = dict(initial.data['notificationChannelMatrix'])
+        disable_payload['notificationChannelMatrix']['pred.reminder'] = dict(
+            initial.data['notificationChannelMatrix']['pred.reminder']
+        )
+        disable_payload['notificationChannelMatrix']['pred.reminder']['email'] = False
+
+        disabled = self.client.put('/api/auth/notification-preferences/', disable_payload, format='json')
+        self.assertEqual(disabled.status_code, status.HTTP_200_OK)
+        self.assertFalse(disabled.data['notificationChannelMatrix']['pred.reminder']['email'])
+        # Availability should remain globally-derived, not clamped by the user's current choice.
+        self.assertTrue(disabled.data['effectiveChannelAvailability']['pred.reminder']['email'])
+
+        enable_payload = dict(disabled.data)
+        enable_payload['notificationChannelMatrix'] = dict(disabled.data['notificationChannelMatrix'])
+        enable_payload['notificationChannelMatrix']['pred.reminder'] = dict(
+            disabled.data['notificationChannelMatrix']['pred.reminder']
+        )
+        enable_payload['notificationChannelMatrix']['pred.reminder']['email'] = True
+
+        reenabled = self.client.put('/api/auth/notification-preferences/', enable_payload, format='json')
+        self.assertEqual(reenabled.status_code, status.HTTP_200_OK)
+        self.assertTrue(reenabled.data['notificationChannelMatrix']['pred.reminder']['email'])
+
     def test_push_action_endpoint_ack_and_project_mute(self):
         project = Project.objects.create(name='Muted Project')
         self._auth(self.user)

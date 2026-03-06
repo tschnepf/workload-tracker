@@ -588,10 +588,10 @@ class WebPushGlobalSettings(models.Model):
     @classmethod
     def get_active(cls):
         class _LegacyDefaults:
-            push_pre_deliverable_reminders_enabled = bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
-            push_daily_digest_enabled = bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
-            push_assignment_changes_enabled = bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True))
-            push_deliverable_date_changes_enabled = bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True))
+            push_pre_deliverable_reminders_enabled = True
+            push_daily_digest_enabled = True
+            push_assignment_changes_enabled = True
+            push_deliverable_date_changes_enabled = True
 
         legacy_default_matrix = legacy_global_matrix_from_settings(_LegacyDefaults())
         obj, _ = cls.objects.get_or_create(
@@ -607,12 +607,12 @@ class WebPushGlobalSettings(models.Model):
                 'push_actions_enabled': bool(getattr(settings, 'WEB_PUSH_ACTIONS_ENABLED', True)),
                 'push_deep_links_enabled': bool(getattr(settings, 'WEB_PUSH_DEEP_LINKS_ENABLED', True)),
                 'push_subscription_healthcheck_enabled': bool(getattr(settings, 'WEB_PUSH_SUBSCRIPTION_HEALTHCHECK_ENABLED', True)),
-                'push_pre_deliverable_reminders_enabled': bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)),
-                'push_daily_digest_enabled': bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)),
-                'push_assignment_changes_enabled': bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True)),
-                'push_deliverable_date_changes_enabled': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True)),
-                'push_deliverable_date_change_scope': str(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_SCOPE', cls.DELIVERABLE_SCOPE_NEXT_UPCOMING) or cls.DELIVERABLE_SCOPE_NEXT_UPCOMING),
-                'push_deliverable_date_change_within_two_weeks_only': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_WITHIN_TWO_WEEKS_ONLY', False)),
+                'push_pre_deliverable_reminders_enabled': True,
+                'push_daily_digest_enabled': True,
+                'push_assignment_changes_enabled': True,
+                'push_deliverable_date_changes_enabled': True,
+                'push_deliverable_date_change_scope': cls.DELIVERABLE_SCOPE_NEXT_UPCOMING,
+                'push_deliverable_date_change_within_two_weeks_only': False,
                 'notification_channel_matrix': legacy_default_matrix,
             },
         )

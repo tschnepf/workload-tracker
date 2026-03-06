@@ -12,7 +12,7 @@ from core.models import (
     WebPushSubscription,
     WebPushVapidKeys,
 )
-from core.webpush import send_push_to_users
+from core.webpush import send_push_to_users, web_push_event_enabled
 
 
 class WebPushDispatchTests(TestCase):
@@ -307,3 +307,28 @@ class WebPushDispatchTests(TestCase):
         payload = send_mock.call_args[0][1]
         self.assertEqual(payload.get('actions'), [])
         self.assertEqual(payload.get('url'), '/my-work')
+
+    @override_settings(
+        WEB_PUSH_ENABLED=True,
+        WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED=False,
+        WEB_PUSH_REMINDER_EVENTS_ENABLED=False,
+        WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED=False,
+    )
+    def test_event_toggles_follow_global_settings_not_env_kill_switches(self):
+        settings_obj = WebPushGlobalSettings.get_active()
+        settings_obj.push_pre_deliverable_reminders_enabled = True
+        settings_obj.push_daily_digest_enabled = True
+        settings_obj.push_assignment_changes_enabled = True
+        settings_obj.push_deliverable_date_changes_enabled = True
+        settings_obj.save(update_fields=[
+            'push_pre_deliverable_reminders_enabled',
+            'push_daily_digest_enabled',
+            'push_assignment_changes_enabled',
+            'push_deliverable_date_changes_enabled',
+            'updated_at',
+        ])
+
+        self.assertTrue(web_push_event_enabled('push_pre_deliverable_reminders'))
+        self.assertTrue(web_push_event_enabled('push_daily_digest'))
+        self.assertTrue(web_push_event_enabled('push_assignment_changes'))
+        self.assertTrue(web_push_event_enabled('push_deliverable_date_changes'))

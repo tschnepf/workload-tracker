@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema_field
 from .models import UserProfile, AdminAuditLog
 from core.models import InAppNotification, NotificationPreference, WebPushSubscription
 from core.notification_matrix import (
-    apply_availability,
+    default_notification_channel_matrix,
     default_user_notification_channel_matrix,
     legacy_user_matrix_from_preference,
     normalize_notification_channel_matrix,
@@ -285,9 +285,12 @@ class NotificationPreferencesSerializer(serializers.Serializer):
             fallback=legacy_user_matrix_from_preference(p),
         )
         effective = (
-            apply_availability(matrix, effective_channel_availability)
+            normalize_notification_channel_matrix(
+                effective_channel_availability,
+                fallback=default_notification_channel_matrix(),
+            )
             if isinstance(effective_channel_availability, dict)
-            else matrix
+            else default_notification_channel_matrix()
         )
         return {
             'emailPreDeliverableReminders': p.email_pre_deliverable_reminders,

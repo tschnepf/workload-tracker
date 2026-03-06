@@ -179,9 +179,9 @@ def web_push_feature_enabled(feature_field: str | None) -> bool:
 def web_push_event_toggles() -> dict[str, bool]:
     deliverable_options = web_push_deliverable_date_change_options()
     defaults = {
-        'push_pre_deliverable_reminders': bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)),
-        'push_daily_digest': bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)),
-        'push_assignment_changes': bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True)),
+        'push_pre_deliverable_reminders': True,
+        'push_daily_digest': True,
+        'push_assignment_changes': True,
         'push_deliverable_date_changes': bool(deliverable_options.get('enabled', True)),
     }
     try:
@@ -196,15 +196,6 @@ def web_push_event_toggles() -> dict[str, bool]:
         pass
     except Exception:
         pass
-
-    # Env switches remain hard kill-switches.
-    if not bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True)):
-        defaults['push_pre_deliverable_reminders'] = False
-        defaults['push_daily_digest'] = False
-    if not bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True)):
-        defaults['push_assignment_changes'] = False
-    if not bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True)):
-        defaults['push_deliverable_date_changes'] = False
     return defaults
 
 
@@ -250,9 +241,9 @@ def web_push_deliverable_date_change_options() -> dict[str, object]:
         getattr(WebPushGlobalSettings, 'DELIVERABLE_SCOPE_ALL_UPCOMING', 'all_upcoming'),
     }
     options = {
-        'enabled': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True)),
-        'scope': str(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_SCOPE', scope_default) or scope_default),
-        'withinTwoWeeksOnly': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_WITHIN_TWO_WEEKS_ONLY', False)),
+        'enabled': True,
+        'scope': scope_default,
+        'withinTwoWeeksOnly': False,
     }
     try:
         cfg = WebPushGlobalSettings.get_active()
@@ -268,8 +259,6 @@ def web_push_deliverable_date_change_options() -> dict[str, object]:
 
     if str(options.get('scope') or '') not in valid_scopes:
         options['scope'] = scope_default
-    if not bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True)):
-        options['enabled'] = False
     return options
 
 
