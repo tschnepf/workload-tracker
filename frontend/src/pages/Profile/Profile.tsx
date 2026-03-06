@@ -19,6 +19,16 @@ import { setColorScheme } from '@/theme/themeManager';
 import { base64UrlToUint8Array, isWebPushSupported } from '@/utils/push';
 
 const defaultNotificationMatrix = (): NotificationChannelMatrix => ({
+  'pred.reminder': { mobilePush: false, email: false, inBrowser: true },
+  'pred.digest': { mobilePush: false, email: false, inBrowser: true },
+  'assignment.created': { mobilePush: false, email: false, inBrowser: true },
+  'assignment.removed': { mobilePush: false, email: false, inBrowser: true },
+  'assignment.bulk_updated': { mobilePush: false, email: false, inBrowser: true },
+  'deliverable.reminder': { mobilePush: false, email: false, inBrowser: true },
+  'deliverable.date_changed': { mobilePush: false, email: false, inBrowser: true },
+});
+
+const defaultAvailabilityMatrix = (): NotificationChannelMatrix => ({
   'pred.reminder': { mobilePush: true, email: true, inBrowser: true },
   'pred.digest': { mobilePush: true, email: true, inBrowser: true },
   'assignment.created': { mobilePush: true, email: true, inBrowser: true },
@@ -80,14 +90,14 @@ const Profile: React.FC = () => {
     }
   }, []);
   const defaultNotificationPrefs = useMemo<NotificationPreferences>(() => ({
-    emailPreDeliverableReminders: true,
+    emailPreDeliverableReminders: false,
     reminderDaysBefore: 1,
     dailyDigest: false,
     webPushEnabled: false,
-    pushPreDeliverableReminders: true,
+    pushPreDeliverableReminders: false,
     pushDailyDigest: false,
-    pushAssignmentChanges: true,
-    pushDeliverableDateChanges: true,
+    pushAssignmentChanges: false,
+    pushDeliverableDateChanges: false,
     pushRateLimitEnabled: true,
     pushWeekendMute: false,
     pushQuietHoursEnabled: false,
@@ -102,7 +112,7 @@ const Profile: React.FC = () => {
     pushDeepLinksEnabled: true,
     pushSubscriptionCleanupEnabled: true,
     notificationChannelMatrix: defaultNotificationMatrix(),
-    effectiveChannelAvailability: defaultNotificationMatrix(),
+    effectiveChannelAvailability: defaultAvailabilityMatrix(),
   }), [browserTimezone]);
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
@@ -142,7 +152,7 @@ const Profile: React.FC = () => {
           pushTimezone: (prefs as any)?.pushTimezone || browserTimezone || '',
           pushSnoozeUntil: (prefs as any)?.pushSnoozeUntil || null,
           notificationChannelMatrix: (prefs as any)?.notificationChannelMatrix || defaultNotificationMatrix(),
-          effectiveChannelAvailability: (prefs as any)?.effectiveChannelAvailability || defaultNotificationMatrix(),
+          effectiveChannelAvailability: (prefs as any)?.effectiveChannelAvailability || defaultAvailabilityMatrix(),
         });
         setPushServerEnabled(Boolean(caps?.pwa?.enabled && caps?.pwa?.pushEnabled));
         setVapidPublicKey(caps?.pwa?.vapidPublicKey || null);

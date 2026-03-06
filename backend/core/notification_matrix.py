@@ -51,10 +51,23 @@ CHANNEL_KEYS = ('mobilePush', 'email', 'inBrowser')
 
 
 def default_notification_channel_matrix() -> dict[str, dict[str, bool]]:
+    """Global/default availability matrix (all channels available)."""
     return {
         event_key: {
             'mobilePush': True,
             'email': True,
+            'inBrowser': True,
+        }
+        for event_key in EVENT_KEYS
+    }
+
+
+def default_user_notification_channel_matrix() -> dict[str, dict[str, bool]]:
+    """User-level defaults: push/email opt-in, in-browser enabled."""
+    return {
+        event_key: {
+            'mobilePush': False,
+            'email': False,
             'inBrowser': True,
         }
         for event_key in EVENT_KEYS
@@ -91,7 +104,7 @@ def normalize_notification_channel_matrix(
 
 
 def legacy_user_matrix_from_preference(pref: Any | None) -> dict[str, dict[str, bool]]:
-    matrix = default_notification_channel_matrix()
+    matrix = default_user_notification_channel_matrix()
 
     if pref is None:
         return matrix
@@ -176,8 +189,14 @@ def apply_availability(
     user_matrix: dict[str, dict[str, bool]],
     availability: dict[str, dict[str, bool]],
 ) -> dict[str, dict[str, bool]]:
-    matrix = normalize_notification_channel_matrix(user_matrix)
-    normalized_availability = normalize_notification_channel_matrix(availability)
+    matrix = normalize_notification_channel_matrix(
+        user_matrix,
+        fallback=default_user_notification_channel_matrix(),
+    )
+    normalized_availability = normalize_notification_channel_matrix(
+        availability,
+        fallback=default_notification_channel_matrix(),
+    )
     for event_key in EVENT_KEYS:
         matrix[event_key] = {
             'mobilePush': bool(matrix[event_key]['mobilePush'] and normalized_availability[event_key]['mobilePush']),
@@ -188,7 +207,10 @@ def apply_availability(
 
 
 def user_legacy_fields_from_matrix(matrix: dict[str, dict[str, bool]]) -> dict[str, bool]:
-    normalized = normalize_notification_channel_matrix(matrix)
+    normalized = normalize_notification_channel_matrix(
+        matrix,
+        fallback=default_user_notification_channel_matrix(),
+    )
     assignment_mobile_enabled = any(
         bool(normalized[event_key]['mobilePush']) for event_key in ASSIGNMENT_EVENT_KEYS
     )

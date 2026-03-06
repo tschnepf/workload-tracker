@@ -153,6 +153,13 @@ class AuthEndpointsTests(TestCase):
         self.assertIn('pushSubscriptionCleanupEnabled', response.data)
         self.assertIn('notificationChannelMatrix', response.data)
         self.assertIn('effectiveChannelAvailability', response.data)
+        self.assertFalse(response.data['emailPreDeliverableReminders'])
+        self.assertFalse(response.data['pushPreDeliverableReminders'])
+        self.assertFalse(response.data['pushAssignmentChanges'])
+        self.assertFalse(response.data['pushDeliverableDateChanges'])
+        self.assertFalse(response.data['notificationChannelMatrix']['pred.reminder']['mobilePush'])
+        self.assertFalse(response.data['notificationChannelMatrix']['pred.reminder']['email'])
+        self.assertTrue(response.data['notificationChannelMatrix']['pred.reminder']['inBrowser'])
 
         payload = {
             'emailPreDeliverableReminders': True,

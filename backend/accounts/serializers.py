@@ -9,6 +9,7 @@ from .models import UserProfile, AdminAuditLog
 from core.models import InAppNotification, NotificationPreference, WebPushSubscription
 from core.notification_matrix import (
     apply_availability,
+    default_user_notification_channel_matrix,
     legacy_user_matrix_from_preference,
     normalize_notification_channel_matrix,
 )
@@ -249,10 +250,10 @@ class NotificationPreferencesSerializer(serializers.Serializer):
     reminderDaysBefore = serializers.IntegerField(min_value=0)
     dailyDigest = serializers.BooleanField()
     webPushEnabled = serializers.BooleanField(required=False, default=False)
-    pushPreDeliverableReminders = serializers.BooleanField(required=False, default=True)
+    pushPreDeliverableReminders = serializers.BooleanField(required=False, default=False)
     pushDailyDigest = serializers.BooleanField(required=False, default=False)
-    pushAssignmentChanges = serializers.BooleanField(required=False, default=True)
-    pushDeliverableDateChanges = serializers.BooleanField(required=False, default=True)
+    pushAssignmentChanges = serializers.BooleanField(required=False, default=False)
+    pushDeliverableDateChanges = serializers.BooleanField(required=False, default=False)
     pushRateLimitEnabled = serializers.BooleanField(required=False, default=True)
     pushWeekendMute = serializers.BooleanField(required=False, default=False)
     pushQuietHoursEnabled = serializers.BooleanField(required=False, default=False)
@@ -315,7 +316,10 @@ class NotificationPreferencesSerializer(serializers.Serializer):
         }
 
     def validate_notificationChannelMatrix(self, value):
-        return normalize_notification_channel_matrix(value)
+        return normalize_notification_channel_matrix(
+            value,
+            fallback=default_user_notification_channel_matrix(),
+        )
 
 
 class PushActionSerializer(serializers.Serializer):

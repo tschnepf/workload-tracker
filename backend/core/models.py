@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from core.notification_matrix import (
     default_notification_channel_matrix,
+    default_user_notification_channel_matrix,
     legacy_global_matrix_from_settings,
     normalize_notification_channel_matrix,
 )
@@ -501,14 +502,14 @@ class NotificationPreference(models.Model):
     )
 
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='notification_preferences')
-    email_pre_deliverable_reminders = models.BooleanField(default=True)
+    email_pre_deliverable_reminders = models.BooleanField(default=False)
     reminder_days_before = models.PositiveIntegerField(default=1)
     daily_digest = models.BooleanField(default=False)
     web_push_enabled = models.BooleanField(default=False)
-    push_pre_deliverable_reminders = models.BooleanField(default=True)
+    push_pre_deliverable_reminders = models.BooleanField(default=False)
     push_daily_digest = models.BooleanField(default=False)
-    push_assignment_changes = models.BooleanField(default=True)
-    push_deliverable_date_changes = models.BooleanField(default=True)
+    push_assignment_changes = models.BooleanField(default=False)
+    push_deliverable_date_changes = models.BooleanField(default=False)
     push_rate_limit_enabled = models.BooleanField(default=True)
     push_weekend_mute = models.BooleanField(default=False)
     push_quiet_hours_enabled = models.BooleanField(default=False)
@@ -532,7 +533,7 @@ class NotificationPreference(models.Model):
     push_actions_enabled = models.BooleanField(default=True)
     push_deep_links_enabled = models.BooleanField(default=True)
     push_subscription_cleanup_enabled = models.BooleanField(default=True)
-    notification_channel_matrix = models.JSONField(default=default_notification_channel_matrix, blank=True)
+    notification_channel_matrix = models.JSONField(default=default_user_notification_channel_matrix, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
