@@ -29,11 +29,15 @@ class WebPushDispatchTests(TestCase):
             user=self.user_enabled,
             web_push_enabled=True,
             push_assignment_changes=True,
+            push_quiet_hours_enabled=False,
+            push_weekend_mute=False,
         )
         NotificationPreference.objects.create(
             user=self.user_disabled,
             web_push_enabled=False,
             push_assignment_changes=True,
+            push_quiet_hours_enabled=False,
+            push_weekend_mute=False,
         )
 
         WebPushSubscription.objects.create(

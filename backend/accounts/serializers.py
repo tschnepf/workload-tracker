@@ -373,6 +373,10 @@ class InAppNotificationItemSerializer(serializers.Serializer):
     body = serializers.CharField()
     url = serializers.CharField()
     payload = serializers.JSONField(required=False)
+    projectId = serializers.IntegerField(allow_null=True, required=False)
+    deliveryReason = serializers.CharField(required=False, allow_blank=True)
+    isSaved = serializers.BooleanField()
+    snoozedUntil = serializers.DateTimeField(allow_null=True)
     readAt = serializers.DateTimeField(allow_null=True)
     clearedAt = serializers.DateTimeField(allow_null=True)
     expiresAt = serializers.DateTimeField()
@@ -387,6 +391,10 @@ class InAppNotificationItemSerializer(serializers.Serializer):
             'body': row.body,
             'url': row.url,
             'payload': row.payload or {},
+            'projectId': row.project_id,
+            'deliveryReason': row.delivery_reason or '',
+            'isSaved': bool(getattr(row, 'is_saved', False)),
+            'snoozedUntil': row.snoozed_until,
             'readAt': row.read_at,
             'clearedAt': row.cleared_at,
             'expiresAt': row.expires_at,
@@ -406,6 +414,7 @@ class InAppMarkReadSerializer(serializers.Serializer):
         allow_empty=False,
         required=True,
     )
+    opened = serializers.BooleanField(required=False, default=False)
 
 
 class InAppClearSerializer(serializers.Serializer):
@@ -414,3 +423,37 @@ class InAppClearSerializer(serializers.Serializer):
         allow_empty=False,
         required=True,
     )
+
+
+class InAppSaveSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        required=True,
+    )
+    saved = serializers.BooleanField(required=True)
+
+
+class InAppSnoozeSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        required=True,
+    )
+    until = serializers.DateTimeField(required=True)
+
+
+class InAppClearAllSerializer(serializers.Serializer):
+    eventKey = serializers.CharField(required=False, allow_blank=True)
+    projectId = serializers.IntegerField(required=False, allow_null=True)
+    includeRead = serializers.BooleanField(required=False, default=True)
+
+
+class NotificationProjectMuteItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    projectId = serializers.IntegerField()
+    projectName = serializers.CharField(allow_blank=True)
+    mobilePushMutedUntil = serializers.DateTimeField(allow_null=True)
+    emailMutedUntil = serializers.DateTimeField(allow_null=True)
+    inBrowserMutedUntil = serializers.DateTimeField(allow_null=True)
+    updatedAt = serializers.DateTimeField()

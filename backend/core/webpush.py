@@ -14,6 +14,7 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 
 from core.models import (
+    NotificationDeliveryLog,
     NotificationPreference,
     WebPushDeferredNotification,
     WebPushGlobalSettings,
@@ -279,6 +280,9 @@ def build_push_payload(
     entity_type: str | None = None,
     entity_id: int | None = None,
     actions: list[dict[str, str]] | None = None,
+    ttl_seconds: int | None = None,
+    urgency: str | None = None,
+    topic: str | None = None,
 ) -> dict:
     payload = {
         'type': event_type,
@@ -292,6 +296,9 @@ def build_push_payload(
         'entityType': entity_type or None,
         'entityId': int(entity_id) if entity_id is not None else None,
         'actions': actions or [],
+        'ttlSeconds': int(ttl_seconds) if ttl_seconds is not None else 3600,
+        'urgency': str(urgency or 'normal'),
+        'topic': str(topic or '').strip() or None,
     }
     if payload['projectId'] is None:
         payload.pop('projectId', None)
@@ -299,6 +306,8 @@ def build_push_payload(
         payload.pop('entityType', None)
     if payload['entityId'] is None:
         payload.pop('entityId', None)
+    if payload.get('topic') is None:
+        payload.pop('topic', None)
     return payload
 
 
@@ -320,6 +329,18 @@ def send_payload_to_subscription(subscription: WebPushSubscription, payload: dic
         return False
 
     try:
+        ttl_seconds = max(60, min(2419200, int(payload.get('ttlSeconds') or 3600)))
+    except Exception:
+        ttl_seconds = 3600
+    urgency = str(payload.get('urgency') or 'normal').strip().lower()
+    if urgency not in {'very-low', 'low', 'normal', 'high'}:
+        urgency = 'normal'
+    topic = str(payload.get('topic') or '').strip()
+    headers = {'Urgency': urgency}
+    if topic:
+        headers['Topic'] = topic
+
+    try:
         webpush(
             subscription_info={
                 'endpoint': subscription.endpoint,
@@ -331,11 +352,24 @@ def send_payload_to_subscription(subscription: WebPushSubscription, payload: dic
             data=json.dumps(payload),
             vapid_private_key=str(creds.get('privateKey') or ''),
             vapid_claims={'sub': str(creds.get('subject') or '')},
+            ttl=ttl_seconds,
+            headers=headers,
         )
         subscription.is_active = True
         subscription.last_success_at = timezone.now()
         subscription.last_error = ''
         subscription.save(update_fields=['is_active', 'last_success_at', 'last_error', 'last_seen_at', 'updated_at'])
+        try:
+            NotificationDeliveryLog.objects.create(
+                event_key=str(payload.get('type') or 'push.generic'),
+                user_id=subscription.user_id,
+                channel=NotificationDeliveryLog.CHANNEL_MOBILE_PUSH,
+                status=NotificationDeliveryLog.STATUS_SENT,
+                reason='webpush_send_ok',
+                project_id=_payload_project_id(payload),
+            )
+        except Exception:
+            pass
         return True
     except WebPushException as exc:
         status_code = None
@@ -350,11 +384,33 @@ def send_payload_to_subscription(subscription: WebPushSubscription, payload: dic
         else:
             subscription.save(update_fields=['last_error', 'last_seen_at', 'updated_at'])
         logger.warning('web_push_failed status=%s subscription_id=%s', status_code, subscription.id)
+        try:
+            NotificationDeliveryLog.objects.create(
+                event_key=str(payload.get('type') or 'push.generic'),
+                user_id=subscription.user_id,
+                channel=NotificationDeliveryLog.CHANNEL_MOBILE_PUSH,
+                status=NotificationDeliveryLog.STATUS_FAILED,
+                reason=f'webpush_status_{status_code or "unknown"}',
+                project_id=_payload_project_id(payload),
+            )
+        except Exception:
+            pass
         return False
     except Exception as exc:
         subscription.last_error = str(exc)[:1000]
         subscription.save(update_fields=['last_error', 'last_seen_at', 'updated_at'])
         logger.warning('web_push_failed_generic subscription_id=%s', subscription.id)
+        try:
+            NotificationDeliveryLog.objects.create(
+                event_key=str(payload.get('type') or 'push.generic'),
+                user_id=subscription.user_id,
+                channel=NotificationDeliveryLog.CHANNEL_MOBILE_PUSH,
+                status=NotificationDeliveryLog.STATUS_FAILED,
+                reason='webpush_exception',
+                project_id=_payload_project_id(payload),
+            )
+        except Exception:
+            pass
         return False
 
 
@@ -514,6 +570,17 @@ def _normalize_payload(payload: dict) -> dict:
     normalized.setdefault('tag', str(normalized.get('type') or 'generic'))
     normalized.setdefault('timestamp', timezone.now().isoformat())
     normalized['priority'] = _payload_priority(normalized)
+    try:
+        normalized['ttlSeconds'] = max(60, min(2419200, int(normalized.get('ttlSeconds') or 3600)))
+    except Exception:
+        normalized['ttlSeconds'] = 3600
+    urgency = str(normalized.get('urgency') or 'normal').strip().lower()
+    normalized['urgency'] = urgency if urgency in {'very-low', 'low', 'normal', 'high'} else 'normal'
+    topic = str(normalized.get('topic') or '').strip()
+    if topic:
+        normalized['topic'] = topic
+    else:
+        normalized.pop('topic', None)
     if not isinstance(normalized.get('actions'), list) or not normalized.get('actions'):
         normalized['actions'] = _default_push_actions(normalized)
     return normalized
@@ -566,6 +633,17 @@ def _defer_payload_for_user(
         payload=payload,
         deliver_after=deliver_after or (timezone.now() + timedelta(minutes=15)),
     )
+    try:
+        NotificationDeliveryLog.objects.create(
+            event_key=event_type or 'push.generic',
+            user_id=user_id,
+            channel=NotificationDeliveryLog.CHANNEL_MOBILE_PUSH,
+            status=NotificationDeliveryLog.STATUS_DEFERRED,
+            reason=reason,
+            project_id=project_id,
+        )
+    except Exception:
+        pass
 
 
 def _delivery_decision(
@@ -840,6 +918,17 @@ def send_push_to_users(user_ids: Iterable[int], payload: dict, *, preference_fie
             feature_toggles=feature_toggles,
         )
         if decision == 'drop':
+            try:
+                NotificationDeliveryLog.objects.create(
+                    event_key=str(user_payload.get('type') or 'push.generic'),
+                    user_id=int(user_id),
+                    channel=NotificationDeliveryLog.CHANNEL_MOBILE_PUSH,
+                    status=NotificationDeliveryLog.STATUS_SUPPRESSED,
+                    reason=reason or 'policy_drop',
+                    project_id=_payload_project_id(user_payload),
+                )
+            except Exception:
+                pass
             continue
         if decision == 'defer':
             _defer_payload_for_user(

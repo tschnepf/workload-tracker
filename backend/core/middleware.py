@@ -231,3 +231,35 @@ class ReadOnlyModeMiddleware:
                 return JsonResponse({'detail': 'Read-only maintenance'}, status=503)
 
         return self.get_response(request)
+
+
+class NotificationPresenceMiddleware:
+    """Marks authenticated users as active for notification suppression policy."""
+
+    _SKIP_PREFIXES = (
+        '/api/health/',
+        '/health/',
+        '/readiness/',
+        '/api/readiness/',
+        '/api/auth/in-app-notifications/',
+        '/static/',
+        '/media/',
+    )
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]):
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
+        try:
+            if request.method.upper() in ('GET', 'HEAD', 'OPTIONS'):
+                path = str(request.path or '')
+                if any(path.startswith(prefix) for prefix in self._SKIP_PREFIXES):
+                    return response
+                user = getattr(request, 'user', None)
+                if user is not None and getattr(user, 'is_authenticated', False):
+                    from core.notification_policy import mark_user_active
+                    mark_user_active(int(user.id))
+        except Exception:  # nosec B110
+            pass
+        return response

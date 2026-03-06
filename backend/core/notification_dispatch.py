@@ -9,8 +9,18 @@ from django.utils import timezone
 from core.models import (
     EmailNotificationDigestItem,
     InAppNotification,
+    NotificationDeliveryLog,
     NotificationPreference,
+    NotificationTemplate,
     WebPushGlobalSettings,
+)
+from core.notification_policy import (
+    CHANNEL_EMAIL,
+    CHANNEL_IN_BROWSER,
+    CHANNEL_MOBILE_PUSH,
+    is_project_channel_muted,
+    notifications_template_rendering_enabled,
+    should_suppress_channel_for_active_user,
 )
 from core.notification_matrix import (
     EVENT_KEYS,
@@ -25,6 +35,36 @@ from core.webpush import build_push_payload, queue_push_to_users
 
 def _normalized_user_ids(user_ids: Iterable[int]) -> list[int]:
     return sorted({int(uid) for uid in user_ids if uid is not None})
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key):
+        return ''
+
+
+def _render_template(raw: str | None, context: dict[str, Any]) -> str:
+    text = str(raw or '')
+    if not text:
+        return ''
+    try:
+        return text.format_map(_SafeFormatDict(context))
+    except Exception:
+        return text
+
+
+def _template_for_event(event_key: str) -> NotificationTemplate | None:
+    if not notifications_template_rendering_enabled():
+        return None
+    return NotificationTemplate.objects.filter(event_key=event_key).first()
+
+
+def _topic_for_mode(*, topic_mode: str, event_key: str, project_id: int | None) -> str | None:
+    mode = str(topic_mode or NotificationTemplate.PUSH_TOPIC_EVENT).strip().lower()
+    if mode == NotificationTemplate.PUSH_TOPIC_NONE:
+        return None
+    if mode == NotificationTemplate.PUSH_TOPIC_PROJECT and project_id is not None:
+        return f"project.{int(project_id)}"
+    return f"event.{event_key}"
 
 
 def _build_global_availability() -> dict[str, dict[str, bool]]:
@@ -138,6 +178,7 @@ def dispatch_event_to_users(
     entity_type: str | None = None,
     entity_id: int | None = None,
     actions: list[dict[str, str]] | None = None,
+    template_context: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     normalized_user_ids = _normalized_user_ids(user_ids)
     if not normalized_user_ids:
@@ -147,11 +188,38 @@ def dispatch_event_to_users(
 
     availability = _build_global_availability()
     pref_map = ensure_preferences_for_users(normalized_user_ids)
+    template_obj = _template_for_event(event_key)
+    render_ctx = {
+        'event_key': event_key,
+        'title': title,
+        'body': body,
+        'url': url,
+        'project_id': project_id or '',
+        'entity_type': entity_type or '',
+        'entity_id': entity_id or '',
+    }
+    if isinstance(template_context, dict):
+        render_ctx.update(template_context)
+
+    push_title = _render_template(getattr(template_obj, 'push_title_template', ''), render_ctx) or title
+    push_body = _render_template(getattr(template_obj, 'push_body_template', ''), render_ctx) or body
+    email_subject = _render_template(getattr(template_obj, 'email_subject_template', ''), render_ctx) or title
+    email_body = _render_template(getattr(template_obj, 'email_body_template', ''), render_ctx) or body
+    in_app_title = _render_template(getattr(template_obj, 'in_app_title_template', ''), render_ctx) or title
+    in_app_body = _render_template(getattr(template_obj, 'in_app_body_template', ''), render_ctx) or body
+
+    push_ttl_seconds = int(getattr(template_obj, 'push_ttl_seconds', 3600) or 3600)
+    push_urgency = str(getattr(template_obj, 'push_urgency', NotificationTemplate.PUSH_URGENCY_NORMAL) or NotificationTemplate.PUSH_URGENCY_NORMAL)
+    push_topic = _topic_for_mode(
+        topic_mode=str(getattr(template_obj, 'push_topic_mode', NotificationTemplate.PUSH_TOPIC_EVENT) or NotificationTemplate.PUSH_TOPIC_EVENT),
+        event_key=event_key,
+        project_id=project_id,
+    )
 
     payload = build_push_payload(
         event_type=event_key,
-        title=title,
-        body=body,
+        title=push_title,
+        body=push_body,
         url=url,
         tag=tag,
         priority=priority,
@@ -159,64 +227,181 @@ def dispatch_event_to_users(
         entity_type=entity_type,
         entity_id=entity_id,
         actions=actions,
+        ttl_seconds=push_ttl_seconds,
+        urgency=push_urgency,
+        topic=push_topic,
     )
 
     push_recipient_ids: list[int] = []
     in_app_rows: list[InAppNotification] = []
     email_rows: list[EmailNotificationDigestItem] = []
-    expires_at = timezone.now() + timedelta(days=7)
+    delivery_logs: list[NotificationDeliveryLog] = []
+    try:
+        cfg = WebPushGlobalSettings.get_active()
+        in_app_retention_days = max(1, int(getattr(cfg, 'in_app_retention_days', 7) or 7))
+    except Exception:
+        in_app_retention_days = 7
+    expires_at = timezone.now() + timedelta(days=in_app_retention_days)
 
     for user_id in normalized_user_ids:
         pref = pref_map.get(user_id)
 
-        if channel_enabled_for_preference(
+        push_enabled = channel_enabled_for_preference(
             pref,
             event_key=event_key,
-            channel='mobilePush',
+            channel=CHANNEL_MOBILE_PUSH,
             availability=availability,
-        ):
-            push_recipient_ids.append(user_id)
-
-        if channel_enabled_for_preference(
-            pref,
-            event_key=event_key,
-            channel='inBrowser',
-            availability=availability,
-        ):
-            in_app_rows.append(
-                InAppNotification(
-                    user_id=user_id,
-                    event_key=event_key,
-                    title=title,
-                    body=body,
-                    url=url,
-                    payload=payload,
-                    expires_at=expires_at,
+        )
+        if push_enabled:
+            if is_project_channel_muted(user_id, project_id, CHANNEL_MOBILE_PUSH):
+                delivery_logs.append(
+                    NotificationDeliveryLog(
+                        event_key=event_key,
+                        user_id=user_id,
+                        channel=CHANNEL_MOBILE_PUSH,
+                        status=NotificationDeliveryLog.STATUS_SUPPRESSED,
+                        reason='project_mute',
+                        project_id=project_id,
+                    )
                 )
-            )
+            else:
+                suppressed, suppress_reason = should_suppress_channel_for_active_user(
+                    user_id=user_id,
+                    channel=CHANNEL_MOBILE_PUSH,
+                    priority=priority,
+                )
+                if suppressed:
+                    delivery_logs.append(
+                        NotificationDeliveryLog(
+                            event_key=event_key,
+                            user_id=user_id,
+                            channel=CHANNEL_MOBILE_PUSH,
+                            status=NotificationDeliveryLog.STATUS_SUPPRESSED,
+                            reason=suppress_reason,
+                            project_id=project_id,
+                        )
+                    )
+                else:
+                    push_recipient_ids.append(user_id)
+                    delivery_logs.append(
+                        NotificationDeliveryLog(
+                            event_key=event_key,
+                            user_id=user_id,
+                            channel=CHANNEL_MOBILE_PUSH,
+                            status=NotificationDeliveryLog.STATUS_QUEUED,
+                            reason='dispatch',
+                            project_id=project_id,
+                        )
+                    )
 
-        if event_key != 'pred.digest' and channel_enabled_for_preference(
+        in_browser_enabled = channel_enabled_for_preference(
             pref,
             event_key=event_key,
-            channel='email',
+            channel=CHANNEL_IN_BROWSER,
             availability=availability,
-        ):
-            email_rows.append(
-                EmailNotificationDigestItem(
-                    user_id=user_id,
-                    event_key=event_key,
-                    title=title,
-                    body=body,
-                    url=url,
-                    payload=payload,
+        )
+        if in_browser_enabled:
+            if is_project_channel_muted(user_id, project_id, CHANNEL_IN_BROWSER):
+                delivery_logs.append(
+                    NotificationDeliveryLog(
+                        event_key=event_key,
+                        user_id=user_id,
+                        channel=CHANNEL_IN_BROWSER,
+                        status=NotificationDeliveryLog.STATUS_SUPPRESSED,
+                        reason='project_mute',
+                        project_id=project_id,
+                    )
                 )
-            )
+            else:
+                in_app_rows.append(
+                    InAppNotification(
+                        user_id=user_id,
+                        event_key=event_key,
+                        title=in_app_title,
+                        body=in_app_body,
+                        url=url,
+                        payload=payload,
+                        project_id=project_id,
+                        delivery_reason='dispatch',
+                        channel_origin=CHANNEL_IN_BROWSER,
+                        expires_at=expires_at,
+                    )
+                )
+                delivery_logs.append(
+                    NotificationDeliveryLog(
+                        event_key=event_key,
+                        user_id=user_id,
+                        channel=CHANNEL_IN_BROWSER,
+                        status=NotificationDeliveryLog.STATUS_SENT,
+                        reason='dispatch',
+                        project_id=project_id,
+                    )
+                )
+
+        email_enabled = channel_enabled_for_preference(
+            pref,
+            event_key=event_key,
+            channel=CHANNEL_EMAIL,
+            availability=availability,
+        )
+        if event_key != 'pred.digest' and email_enabled:
+            if is_project_channel_muted(user_id, project_id, CHANNEL_EMAIL):
+                delivery_logs.append(
+                    NotificationDeliveryLog(
+                        event_key=event_key,
+                        user_id=user_id,
+                        channel=CHANNEL_EMAIL,
+                        status=NotificationDeliveryLog.STATUS_SUPPRESSED,
+                        reason='project_mute',
+                        project_id=project_id,
+                    )
+                )
+            else:
+                suppressed, suppress_reason = should_suppress_channel_for_active_user(
+                    user_id=user_id,
+                    channel=CHANNEL_EMAIL,
+                    priority=priority,
+                )
+                if suppressed:
+                    delivery_logs.append(
+                        NotificationDeliveryLog(
+                            event_key=event_key,
+                            user_id=user_id,
+                            channel=CHANNEL_EMAIL,
+                            status=NotificationDeliveryLog.STATUS_SUPPRESSED,
+                            reason=suppress_reason,
+                            project_id=project_id,
+                        )
+                    )
+                else:
+                    email_rows.append(
+                        EmailNotificationDigestItem(
+                            user_id=user_id,
+                            event_key=event_key,
+                            title=email_subject,
+                            body=email_body,
+                            url=url,
+                            payload=payload,
+                        )
+                    )
+                    delivery_logs.append(
+                        NotificationDeliveryLog(
+                            event_key=event_key,
+                            user_id=user_id,
+                            channel=CHANNEL_EMAIL,
+                            status=NotificationDeliveryLog.STATUS_QUEUED,
+                            reason='digest_queue',
+                            project_id=project_id,
+                        )
+                    )
 
     with transaction.atomic():
         if in_app_rows:
             InAppNotification.objects.bulk_create(in_app_rows)
         if email_rows:
             EmailNotificationDigestItem.objects.bulk_create(email_rows)
+        if delivery_logs:
+            NotificationDeliveryLog.objects.bulk_create(delivery_logs)
 
     if push_recipient_ids:
         queue_push_to_users(push_recipient_ids, payload, preference_field=None)

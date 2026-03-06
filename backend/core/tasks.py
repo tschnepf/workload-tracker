@@ -424,6 +424,13 @@ def send_email_notification_daily_summary(self):
     from django.core.mail import send_mail
 
     now_ts = timezone.now()
+    stale_days = max(1, int(getattr(settings, 'EMAIL_NOTIFICATION_STALE_UNSENT_DAYS', 14) or 14))
+    stale_cutoff = now_ts - timedelta(days=stale_days)
+    stale_marked_items = int(
+        EmailNotificationDigestItem.objects
+        .filter(sent_at__isnull=True, created_at__lt=stale_cutoff)
+        .update(sent_at=now_ts)
+    )
     unsent_qs = (
         EmailNotificationDigestItem.objects
         .filter(sent_at__isnull=True)
@@ -432,7 +439,7 @@ def send_email_notification_daily_summary(self):
     )
     rows = list(unsent_qs[:5000])
     if not rows:
-        return {'processedUsers': 0, 'sentEmails': 0, 'markedItems': 0}
+        return {'processedUsers': 0, 'sentEmails': 0, 'markedItems': 0, 'staleMarkedItems': stale_marked_items}
 
     user_ids = sorted({int(row.user_id) for row in rows})
     pref_map = NotificationPreference.objects.filter(user_id__in=user_ids).in_bulk(field_name='user_id')
@@ -500,6 +507,59 @@ def send_email_notification_daily_summary(self):
         'processedUsers': len(grouped),
         'sentEmails': sent_emails,
         'markedItems': marked_items,
+        'staleMarkedItems': stale_marked_items,
+    }
+
+
+@shared_task(bind=True, soft_time_limit=120)
+def cleanup_notification_data_task(self) -> Dict[str, Any]:
+    from django.db.models import Q
+    from core.models import EmailNotificationDigestItem, InAppNotification, NotificationDeliveryLog, WebPushGlobalSettings
+
+    now_ts = timezone.now()
+    stale_unsent_days = max(1, int(getattr(settings, 'EMAIL_NOTIFICATION_STALE_UNSENT_DAYS', 14) or 14))
+    stale_unsent_cutoff = now_ts - timedelta(days=stale_unsent_days)
+
+    cfg = WebPushGlobalSettings.get_active()
+    in_app_retention_days = max(1, int(getattr(cfg, 'in_app_retention_days', 7) or 7))
+    saved_retention_days = max(7, int(getattr(cfg, 'saved_in_app_retention_days', 90) or 90))
+    in_app_expired_cutoff = now_ts - timedelta(days=in_app_retention_days)
+    in_app_saved_cutoff = now_ts - timedelta(days=saved_retention_days)
+    delivery_log_cutoff = now_ts - timedelta(days=max(saved_retention_days, 90))
+
+    in_app_deleted = int(
+        InAppNotification.objects.filter(
+            Q(cleared_at__isnull=False)
+            | Q(is_saved=False, expires_at__lt=now_ts)
+            | Q(is_saved=True, created_at__lt=in_app_saved_cutoff)
+            | Q(is_saved=False, created_at__lt=in_app_expired_cutoff)
+        ).delete()[0]
+    )
+
+    stale_unsent_marked = int(
+        EmailNotificationDigestItem.objects
+        .filter(sent_at__isnull=True, created_at__lt=stale_unsent_cutoff)
+        .update(sent_at=now_ts)
+    )
+    email_sent_deleted = int(
+        EmailNotificationDigestItem.objects
+        .filter(sent_at__lt=delivery_log_cutoff)
+        .delete()[0]
+    )
+    delivery_logs_deleted = int(
+        NotificationDeliveryLog.objects.filter(created_at__lt=delivery_log_cutoff).delete()[0]
+    )
+
+    return {
+        'inAppDeleted': in_app_deleted,
+        'staleUnsentMarked': stale_unsent_marked,
+        'emailSentDeleted': email_sent_deleted,
+        'deliveryLogsDeleted': delivery_logs_deleted,
+        'retentionDays': {
+            'inApp': in_app_retention_days,
+            'savedInApp': saved_retention_days,
+            'staleUnsentEmail': stale_unsent_days,
+        },
     }
 
 

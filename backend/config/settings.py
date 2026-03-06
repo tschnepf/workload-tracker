@@ -127,6 +127,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.NotificationPresenceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -317,6 +318,12 @@ WEB_PUSH_TEST_STAFF_ONLY = os.getenv(
     'WEB_PUSH_TEST_STAFF_ONLY',
     'false' if DEBUG else 'true',
 ).lower() == 'true'
+
+NOTIFICATIONS_V2_ENABLED = os.getenv('NOTIFICATIONS_V2_ENABLED', 'true').lower() == 'true'
+NOTIFICATIONS_ACTIVE_SUPPRESSION_ENABLED = os.getenv('NOTIFICATIONS_ACTIVE_SUPPRESSION_ENABLED', 'true').lower() == 'true'
+NOTIFICATIONS_TEMPLATE_RENDERING_ENABLED = os.getenv('NOTIFICATIONS_TEMPLATE_RENDERING_ENABLED', 'true').lower() == 'true'
+NOTIFICATIONS_ACTIVE_WEB_WINDOW_SECONDS = int(os.getenv('NOTIFICATIONS_ACTIVE_WEB_WINDOW_SECONDS', '120') or '120')
+EMAIL_NOTIFICATION_STALE_UNSENT_DAYS = int(os.getenv('EMAIL_NOTIFICATION_STALE_UNSENT_DAYS', '14') or '14')
 
 ADMIN_PASSWORD_RESET_SUPERUSER_ONLY = os.getenv('ADMIN_PASSWORD_RESET_SUPERUSER_ONLY', 'false').lower() == 'true'
 RESTORE_JOB_TOKEN_SECRET = os.getenv('RESTORE_JOB_TOKEN_SECRET', SECRET_KEY if DEBUG else '')
@@ -734,6 +741,10 @@ CELERY_BEAT_SCHEDULE['web-push-subscription-healthcheck'] = {
 CELERY_BEAT_SCHEDULE['email-notification-daily-summary'] = {
     'task': 'core.tasks.send_email_notification_daily_summary',
     'schedule': timedelta(hours=1),
+}
+CELERY_BEAT_SCHEDULE['notifications-cleanup'] = {
+    'task': 'core.tasks.cleanup_notification_data_task',
+    'schedule': timedelta(hours=6),
 }
 
 # CSP rollout configuration

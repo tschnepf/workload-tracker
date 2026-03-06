@@ -575,6 +575,19 @@ class WebPushGlobalSettings(models.Model):
         default=DELIVERABLE_SCOPE_NEXT_UPCOMING,
     )
     push_deliverable_date_change_within_two_weeks_only = models.BooleanField(default=False)
+    active_web_suppression_enabled = models.BooleanField(default=True)
+    active_web_window_seconds = models.PositiveIntegerField(
+        default=120,
+        validators=[MinValueValidator(30), MaxValueValidator(3600)],
+    )
+    in_app_retention_days = models.PositiveIntegerField(
+        default=7,
+        validators=[MinValueValidator(1), MaxValueValidator(365)],
+    )
+    saved_in_app_retention_days = models.PositiveIntegerField(
+        default=90,
+        validators=[MinValueValidator(7), MaxValueValidator(3650)],
+    )
     notification_channel_matrix = models.JSONField(default=default_notification_channel_matrix, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -613,6 +626,10 @@ class WebPushGlobalSettings(models.Model):
                 'push_deliverable_date_changes_enabled': True,
                 'push_deliverable_date_change_scope': cls.DELIVERABLE_SCOPE_NEXT_UPCOMING,
                 'push_deliverable_date_change_within_two_weeks_only': False,
+                'active_web_suppression_enabled': True,
+                'active_web_window_seconds': 120,
+                'in_app_retention_days': 7,
+                'saved_in_app_retention_days': 90,
                 'notification_channel_matrix': legacy_default_matrix,
             },
         )
@@ -704,6 +721,11 @@ class InAppNotification(models.Model):
     body = models.TextField(blank=True, default='')
     url = models.CharField(max_length=500, blank=True, default='/')
     payload = models.JSONField(default=dict, blank=True)
+    project_id = models.IntegerField(null=True, blank=True)
+    delivery_reason = models.CharField(max_length=120, blank=True, default='')
+    channel_origin = models.CharField(max_length=40, blank=True, default='inBrowser')
+    is_saved = models.BooleanField(default=False)
+    snoozed_until = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
     cleared_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(default=default_in_app_notification_expiry)
@@ -715,6 +737,7 @@ class InAppNotification(models.Model):
         indexes = [
             models.Index(fields=['user', 'cleared_at', 'created_at'], name='idx_inapp_user_clear'),
             models.Index(fields=['user', 'read_at', 'created_at'], name='idx_inapp_user_read'),
+            models.Index(fields=['user', 'is_saved', 'created_at'], name='idx_inapp_user_saved'),
             models.Index(fields=['expires_at'], name='idx_inapp_expires'),
         ]
 
@@ -741,6 +764,128 @@ class EmailNotificationDigestItem(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"EmailNotificationDigestItem(user={self.user_id}, event={self.event_key})"
+
+
+class NotificationProjectMute(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='notification_project_mutes')
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='notification_user_mutes')
+    mobile_push_muted_until = models.DateTimeField(null=True, blank=True)
+    email_muted_until = models.DateTimeField(null=True, blank=True)
+    in_browser_muted_until = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+        unique_together = [['user', 'project']]
+        indexes = [
+            models.Index(fields=['user', 'updated_at'], name='idx_npm_user_updated'),
+            models.Index(fields=['project', 'updated_at'], name='idx_npm_project_updated'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"NotificationProjectMute(user={self.user_id}, project={self.project_id})"
+
+
+class NotificationTemplate(models.Model):
+    PUSH_URGENCY_VERY_LOW = 'very-low'
+    PUSH_URGENCY_LOW = 'low'
+    PUSH_URGENCY_NORMAL = 'normal'
+    PUSH_URGENCY_HIGH = 'high'
+    PUSH_URGENCY_CHOICES = (
+        (PUSH_URGENCY_VERY_LOW, 'Very Low'),
+        (PUSH_URGENCY_LOW, 'Low'),
+        (PUSH_URGENCY_NORMAL, 'Normal'),
+        (PUSH_URGENCY_HIGH, 'High'),
+    )
+    PUSH_TOPIC_NONE = 'none'
+    PUSH_TOPIC_EVENT = 'event'
+    PUSH_TOPIC_PROJECT = 'project'
+    PUSH_TOPIC_MODE_CHOICES = (
+        (PUSH_TOPIC_NONE, 'None'),
+        (PUSH_TOPIC_EVENT, 'Event'),
+        (PUSH_TOPIC_PROJECT, 'Project'),
+    )
+
+    event_key = models.CharField(max_length=120, unique=True)
+    push_title_template = models.CharField(max_length=200, blank=True, default='')
+    push_body_template = models.TextField(blank=True, default='')
+    email_subject_template = models.CharField(max_length=200, blank=True, default='')
+    email_body_template = models.TextField(blank=True, default='')
+    in_app_title_template = models.CharField(max_length=200, blank=True, default='')
+    in_app_body_template = models.TextField(blank=True, default='')
+    push_ttl_seconds = models.PositiveIntegerField(
+        default=3600,
+        validators=[MinValueValidator(60), MaxValueValidator(2419200)],
+    )
+    push_urgency = models.CharField(
+        max_length=16,
+        choices=PUSH_URGENCY_CHOICES,
+        default=PUSH_URGENCY_NORMAL,
+    )
+    push_topic_mode = models.CharField(
+        max_length=16,
+        choices=PUSH_TOPIC_MODE_CHOICES,
+        default=PUSH_TOPIC_EVENT,
+    )
+    updated_by = models.ForeignKey('auth.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='updated_notification_templates')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['event_key']
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"NotificationTemplate({self.event_key})"
+
+
+class NotificationDeliveryLog(models.Model):
+    CHANNEL_MOBILE_PUSH = 'mobilePush'
+    CHANNEL_EMAIL = 'email'
+    CHANNEL_IN_BROWSER = 'inBrowser'
+    CHANNEL_CHOICES = (
+        (CHANNEL_MOBILE_PUSH, 'Mobile Push'),
+        (CHANNEL_EMAIL, 'Email'),
+        (CHANNEL_IN_BROWSER, 'In Browser'),
+    )
+
+    STATUS_SENT = 'sent'
+    STATUS_QUEUED = 'queued'
+    STATUS_DEFERRED = 'deferred'
+    STATUS_SUPPRESSED = 'suppressed'
+    STATUS_FAILED = 'failed'
+    STATUS_OPENED = 'opened'
+    STATUS_CLEARED = 'cleared'
+    STATUS_READ = 'read'
+    STATUS_CHOICES = (
+        (STATUS_SENT, 'Sent'),
+        (STATUS_QUEUED, 'Queued'),
+        (STATUS_DEFERRED, 'Deferred'),
+        (STATUS_SUPPRESSED, 'Suppressed'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_OPENED, 'Opened'),
+        (STATUS_CLEARED, 'Cleared'),
+        (STATUS_READ, 'Read'),
+    )
+
+    event_key = models.CharField(max_length=120)
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='notification_delivery_logs')
+    channel = models.CharField(max_length=32, choices=CHANNEL_CHOICES)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+    reason = models.CharField(max_length=120, blank=True, default='')
+    project_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['created_at'], name='idx_ndl_created'),
+            models.Index(fields=['event_key', 'created_at'], name='idx_ndl_event_created'),
+            models.Index(fields=['channel', 'status', 'created_at'], name='idx_ndl_chan_stat_created'),
+            models.Index(fields=['user', 'created_at'], name='idx_ndl_user_created'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"NotificationDeliveryLog(user={self.user_id}, event={self.event_key}, channel={self.channel}, status={self.status})"
 
 
 class NotificationLog(models.Model):

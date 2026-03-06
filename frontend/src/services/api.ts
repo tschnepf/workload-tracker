@@ -192,6 +192,10 @@ export type WebPushGlobalSettings = {
   pushDeliverableDateChangesEnabled: boolean;
   pushDeliverableDateChangeScope: 'next_upcoming' | 'all_upcoming';
   pushDeliverableDateChangeWithinTwoWeeksOnly: boolean;
+  activeWebSuppressionEnabled: boolean;
+  activeWebWindowSeconds: number;
+  inAppRetentionDays: number;
+  savedInAppRetentionDays: number;
   notificationChannelMatrix: NotificationChannelMatrix;
   notificationEventCatalog: NotificationEventCatalogItem[];
   updatedAt: string;
@@ -213,6 +217,10 @@ export type InAppNotificationItem = {
   body: string;
   url: string;
   payload: Record<string, unknown>;
+  projectId?: number | null;
+  deliveryReason?: string;
+  isSaved: boolean;
+  snoozedUntil: string | null;
   readAt: string | null;
   clearedAt: string | null;
   expiresAt: string;
@@ -223,6 +231,46 @@ export type InAppNotificationsResponse = {
   items: InAppNotificationItem[];
   unreadCount: number;
   nextCursor: number | null;
+};
+
+export type InAppNotificationStatusFilter = 'unread' | 'read' | 'saved' | 'snoozed' | 'all';
+
+export type NotificationProjectMuteItem = {
+  id: number;
+  projectId: number;
+  projectName: string;
+  mobilePushMutedUntil: string | null;
+  emailMutedUntil: string | null;
+  inBrowserMutedUntil: string | null;
+  updatedAt: string;
+};
+
+export type NotificationTemplate = {
+  eventKey: NotificationEventKey;
+  pushTitleTemplate: string;
+  pushBodyTemplate: string;
+  emailSubjectTemplate: string;
+  emailBodyTemplate: string;
+  inAppTitleTemplate: string;
+  inAppBodyTemplate: string;
+  pushTtlSeconds: number;
+  pushUrgency: 'very-low' | 'low' | 'normal' | 'high';
+  pushTopicMode: 'none' | 'event' | 'project';
+  updatedAt?: string;
+};
+
+export type NotificationAnalyticsResponse = {
+  windowDays: number;
+  generatedAt: string;
+  total: number;
+  byEventChannelStatus: Array<{
+    eventKey: string;
+    channel: 'mobilePush' | 'email' | 'inBrowser';
+    status: string;
+    count: number;
+  }>;
+  byChannel: Array<{ channel: 'mobilePush' | 'email' | 'inBrowser'; count: number }>;
+  byStatus: Array<{ status: string; count: number }>;
 };
 
 // Delegate to shared error mapper to avoid duplication
@@ -781,6 +829,10 @@ export const webPushGlobalSettingsApi = {
       | 'pushDeliverableDateChangesEnabled'
       | 'pushDeliverableDateChangeScope'
       | 'pushDeliverableDateChangeWithinTwoWeeksOnly'
+      | 'activeWebSuppressionEnabled'
+      | 'activeWebWindowSeconds'
+      | 'inAppRetentionDays'
+      | 'savedInAppRetentionDays'
       | 'notificationChannelMatrix'
     >>
   ): Promise<WebPushGlobalSettings> => {
@@ -809,6 +861,42 @@ export const webPushVapidKeysApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as WebPushVapidKeysStatus;
+  },
+};
+
+export const notificationTemplatesApi = {
+  list: async (): Promise<NotificationTemplate[]> => {
+    const res = await apiClient.GET('/core/notification-templates/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as NotificationTemplate[];
+  },
+  update: async (templates: NotificationTemplate[]): Promise<NotificationTemplate[]> => {
+    const res = await apiClient.PUT('/core/notification-templates/' as any, {
+      body: templates as any,
+      headers: authHeaders(),
+    });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as NotificationTemplate[];
+  },
+};
+
+export const notificationAnalyticsApi = {
+  get: async (days = 7): Promise<NotificationAnalyticsResponse> => {
+    const safeDays = Math.max(1, Math.min(90, Number(days || 7)));
+    const res = await apiClient.GET(`/core/notifications/analytics/?days=${encodeURIComponent(String(safeDays))}` as any, {
+      headers: authHeaders(),
+    });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as NotificationAnalyticsResponse;
   },
 };
 
@@ -2646,16 +2734,28 @@ export const authApi = {
     limit?: number;
     cursor?: number | null;
     since?: string | null;
+    eventKey?: NotificationEventKey;
+    status?: InAppNotificationStatusFilter;
+    projectId?: number | null;
   }): Promise<InAppNotificationsResponse> => {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.cursor) query.set('cursor', String(params.cursor));
     if (params?.since) query.set('since', String(params.since));
+    if (params?.eventKey) query.set('eventKey', String(params.eventKey));
+    if (params?.status) query.set('status', String(params.status));
+    if (params?.projectId) query.set('projectId', String(params.projectId));
     const qs = query.toString();
     return fetchApi<InAppNotificationsResponse>(`/auth/in-app-notifications/${qs ? `?${qs}` : ''}`);
   },
-  markInAppNotificationsRead: async (ids: number[]): Promise<{ updated: number }> => {
+  markInAppNotificationsRead: async (ids: number[], opened = false): Promise<{ updated: number }> => {
     return fetchApi<{ updated: number }>('/auth/in-app-notifications/mark-read/', {
+      method: 'POST',
+      body: JSON.stringify({ ids, opened }),
+    });
+  },
+  markInAppNotificationsUnread: async (ids: number[]): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/mark-unread/', {
       method: 'POST',
       body: JSON.stringify({ ids }),
     });
@@ -2666,11 +2766,50 @@ export const authApi = {
       body: JSON.stringify({}),
     });
   },
+  saveInAppNotifications: async (ids: number[], saved: boolean): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/save/', {
+      method: 'POST',
+      body: JSON.stringify({ ids, saved }),
+    });
+  },
+  snoozeInAppNotifications: async (ids: number[], untilIso: string): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/snooze/', {
+      method: 'POST',
+      body: JSON.stringify({ ids, until: untilIso }),
+    });
+  },
   clearInAppNotifications: async (ids: number[]): Promise<{ updated: number }> => {
     return fetchApi<{ updated: number }>('/auth/in-app-notifications/clear/', {
       method: 'POST',
       body: JSON.stringify({ ids }),
     });
+  },
+  clearAllInAppNotifications: async (payload?: {
+    eventKey?: NotificationEventKey;
+    projectId?: number | null;
+    includeRead?: boolean;
+  }): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/clear-all/', {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+  },
+  listNotificationProjectMutes: async (): Promise<NotificationProjectMuteItem[]> => {
+    return fetchApi<NotificationProjectMuteItem[]>('/auth/notification-project-mutes/');
+  },
+  upsertNotificationProjectMute: async (payload: {
+    projectId: number;
+    mobilePushMutedUntil?: string | null;
+    emailMutedUntil?: string | null;
+    inBrowserMutedUntil?: string | null;
+  }): Promise<NotificationProjectMuteItem> => {
+    return fetchApi<NotificationProjectMuteItem>('/auth/notification-project-mutes/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteNotificationProjectMute: async (muteId: number): Promise<void> => {
+    await fetchApi<void>(`/auth/notification-project-mutes/${muteId}/`, { method: 'DELETE' });
   },
   listPushSubscriptions: async (): Promise<PushSubscriptionItem[]> => {
     return fetchApi<PushSubscriptionItem[]>('/auth/push-subscriptions/');

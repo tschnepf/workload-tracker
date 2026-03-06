@@ -31,12 +31,23 @@ from .serializers import (
     InAppNotificationsListSerializer,
     InAppMarkReadSerializer,
     InAppClearSerializer,
+    InAppSaveSerializer,
+    InAppSnoozeSerializer,
+    InAppClearAllSerializer,
+    NotificationProjectMuteItemSerializer,
 )
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
-from core.models import InAppNotification, NotificationPreference, WebPushProjectMute, WebPushSubscription
+from core.models import (
+    InAppNotification,
+    NotificationDeliveryLog,
+    NotificationPreference,
+    NotificationProjectMute,
+    WebPushProjectMute,
+    WebPushSubscription,
+)
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
@@ -58,6 +69,7 @@ from core.notification_matrix import (
     normalize_notification_channel_matrix,
     user_legacy_fields_from_matrix,
 )
+from core.notification_policy import CHANNEL_EMAIL, CHANNEL_IN_BROWSER, CHANNEL_MOBILE_PUSH
 
 
 class HotEndpointThrottle(UserRateThrottle):
@@ -818,6 +830,9 @@ class InAppNotificationsView(APIView):
             OpenApiParameter(name='limit', type=int, required=False),
             OpenApiParameter(name='cursor', type=int, required=False),
             OpenApiParameter(name='since', type=str, required=False, description='ISO datetime'),
+            OpenApiParameter(name='eventKey', type=str, required=False),
+            OpenApiParameter(name='status', type=str, required=False, description='unread|read|saved|snoozed|all'),
+            OpenApiParameter(name='projectId', type=int, required=False),
         ],
         responses=InAppNotificationsListSerializer,
     )
@@ -839,13 +854,43 @@ class InAppNotificationsView(APIView):
 
         since_raw = request.query_params.get('since')
         since_dt = parse_datetime(str(since_raw or '').strip()) if since_raw else None
+        event_key = str(request.query_params.get('eventKey') or '').strip()
+        status_filter = str(request.query_params.get('status') or 'all').strip().lower()
+        project_id_raw = request.query_params.get('projectId')
+        project_id = None
+        if project_id_raw not in (None, ''):
+            try:
+                project_id = int(project_id_raw)
+            except Exception:
+                project_id = None
 
         base_qs = InAppNotification.objects.filter(
             user=request.user,
             cleared_at__isnull=True,
             expires_at__gt=now_ts,
         )
-        unread_count = base_qs.filter(read_at__isnull=True).count()
+        if event_key:
+            base_qs = base_qs.filter(event_key=event_key)
+        if project_id is not None:
+            base_qs = base_qs.filter(project_id=project_id)
+
+        if status_filter == 'unread':
+            base_qs = base_qs.filter(read_at__isnull=True).filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now_ts))
+        elif status_filter == 'read':
+            base_qs = base_qs.filter(read_at__isnull=False).filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now_ts))
+        elif status_filter == 'saved':
+            base_qs = base_qs.filter(is_saved=True).filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now_ts))
+        elif status_filter == 'snoozed':
+            base_qs = base_qs.filter(snoozed_until__gt=now_ts)
+        else:
+            base_qs = base_qs.filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now_ts))
+
+        unread_count = InAppNotification.objects.filter(
+            user=request.user,
+            cleared_at__isnull=True,
+            expires_at__gt=now_ts,
+            read_at__isnull=True,
+        ).filter(Q(snoozed_until__isnull=True) | Q(snoozed_until__lte=now_ts)).count()
 
         qs = base_qs
         if cursor is not None:
@@ -866,6 +911,27 @@ class InAppNotificationsView(APIView):
         )
 
 
+def _notification_log_rows(
+    rows: list[InAppNotification],
+    *,
+    status_value: str,
+    reason: str,
+) -> list[NotificationDeliveryLog]:
+    out: list[NotificationDeliveryLog] = []
+    for row in rows:
+        out.append(
+            NotificationDeliveryLog(
+                event_key=row.event_key,
+                user_id=row.user_id,
+                channel=CHANNEL_IN_BROWSER,
+                status=status_value,
+                reason=reason,
+                project_id=row.project_id,
+            )
+        )
+    return out
+
+
 class InAppNotificationsMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -877,12 +943,42 @@ class InAppNotificationsMarkReadView(APIView):
         ser = InAppMarkReadSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
+        opened = bool(ser.validated_data.get('opened', False))
+        now_ts = timezone.now()
+        qs = InAppNotification.objects.filter(
+            user=request.user,
+            id__in=ids,
+            read_at__isnull=True,
+        )
+        rows = list(qs.only('id', 'user_id', 'event_key', 'project_id'))
+        updated = qs.update(read_at=now_ts, updated_at=now_ts)
+        if rows:
+            log_rows = _notification_log_rows(
+                rows,
+                status_value=NotificationDeliveryLog.STATUS_OPENED if opened else NotificationDeliveryLog.STATUS_READ,
+                reason='user_action_opened' if opened else 'user_action_read',
+            )
+            NotificationDeliveryLog.objects.bulk_create(log_rows)
+        return Response({'updated': int(updated or 0)})
+
+
+class InAppNotificationsMarkUnreadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=InAppMarkReadSerializer, responses={200: inline_serializer(
+        name='InAppMarkUnreadResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        ser = InAppMarkReadSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
         now_ts = timezone.now()
         updated = InAppNotification.objects.filter(
             user=request.user,
             id__in=ids,
-            read_at__isnull=True,
-        ).update(read_at=now_ts, updated_at=now_ts)
+            cleared_at__isnull=True,
+        ).update(read_at=None, updated_at=now_ts)
         return Response({'updated': int(updated or 0)})
 
 
@@ -895,12 +991,22 @@ class InAppNotificationsMarkAllReadView(APIView):
     )})
     def post(self, request):
         now_ts = timezone.now()
-        updated = InAppNotification.objects.filter(
+        qs = InAppNotification.objects.filter(
             user=request.user,
             cleared_at__isnull=True,
             expires_at__gt=now_ts,
             read_at__isnull=True,
-        ).update(read_at=now_ts, updated_at=now_ts)
+        )
+        rows = list(qs.only('id', 'user_id', 'event_key', 'project_id'))
+        updated = qs.update(read_at=now_ts, updated_at=now_ts)
+        if rows:
+            NotificationDeliveryLog.objects.bulk_create(
+                _notification_log_rows(
+                    rows,
+                    status_value=NotificationDeliveryLog.STATUS_READ,
+                    reason='user_action_mark_all_read',
+                )
+            )
         return Response({'updated': int(updated or 0)})
 
 
@@ -916,12 +1022,204 @@ class InAppNotificationsClearView(APIView):
         ser.is_valid(raise_exception=True)
         ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
         now_ts = timezone.now()
+        qs = InAppNotification.objects.filter(
+            user=request.user,
+            id__in=ids,
+            cleared_at__isnull=True,
+        )
+        rows = list(qs.only('id', 'user_id', 'event_key', 'project_id'))
+        updated = qs.update(cleared_at=now_ts, updated_at=now_ts)
+        if rows:
+            NotificationDeliveryLog.objects.bulk_create(
+                _notification_log_rows(
+                    rows,
+                    status_value=NotificationDeliveryLog.STATUS_CLEARED,
+                    reason='user_action_clear',
+                )
+            )
+        return Response({'updated': int(updated or 0)})
+
+
+class InAppNotificationsSaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=InAppSaveSerializer, responses={200: inline_serializer(
+        name='InAppSaveResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        ser = InAppSaveSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
+        saved = bool(ser.validated_data.get('saved', False))
+        now_ts = timezone.now()
         updated = InAppNotification.objects.filter(
             user=request.user,
             id__in=ids,
             cleared_at__isnull=True,
-        ).update(cleared_at=now_ts, updated_at=now_ts)
+        ).update(is_saved=saved, updated_at=now_ts)
         return Response({'updated': int(updated or 0)})
+
+
+class InAppNotificationsSnoozeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=InAppSnoozeSerializer, responses={200: inline_serializer(
+        name='InAppSnoozeResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        ser = InAppSnoozeSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
+        until = ser.validated_data['until']
+        now_ts = timezone.now()
+        if until <= now_ts:
+            return Response({'detail': 'until must be in the future'}, status=status.HTTP_400_BAD_REQUEST)
+        updated = InAppNotification.objects.filter(
+            user=request.user,
+            id__in=ids,
+            cleared_at__isnull=True,
+        ).update(snoozed_until=until, updated_at=now_ts)
+        return Response({'updated': int(updated or 0)})
+
+
+class InAppNotificationsClearAllView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=InAppClearAllSerializer, responses={200: inline_serializer(
+        name='InAppClearAllResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        ser = InAppClearAllSerializer(data=request.data if isinstance(request.data, dict) else {})
+        ser.is_valid(raise_exception=True)
+        now_ts = timezone.now()
+        event_key = str(ser.validated_data.get('eventKey') or '').strip()
+        include_read = bool(ser.validated_data.get('includeRead', True))
+        project_id = ser.validated_data.get('projectId')
+
+        qs = InAppNotification.objects.filter(
+            user=request.user,
+            cleared_at__isnull=True,
+            expires_at__gt=now_ts,
+        )
+        if event_key:
+            qs = qs.filter(event_key=event_key)
+        if project_id is not None:
+            qs = qs.filter(project_id=int(project_id))
+        if not include_read:
+            qs = qs.filter(read_at__isnull=True)
+
+        rows = list(qs.only('id', 'user_id', 'event_key', 'project_id')[:5000])
+        updated = qs.update(cleared_at=now_ts, updated_at=now_ts)
+        if rows:
+            NotificationDeliveryLog.objects.bulk_create(
+                _notification_log_rows(
+                    rows,
+                    status_value=NotificationDeliveryLog.STATUS_CLEARED,
+                    reason='user_action_clear_all',
+                )
+            )
+        return Response({'updated': int(updated or 0)})
+
+
+class NotificationProjectMutesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=NotificationProjectMuteItemSerializer(many=True))
+    def get(self, request):
+        rows = NotificationProjectMute.objects.filter(user=request.user).select_related('project').order_by('-updated_at')[:200]
+        payload = [
+            {
+                'id': row.id,
+                'projectId': row.project_id,
+                'projectName': str(getattr(getattr(row, 'project', None), 'name', '') or ''),
+                'mobilePushMutedUntil': row.mobile_push_muted_until,
+                'emailMutedUntil': row.email_muted_until,
+                'inBrowserMutedUntil': row.in_browser_muted_until,
+                'updatedAt': row.updated_at,
+            }
+            for row in rows
+        ]
+        return Response(payload)
+
+    @extend_schema(
+        request=inline_serializer(
+            name='NotificationProjectMuteUpsertRequest',
+            fields={
+                'projectId': serializers.IntegerField(),
+                'mobilePushMutedUntil': serializers.DateTimeField(required=False, allow_null=True),
+                'emailMutedUntil': serializers.DateTimeField(required=False, allow_null=True),
+                'inBrowserMutedUntil': serializers.DateTimeField(required=False, allow_null=True),
+            },
+        ),
+        responses=NotificationProjectMuteItemSerializer,
+    )
+    def post(self, request):
+        data = request.data if isinstance(request.data, dict) else {}
+        try:
+            project_id = int(data.get('projectId'))
+        except Exception:
+            return Response({'detail': 'projectId is required'}, status=status.HTTP_400_BAD_REQUEST)
+        mobile_push_until_raw = data.get('mobilePushMutedUntil')
+        email_until_raw = data.get('emailMutedUntil')
+        in_browser_until_raw = data.get('inBrowserMutedUntil')
+
+        def _parse_optional_dt(value):
+            if value in (None, '',):
+                return None
+            if hasattr(value, 'tzinfo'):
+                return value
+            parsed = parse_datetime(str(value))
+            return parsed
+
+        mobile_push_until = _parse_optional_dt(mobile_push_until_raw)
+        email_until = _parse_optional_dt(email_until_raw)
+        in_browser_until = _parse_optional_dt(in_browser_until_raw)
+        if (
+            mobile_push_until_raw not in (None, '')
+            and mobile_push_until is None
+        ) or (
+            email_until_raw not in (None, '')
+            and email_until is None
+        ) or (
+            in_browser_until_raw not in (None, '')
+            and in_browser_until is None
+        ):
+            return Response({'detail': 'Invalid datetime format for mute-until fields.'}, status=status.HTTP_400_BAD_REQUEST)
+        mute, _ = NotificationProjectMute.objects.update_or_create(
+            user=request.user,
+            project_id=project_id,
+            defaults={
+                'mobile_push_muted_until': mobile_push_until,
+                'email_muted_until': email_until,
+                'in_browser_muted_until': in_browser_until,
+            },
+        )
+        return Response(
+            {
+                'id': mute.id,
+                'projectId': mute.project_id,
+                'projectName': '',
+                'mobilePushMutedUntil': mute.mobile_push_muted_until,
+                'emailMutedUntil': mute.email_muted_until,
+                'inBrowserMutedUntil': mute.in_browser_muted_until,
+                'updatedAt': mute.updated_at,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class NotificationProjectMuteDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={204: None})
+    def delete(self, request, mute_id: int):
+        deleted, _ = NotificationProjectMute.objects.filter(user=request.user, id=mute_id).delete()
+        if deleted == 0:
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AdminAuditLogsView(APIView):

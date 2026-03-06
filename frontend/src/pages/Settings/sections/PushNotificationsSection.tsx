@@ -6,10 +6,14 @@ import { useSettingsData } from '../SettingsDataContext';
 import { isAdminUser } from '@/utils/roleAccess';
 import { showToast } from '@/lib/toastBus';
 import {
+  notificationAnalyticsApi,
+  notificationTemplatesApi,
   webPushGlobalSettingsApi,
   webPushVapidKeysApi,
   type NotificationChannelMatrix,
   type NotificationEventCatalogItem,
+  type NotificationTemplate,
+  type NotificationAnalyticsResponse,
   type WebPushVapidKeysStatus,
 } from '@/services/api';
 
@@ -112,6 +116,20 @@ const PushNotificationsSection: React.FC = () => {
   const [initialDeliverableScope, setInitialDeliverableScope] = React.useState<'next_upcoming' | 'all_upcoming'>('next_upcoming');
   const [deliverableWithinTwoWeeksOnly, setDeliverableWithinTwoWeeksOnly] = React.useState(false);
   const [initialDeliverableWithinTwoWeeksOnly, setInitialDeliverableWithinTwoWeeksOnly] = React.useState(false);
+  const [activeWebSuppressionEnabled, setActiveWebSuppressionEnabled] = React.useState(true);
+  const [initialActiveWebSuppressionEnabled, setInitialActiveWebSuppressionEnabled] = React.useState(true);
+  const [activeWebWindowSeconds, setActiveWebWindowSeconds] = React.useState(120);
+  const [initialActiveWebWindowSeconds, setInitialActiveWebWindowSeconds] = React.useState(120);
+  const [inAppRetentionDays, setInAppRetentionDays] = React.useState(7);
+  const [initialInAppRetentionDays, setInitialInAppRetentionDays] = React.useState(7);
+  const [savedInAppRetentionDays, setSavedInAppRetentionDays] = React.useState(90);
+  const [initialSavedInAppRetentionDays, setInitialSavedInAppRetentionDays] = React.useState(90);
+  const [templates, setTemplates] = React.useState<NotificationTemplate[]>([]);
+  const [initialTemplates, setInitialTemplates] = React.useState<NotificationTemplate[]>([]);
+  const [templatesBusy, setTemplatesBusy] = React.useState(false);
+  const [analytics, setAnalytics] = React.useState<NotificationAnalyticsResponse | null>(null);
+  const [analyticsDays, setAnalyticsDays] = React.useState(7);
+  const [analyticsBusy, setAnalyticsBusy] = React.useState(false);
   const [vapidStatus, setVapidStatus] = React.useState<WebPushVapidKeysStatus | null>(null);
   const [vapidSubject, setVapidSubject] = React.useState('');
 
@@ -120,9 +138,11 @@ const PushNotificationsSection: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [globalData, keyData] = await Promise.all([
+      const [globalData, keyData, templatesData, analyticsData] = await Promise.all([
         webPushGlobalSettingsApi.get(),
         webPushVapidKeysApi.get(),
+        notificationTemplatesApi.list(),
+        notificationAnalyticsApi.get(7),
       ]);
       setEnabled(Boolean(globalData.enabled));
       setInitialEnabled(Boolean(globalData.enabled));
@@ -153,6 +173,21 @@ const PushNotificationsSection: React.FC = () => {
       const withinTwoWeeks = Boolean(globalData.pushDeliverableDateChangeWithinTwoWeeksOnly ?? false);
       setDeliverableWithinTwoWeeksOnly(withinTwoWeeks);
       setInitialDeliverableWithinTwoWeeksOnly(withinTwoWeeks);
+      const nextSuppressionEnabled = Boolean(globalData.activeWebSuppressionEnabled ?? true);
+      setActiveWebSuppressionEnabled(nextSuppressionEnabled);
+      setInitialActiveWebSuppressionEnabled(nextSuppressionEnabled);
+      const nextActiveWindow = Math.max(30, Number(globalData.activeWebWindowSeconds ?? 120));
+      setActiveWebWindowSeconds(nextActiveWindow);
+      setInitialActiveWebWindowSeconds(nextActiveWindow);
+      const nextInAppRetention = Math.max(1, Number(globalData.inAppRetentionDays ?? 7));
+      setInAppRetentionDays(nextInAppRetention);
+      setInitialInAppRetentionDays(nextInAppRetention);
+      const nextSavedRetention = Math.max(7, Number(globalData.savedInAppRetentionDays ?? 90));
+      setSavedInAppRetentionDays(nextSavedRetention);
+      setInitialSavedInAppRetentionDays(nextSavedRetention);
+      setTemplates(templatesData || []);
+      setInitialTemplates(templatesData || []);
+      setAnalytics(analyticsData || null);
       setVapidStatus(keyData);
       setVapidSubject(keyData.subject || '');
     } catch (e: any) {
@@ -193,6 +228,10 @@ const PushNotificationsSection: React.FC = () => {
         pushSubscriptionHealthcheckEnabled: featureToggles.pushSubscriptionHealthcheckEnabled,
         pushDeliverableDateChangeScope: deliverableScope,
         pushDeliverableDateChangeWithinTwoWeeksOnly: deliverableWithinTwoWeeksOnly,
+        activeWebSuppressionEnabled,
+        activeWebWindowSeconds,
+        inAppRetentionDays,
+        savedInAppRetentionDays,
         notificationChannelMatrix: channelMatrix,
       });
       setEnabled(Boolean(data.enabled));
@@ -222,11 +261,63 @@ const PushNotificationsSection: React.FC = () => {
       const withinTwoWeeks = Boolean(data.pushDeliverableDateChangeWithinTwoWeeksOnly ?? false);
       setDeliverableWithinTwoWeeksOnly(withinTwoWeeks);
       setInitialDeliverableWithinTwoWeeksOnly(withinTwoWeeks);
+      const nextSuppressionEnabled = Boolean(data.activeWebSuppressionEnabled ?? true);
+      setActiveWebSuppressionEnabled(nextSuppressionEnabled);
+      setInitialActiveWebSuppressionEnabled(nextSuppressionEnabled);
+      const nextActiveWindow = Math.max(30, Number(data.activeWebWindowSeconds ?? 120));
+      setActiveWebWindowSeconds(nextActiveWindow);
+      setInitialActiveWebWindowSeconds(nextActiveWindow);
+      const nextInAppRetention = Math.max(1, Number(data.inAppRetentionDays ?? 7));
+      setInAppRetentionDays(nextInAppRetention);
+      setInitialInAppRetentionDays(nextInAppRetention);
+      const nextSavedRetention = Math.max(7, Number(data.savedInAppRetentionDays ?? 90));
+      setSavedInAppRetentionDays(nextSavedRetention);
+      setInitialSavedInAppRetentionDays(nextSavedRetention);
       showToast(`Notifications ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
     } catch (e: any) {
       setError(e?.message || 'Failed to update notification settings');
     } finally {
       setSavingGlobal(false);
+    }
+  };
+
+  const updateTemplateField = (
+    eventKey: string,
+    field: keyof NotificationTemplate,
+    value: string | number,
+  ) => {
+    setTemplates((prev) => prev.map((row) => (
+      row.eventKey === eventKey
+        ? ({ ...row, [field]: value } as NotificationTemplate)
+        : row
+    )));
+  };
+
+  const saveTemplates = async () => {
+    setTemplatesBusy(true);
+    setError(null);
+    try {
+      const saved = await notificationTemplatesApi.update(templates);
+      setTemplates(saved || []);
+      setInitialTemplates(saved || []);
+      showToast('Notification templates saved', 'success');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save templates');
+    } finally {
+      setTemplatesBusy(false);
+    }
+  };
+
+  const refreshAnalytics = async () => {
+    setAnalyticsBusy(true);
+    setError(null);
+    try {
+      const data = await notificationAnalyticsApi.get(analyticsDays);
+      setAnalytics(data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load notification analytics');
+    } finally {
+      setAnalyticsBusy(false);
     }
   };
 
@@ -266,7 +357,12 @@ const PushNotificationsSection: React.FC = () => {
     || matrixChanged(channelMatrix, initialChannelMatrix)
     || deliverableScope !== initialDeliverableScope
     || deliverableWithinTwoWeeksOnly !== initialDeliverableWithinTwoWeeksOnly
+    || activeWebSuppressionEnabled !== initialActiveWebSuppressionEnabled
+    || activeWebWindowSeconds !== initialActiveWebWindowSeconds
+    || inAppRetentionDays !== initialInAppRetentionDays
+    || savedInAppRetentionDays !== initialSavedInAppRetentionDays
   );
+  const templatesDirty = JSON.stringify(templates) !== JSON.stringify(initialTemplates);
 
   const hasVapidKey = Boolean(vapidStatus?.configured);
   const busy = loading || savingGlobal || savingKeys;
@@ -466,6 +562,182 @@ const PushNotificationsSection: React.FC = () => {
               Only include date changes within the next 2 weeks
             </label>
           </div>
+
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">Active-Web Suppression</div>
+          <label className="flex items-center gap-3 text-sm text-[var(--text)]">
+            <input
+              type="checkbox"
+              checked={activeWebSuppressionEnabled}
+              onChange={(e) => setActiveWebSuppressionEnabled(e.target.checked)}
+              disabled={busy}
+            />
+            Prefer in-browser over push/email for active web users
+          </label>
+          <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+            <span className="text-xs text-[var(--muted)]">Active window (seconds):</span>
+            <input
+              type="number"
+              min={30}
+              max={3600}
+              step={10}
+              className="w-28 bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+              value={activeWebWindowSeconds}
+              disabled={busy || !activeWebSuppressionEnabled}
+              onChange={(e) => setActiveWebWindowSeconds(Math.max(30, Math.min(3600, Number(e.target.value) || 120)))}
+            />
+          </div>
+
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">Retention</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+              <span className="text-xs text-[var(--muted)]">In-app retention days:</span>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                className="w-24 bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+                value={inAppRetentionDays}
+                disabled={busy}
+                onChange={(e) => setInAppRetentionDays(Math.max(1, Math.min(365, Number(e.target.value) || 7)))}
+              />
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+              <span className="text-xs text-[var(--muted)]">Saved retention days:</span>
+              <input
+                type="number"
+                min={7}
+                max={3650}
+                step={1}
+                className="w-24 bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+                value={savedInAppRetentionDays}
+                disabled={busy}
+                onChange={(e) => setSavedInAppRetentionDays(Math.max(7, Math.min(3650, Number(e.target.value) || 90)))}
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-[var(--border)]" />
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">Notification Templates</div>
+          <div className="text-xs text-[var(--muted)]">
+            Edit per-event copy for Mobile Push, Email, and In Browser notifications.
+          </div>
+          <div className="space-y-3">
+            {templates.map((template) => (
+              <div key={template.eventKey} className="border border-[var(--border)] rounded p-3 space-y-2">
+                <div className="text-sm font-medium text-[var(--text)]">{template.eventKey}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <Input
+                    label="Push title"
+                    value={template.pushTitleTemplate}
+                    onChange={(e) => updateTemplateField(template.eventKey, 'pushTitleTemplate', (e.target as HTMLInputElement).value)}
+                    disabled={templatesBusy}
+                  />
+                  <Input
+                    label="Push body"
+                    value={template.pushBodyTemplate}
+                    onChange={(e) => updateTemplateField(template.eventKey, 'pushBodyTemplate', (e.target as HTMLInputElement).value)}
+                    disabled={templatesBusy}
+                  />
+                  <Input
+                    label="Email subject"
+                    value={template.emailSubjectTemplate}
+                    onChange={(e) => updateTemplateField(template.eventKey, 'emailSubjectTemplate', (e.target as HTMLInputElement).value)}
+                    disabled={templatesBusy}
+                  />
+                  <Input
+                    label="Email body"
+                    value={template.emailBodyTemplate}
+                    onChange={(e) => updateTemplateField(template.eventKey, 'emailBodyTemplate', (e.target as HTMLInputElement).value)}
+                    disabled={templatesBusy}
+                  />
+                  <Input
+                    label="In-app title"
+                    value={template.inAppTitleTemplate}
+                    onChange={(e) => updateTemplateField(template.eventKey, 'inAppTitleTemplate', (e.target as HTMLInputElement).value)}
+                    disabled={templatesBusy}
+                  />
+                  <Input
+                    label="In-app body"
+                    value={template.inAppBodyTemplate}
+                    onChange={(e) => updateTemplateField(template.eventKey, 'inAppBodyTemplate', (e.target as HTMLInputElement).value)}
+                    disabled={templatesBusy}
+                  />
+                  <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <span className="text-xs text-[var(--muted)]">Push TTL (s):</span>
+                    <input
+                      type="number"
+                      min={60}
+                      max={2419200}
+                      className="w-28 bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+                      value={template.pushTtlSeconds}
+                      onChange={(e) => updateTemplateField(template.eventKey, 'pushTtlSeconds', Math.max(60, Math.min(2419200, Number(e.target.value) || 3600)))}
+                      disabled={templatesBusy}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <span className="text-xs text-[var(--muted)]">Urgency:</span>
+                    <select
+                      className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+                      value={template.pushUrgency}
+                      onChange={(e) => updateTemplateField(template.eventKey, 'pushUrgency', (e.target as HTMLSelectElement).value)}
+                      disabled={templatesBusy}
+                    >
+                      <option value="very-low">very-low</option>
+                      <option value="low">low</option>
+                      <option value="normal">normal</option>
+                      <option value="high">high</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <span className="text-xs text-[var(--muted)]">Topic mode:</span>
+                    <select
+                      className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+                      value={template.pushTopicMode}
+                      onChange={(e) => updateTemplateField(template.eventKey, 'pushTopicMode', (e.target as HTMLSelectElement).value)}
+                      disabled={templatesBusy}
+                    >
+                      <option value="none">none</option>
+                      <option value="event">event</option>
+                      <option value="project">project</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div>
+              <Button variant="secondary" size="sm" onClick={saveTemplates} disabled={templatesBusy || !templatesDirty}>
+                {templatesBusy ? 'Saving...' : 'Save Templates'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-[var(--border)]" />
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">Delivery Analytics</div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={90}
+              className="w-20 bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
+              value={analyticsDays}
+              onChange={(e) => setAnalyticsDays(Math.max(1, Math.min(90, Number(e.target.value) || 7)))}
+              disabled={analyticsBusy}
+            />
+            <Button variant="secondary" size="sm" onClick={refreshAnalytics} disabled={analyticsBusy}>
+              {analyticsBusy ? 'Loading...' : 'Refresh Analytics'}
+            </Button>
+          </div>
+          {analytics ? (
+            <div className="text-xs text-[var(--muted)]">
+              Window: {analytics.windowDays} day(s) | Total events: {analytics.total}
+            </div>
+          ) : null}
+          {analytics?.byChannel?.length ? (
+            <div className="text-xs text-[var(--muted)]">
+              {analytics.byChannel.map((row) => `${row.channel}: ${row.count}`).join(' | ')}
+            </div>
+          ) : null}
 
           <div className="pt-2 border-t border-[var(--border)]" />
           <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">VAPID Keys</div>

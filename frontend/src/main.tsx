@@ -85,6 +85,7 @@ const SetPassword = React.lazy(() => import('./pages/Auth/SetPassword'))
 const SsoComplete = React.lazy(() => import('./pages/Auth/SsoComplete'))
 const OfflinePage = React.lazy(() => import('./pages/Offline/Offline'))
 const Profile = React.lazy(() => import('./pages/Profile/Profile'))
+const NotificationsPage = React.lazy(() => import('./pages/Notifications/NotificationsPage'))
 const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'))
 const PersonalDashboard = React.lazy(() => import('./pages/Personal/PersonalDashboard'))
 
@@ -108,6 +109,7 @@ const router = createBrowserRouter([
       // Protected routes
       { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
       { path: 'profile', element: <RequireAuth><Profile /></RequireAuth> },
+      { path: 'notifications', element: <RequireAuth><NotificationsPage /></RequireAuth> },
       { path: 'people', element: <RequireAuth><PeopleList /></RequireAuth> },
       { path: 'people/new', element: <RequireAuth><PersonForm /></RequireAuth> },
       { path: 'people/:id/edit', element: <RequireAuth><PersonForm /></RequireAuth> },

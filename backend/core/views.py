@@ -7,13 +7,15 @@ from rest_framework import serializers, status
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Q, Value
+from django.db.models import Q, Value, Count
 from django.db.models.functions import Coalesce, Lower
 import hashlib
 import os
 import json
 from django.db import transaction
 from decimal import Decimal
+from datetime import timedelta
+from django.utils import timezone
 
 from .serializers import (
     PreDeliverableGlobalSettingsItemSerializer,
@@ -24,6 +26,7 @@ from .serializers import (
     DeliverablePhaseMappingSettingsSerializer,
     QATaskSettingsSerializer,
     WebPushGlobalSettingsSerializer,
+    NotificationTemplateSerializer,
     WebPushVapidKeysStatusSerializer,
     WebPushVapidKeysGenerateSerializer,
     NetworkGraphSettingsSerializer,
@@ -39,6 +42,8 @@ from .models import (
     QATaskSettings,
     WebPushGlobalSettings,
     WebPushVapidKeys,
+    NotificationDeliveryLog,
+    NotificationTemplate,
     TaskProgressColorSettings,
     NetworkGraphSettings,
     AutoHoursRoleSetting,
@@ -46,6 +51,7 @@ from .models import (
     AutoHoursTemplate,
     AutoHoursTemplateRoleSetting,
 )
+from .notification_matrix import EVENT_CATALOG
 from .webpush import (
     web_push_globally_enabled,
     web_push_keys_configured,
@@ -2708,6 +2714,161 @@ class WebPushGlobalSettingsView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(WebPushGlobalSettingsSerializer(obj).data)
+
+
+class NotificationTemplatesView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @staticmethod
+    def _default_template_payload(event_key: str, label: str, description: str) -> dict:
+        subject = f"{label} - Workload Tracker"
+        body = description or label
+        return {
+            'event_key': event_key,
+            'push_title_template': label,
+            'push_body_template': body,
+            'email_subject_template': subject,
+            'email_body_template': body,
+            'in_app_title_template': label,
+            'in_app_body_template': body,
+            'push_ttl_seconds': 3600,
+            'push_urgency': NotificationTemplate.PUSH_URGENCY_NORMAL,
+            'push_topic_mode': NotificationTemplate.PUSH_TOPIC_EVENT,
+        }
+
+    @classmethod
+    def _ensure_seed_templates(cls):
+        existing = set(NotificationTemplate.objects.values_list('event_key', flat=True))
+        missing_rows = []
+        for item in EVENT_CATALOG:
+            event_key = str(item.get('key') or '').strip()
+            if not event_key or event_key in existing:
+                continue
+            missing_rows.append(NotificationTemplate(**cls._default_template_payload(
+                event_key,
+                str(item.get('label') or event_key),
+                str(item.get('description') or ''),
+            )))
+        if missing_rows:
+            NotificationTemplate.objects.bulk_create(missing_rows, ignore_conflicts=True)
+
+    @extend_schema(responses=NotificationTemplateSerializer(many=True))
+    def get(self, request):
+        self._ensure_seed_templates()
+        rows = NotificationTemplate.objects.order_by('event_key')
+        return Response(NotificationTemplateSerializer(rows, many=True).data)
+
+    @extend_schema(
+        request=inline_serializer(
+            name='NotificationTemplatesPutRequest',
+            fields={
+                'templates': NotificationTemplateSerializer(many=True, required=False),
+            },
+        ),
+        responses=NotificationTemplateSerializer(many=True),
+    )
+    def put(self, request):
+        payload = request.data
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict) and isinstance(payload.get('templates'), list):
+            items = payload.get('templates')
+        else:
+            return Response(
+                {'detail': 'Expected request body to be a list or {"templates":[...]}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = NotificationTemplateSerializer(data=items, many=True, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_keys: set[str] = set()
+        with transaction.atomic():
+            for item in serializer.validated_data:
+                event_key = str(item.get('event_key') or '').strip()
+                if not event_key:
+                    continue
+                defaults = dict(item)
+                defaults.pop('event_key', None)
+                defaults['updated_by'] = request.user if request.user.is_authenticated else None
+                NotificationTemplate.objects.update_or_create(
+                    event_key=event_key,
+                    defaults=defaults,
+                )
+                updated_keys.add(event_key)
+        if not updated_keys:
+            return Response([], status=status.HTTP_200_OK)
+        rows = NotificationTemplate.objects.filter(event_key__in=sorted(updated_keys)).order_by('event_key')
+        return Response(NotificationTemplateSerializer(rows, many=True).data)
+
+
+class NotificationAnalyticsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='days', type=int, required=False, description='Window size in days (1-90)'),
+        ],
+        responses=inline_serializer(
+            name='NotificationAnalyticsResponse',
+            fields={
+                'windowDays': serializers.IntegerField(),
+                'generatedAt': serializers.DateTimeField(),
+                'total': serializers.IntegerField(),
+                'byEventChannelStatus': serializers.ListField(child=serializers.DictField()),
+                'byChannel': serializers.ListField(child=serializers.DictField()),
+                'byStatus': serializers.ListField(child=serializers.DictField()),
+            },
+        ),
+    )
+    def get(self, request):
+        try:
+            window_days = int(request.query_params.get('days') or 7)
+        except Exception:
+            window_days = 7
+        window_days = max(1, min(90, window_days))
+        since = timezone.now() - timedelta(days=window_days)
+
+        qs = NotificationDeliveryLog.objects.filter(created_at__gte=since)
+        grouped_rows = list(
+            qs.values('event_key', 'channel', 'status')
+            .annotate(count=Count('id'))
+            .order_by('event_key', 'channel', 'status')
+        )
+        by_event_channel_status = [
+            {
+                'eventKey': row['event_key'],
+                'channel': row['channel'],
+                'status': row['status'],
+                'count': int(row['count']),
+            }
+            for row in grouped_rows
+        ]
+        by_channel_rows = list(
+            qs.values('channel')
+            .annotate(count=Count('id'))
+            .order_by('channel')
+        )
+        by_status_rows = list(
+            qs.values('status')
+            .annotate(count=Count('id'))
+            .order_by('status')
+        )
+        return Response(
+            {
+                'windowDays': window_days,
+                'generatedAt': timezone.now(),
+                'total': int(sum(int(row['count']) for row in grouped_rows)),
+                'byEventChannelStatus': by_event_channel_status,
+                'byChannel': [
+                    {'channel': row['channel'], 'count': int(row['count'])}
+                    for row in by_channel_rows
+                ],
+                'byStatus': [
+                    {'status': row['status'], 'count': int(row['count'])}
+                    for row in by_status_rows
+                ],
+            }
+        )
 
 
 class WebPushVapidKeysView(APIView):

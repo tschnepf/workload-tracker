@@ -9,6 +9,7 @@ import {
   systemApi,
   type NotificationChannelMatrix,
   type NotificationPreferences,
+  type NotificationProjectMuteItem,
   type PushSubscriptionItem,
 } from '@/services/api';
 import { useUpdatePerson } from '@/hooks/usePeople';
@@ -82,6 +83,9 @@ const Profile: React.FC = () => {
     subscriptionHealthcheck: true,
   });
   const [pushSubscriptions, setPushSubscriptions] = useState<PushSubscriptionItem[]>([]);
+  const [projectMutes, setProjectMutes] = useState<NotificationProjectMuteItem[]>([]);
+  const [projectMuteIdInput, setProjectMuteIdInput] = useState('');
+  const [projectMuteBusy, setProjectMuteBusy] = useState(false);
   const browserTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
@@ -177,6 +181,12 @@ const Profile: React.FC = () => {
       } catch {
         // ignore subscription list failures
       }
+      try {
+        const mutes = await authApi.listNotificationProjectMutes();
+        if (!cancelled) setProjectMutes(mutes);
+      } catch {
+        // ignore mute list failures
+      }
 
       if (!cancelled) {
         const supported = (
@@ -239,6 +249,15 @@ const Profile: React.FC = () => {
       setPushSubscriptions(subs);
     } catch {
       // ignore list refresh failure
+    }
+  }
+
+  async function refreshProjectMutes() {
+    try {
+      const mutes = await authApi.listNotificationProjectMutes();
+      setProjectMutes(mutes);
+    } catch {
+      // ignore
     }
   }
 
@@ -764,6 +783,74 @@ const Profile: React.FC = () => {
                 />
                 Allow automatic cleanup of stale push subscriptions
               </label>
+
+              <div className="pt-2 border-t border-[var(--border)]">
+                <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide mb-2">
+                  Project Mutes
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="number"
+                    value={projectMuteIdInput}
+                    onChange={(e) => setProjectMuteIdInput((e.target as HTMLInputElement).value)}
+                    placeholder="Project ID"
+                  />
+                  <Button
+                    disabled={projectMuteBusy || !projectMuteIdInput}
+                    onClick={async () => {
+                      const projectId = Number(projectMuteIdInput || 0);
+                      if (!projectId || !Number.isFinite(projectId)) {
+                        setToast({ message: 'Enter a valid Project ID', type: 'warning' });
+                        return;
+                      }
+                      setProjectMuteBusy(true);
+                      try {
+                        const until = new Date(Date.now() + (24 * 60 * 60 * 1000)).toISOString();
+                        await authApi.upsertNotificationProjectMute({
+                          projectId,
+                          mobilePushMutedUntil: until,
+                          emailMutedUntil: until,
+                          inBrowserMutedUntil: until,
+                        });
+                        setProjectMuteIdInput('');
+                        await refreshProjectMutes();
+                        setToast({ message: 'Project muted for 24 hours', type: 'success' });
+                      } catch (err: any) {
+                        setToast({ message: err?.message || 'Failed to save project mute', type: 'error' });
+                      } finally {
+                        setProjectMuteBusy(false);
+                      }
+                    }}
+                  >
+                    {projectMuteBusy ? 'Saving…' : 'Mute Project 24h'}
+                  </Button>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {projectMutes.length === 0 ? (
+                    <div className="text-xs text-[var(--muted)]">No project mutes configured.</div>
+                  ) : (
+                    projectMutes.map((mute) => (
+                      <div key={mute.id} className="flex items-center justify-between gap-2 text-xs text-[var(--text)]">
+                        <span>
+                          Project {mute.projectId}{mute.projectName ? ` - ${mute.projectName}` : ''} (push {mute.mobilePushMutedUntil ? new Date(mute.mobilePushMutedUntil).toLocaleString() : 'off'})
+                        </span>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await authApi.deleteNotificationProjectMute(mute.id);
+                              await refreshProjectMutes();
+                            } catch {
+                              setToast({ message: 'Failed to delete project mute', type: 'error' });
+                            }
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
               <div className="flex items-center gap-2 pt-2">
                 <Button

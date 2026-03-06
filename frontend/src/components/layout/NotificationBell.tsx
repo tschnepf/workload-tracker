@@ -1,20 +1,43 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
 import { useInAppNotifications } from '@/hooks/useInAppNotifications';
-import type { InAppNotificationItem } from '@/services/api';
+import type { InAppNotificationItem, InAppNotificationStatusFilter } from '@/services/api';
+
+const TABS: Array<{ key: InAppNotificationStatusFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+  { key: 'saved', label: 'Saved' },
+  { key: 'snoozed', label: 'Snoozed' },
+  { key: 'read', label: 'Read' },
+];
 
 const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
+  const [statusTab, setStatusTab] = React.useState<InAppNotificationStatusFilter>('all');
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const {
     items,
     unreadCount,
     loading,
+    filters,
+    setFilters,
     markRead,
+    markUnread,
     markAllRead,
+    save,
+    snooze,
     clear,
-  } = useInAppNotifications({ enabled, pollMs: 60000, limit: 50 });
+    clearAll,
+  } = useInAppNotifications({
+    enabled,
+    panelOpen: open,
+    pollVisibleMs: 60000,
+    pollHiddenMs: 180000,
+    pollPanelOpenMs: 15000,
+    limit: 50,
+    initialFilters: { status: 'all' },
+  });
 
   React.useEffect(() => {
     const onDocumentClick = (event: MouseEvent) => {
@@ -27,9 +50,16 @@ const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
     return () => document.removeEventListener('click', onDocumentClick);
   }, []);
 
+  React.useEffect(() => {
+    setFilters({
+      ...filters,
+      status: statusTab,
+    });
+  }, [statusTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openNotification = async (item: InAppNotificationItem) => {
     try {
-      if (!item.readAt) await markRead([item.id]);
+      if (!item.readAt) await markRead([item.id], true);
     } catch {
       // non-blocking
     }
@@ -42,12 +72,12 @@ const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
     navigate(target);
   };
 
-  const clearAll = async () => {
-    const allIds = items
-      .map((item) => Number(item.id))
-      .filter((id) => Number.isFinite(id) && id > 0);
-    if (!allIds.length) return;
-    await clear(allIds);
+  const clearAllCurrent = async () => {
+    await clearAll({
+      eventKey: filters.eventKey,
+      projectId: filters.projectId ?? undefined,
+      includeRead: statusTab !== 'unread',
+    });
   };
 
   return (
@@ -70,7 +100,7 @@ const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
       </button>
 
       {open ? (
-        <div className="absolute right-0 mt-2 w-[360px] max-w-[90vw] rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-[420px] max-w-[95vw] rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-lg z-50">
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
             <div className="text-sm font-semibold text-[var(--text)]">Notifications</div>
             <div className="flex items-center gap-3">
@@ -85,43 +115,107 @@ const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
               <button
                 type="button"
                 className="text-xs text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-50"
-                onClick={() => { void clearAll(); }}
+                onClick={() => { void clearAllCurrent(); }}
                 disabled={loading || items.length <= 0}
               >
                 Clear all
               </button>
             </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto scrollbar-theme">
+
+          <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 overflow-x-auto scrollbar-theme">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`px-2 py-1 rounded text-xs border ${
+                    statusTab === tab.key
+                      ? 'border-[var(--text)] text-[var(--text)]'
+                      : 'border-[var(--border)] text-[var(--muted)]'
+                  }`}
+                  onClick={() => setStatusTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="text-xs text-[var(--muted)] hover:text-[var(--text)] whitespace-nowrap"
+              onClick={() => {
+                setOpen(false);
+                navigate('/notifications');
+              }}
+            >
+              View all
+            </button>
+          </div>
+
+          <div className="max-h-[480px] overflow-y-auto scrollbar-theme">
             {!items.length ? (
-              <div className="px-3 py-4 text-sm text-[var(--muted)]">No recent notifications.</div>
+              <div className="px-3 py-4 text-sm text-[var(--muted)]">No notifications in this view.</div>
             ) : (
               <ul>
                 {items.map((item) => (
                   <li key={item.id} className="border-b border-[var(--border)] last:border-b-0">
-                    <div className="flex items-start gap-2 px-3 py-2">
+                    <div className="px-3 py-2">
                       <button
                         type="button"
-                        className={`text-left flex-1 ${item.readAt ? 'opacity-80' : ''}`}
+                        className={`text-left w-full ${item.readAt ? 'opacity-80' : ''}`}
                         onClick={() => { void openNotification(item); }}
                       >
                         <div className="text-sm text-[var(--text)] font-medium">{item.title}</div>
                         {item.body ? <div className="text-xs text-[var(--muted)] mt-0.5">{item.body}</div> : null}
                         <div className="text-[11px] text-[var(--muted)] mt-1">{new Date(item.createdAt).toLocaleString()}</div>
                       </button>
-                      <button
-                        type="button"
-                        className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void clear([item.id]);
-                        }}
-                        aria-label="Clear notification"
-                        title="Clear"
-                      >
-                        Clear
-                      </button>
+                      <div className="flex items-center gap-3 mt-2">
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void (item.readAt ? markUnread([item.id]) : markRead([item.id], false));
+                          }}
+                        >
+                          {item.readAt ? 'Mark unread' : 'Mark read'}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void save([item.id], !item.isSaved);
+                          }}
+                        >
+                          {item.isSaved ? 'Unsave' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const until = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+                            void snooze([item.id], until);
+                          }}
+                        >
+                          Snooze 1h
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void clear([item.id]);
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
                     </div>
                   </li>
                 ))}

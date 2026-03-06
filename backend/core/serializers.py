@@ -19,6 +19,7 @@ from .models import (
     NetworkGraphSettings,
     TaskProgressColorSettings,
     WebPushGlobalSettings,
+    NotificationTemplate,
     _normalize_task_progress_ranges,
 )
 from projects.models import Project
@@ -256,6 +257,28 @@ class WebPushGlobalSettingsSerializer(serializers.ModelSerializer):
         source='push_deliverable_date_change_within_two_weeks_only',
         required=False,
     )
+    activeWebSuppressionEnabled = serializers.BooleanField(
+        source='active_web_suppression_enabled',
+        required=False,
+    )
+    activeWebWindowSeconds = serializers.IntegerField(
+        source='active_web_window_seconds',
+        min_value=30,
+        max_value=3600,
+        required=False,
+    )
+    inAppRetentionDays = serializers.IntegerField(
+        source='in_app_retention_days',
+        min_value=1,
+        max_value=365,
+        required=False,
+    )
+    savedInAppRetentionDays = serializers.IntegerField(
+        source='saved_in_app_retention_days',
+        min_value=7,
+        max_value=3650,
+        required=False,
+    )
     notificationChannelMatrix = serializers.JSONField(
         source='notification_channel_matrix',
         required=False,
@@ -349,6 +372,10 @@ class WebPushGlobalSettingsSerializer(serializers.ModelSerializer):
             'pushDeliverableDateChangesEnabled',
             'pushDeliverableDateChangeScope',
             'pushDeliverableDateChangeWithinTwoWeeksOnly',
+            'activeWebSuppressionEnabled',
+            'activeWebWindowSeconds',
+            'inAppRetentionDays',
+            'savedInAppRetentionDays',
             'notificationChannelMatrix',
             'notificationEventCatalog',
             'updatedAt',
@@ -362,6 +389,44 @@ class WebPushVapidKeysStatusSerializer(serializers.Serializer):
     publicKeyMasked = serializers.CharField(allow_null=True, required=False)
     privateKeyMasked = serializers.CharField(allow_null=True, required=False)
     updatedAt = serializers.DateTimeField(allow_null=True, required=False)
+
+
+class NotificationTemplateSerializer(serializers.ModelSerializer):
+    eventKey = serializers.CharField(source='event_key')
+    pushTitleTemplate = serializers.CharField(source='push_title_template', allow_blank=True, required=False)
+    pushBodyTemplate = serializers.CharField(source='push_body_template', allow_blank=True, required=False)
+    emailSubjectTemplate = serializers.CharField(source='email_subject_template', allow_blank=True, required=False)
+    emailBodyTemplate = serializers.CharField(source='email_body_template', allow_blank=True, required=False)
+    inAppTitleTemplate = serializers.CharField(source='in_app_title_template', allow_blank=True, required=False)
+    inAppBodyTemplate = serializers.CharField(source='in_app_body_template', allow_blank=True, required=False)
+    pushTtlSeconds = serializers.IntegerField(source='push_ttl_seconds', min_value=60, max_value=2419200, required=False)
+    pushUrgency = serializers.ChoiceField(
+        source='push_urgency',
+        choices=[choice[0] for choice in NotificationTemplate.PUSH_URGENCY_CHOICES],
+        required=False,
+    )
+    pushTopicMode = serializers.ChoiceField(
+        source='push_topic_mode',
+        choices=[choice[0] for choice in NotificationTemplate.PUSH_TOPIC_MODE_CHOICES],
+        required=False,
+    )
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = NotificationTemplate
+        fields = [
+            'eventKey',
+            'pushTitleTemplate',
+            'pushBodyTemplate',
+            'emailSubjectTemplate',
+            'emailBodyTemplate',
+            'inAppTitleTemplate',
+            'inAppBodyTemplate',
+            'pushTtlSeconds',
+            'pushUrgency',
+            'pushTopicMode',
+            'updatedAt',
+        ]
 
 
 class WebPushVapidKeysGenerateSerializer(serializers.Serializer):
