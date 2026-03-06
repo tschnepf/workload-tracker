@@ -42,6 +42,14 @@ const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
     navigate(target);
   };
 
+  const clearAll = async () => {
+    const allIds = items
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!allIds.length) return;
+    await clear(allIds);
+  };
+
   return (
     <div className="relative" ref={rootRef}>
       <button
@@ -65,14 +73,24 @@ const NotificationBell: React.FC<{ enabled: boolean }> = ({ enabled }) => {
         <div className="absolute right-0 mt-2 w-[360px] max-w-[90vw] rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-lg z-50">
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)]">
             <div className="text-sm font-semibold text-[var(--text)]">Notifications</div>
-            <button
-              type="button"
-              className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
-              onClick={() => { void markAllRead(); }}
-              disabled={loading || unreadCount <= 0}
-            >
-              Mark all read
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="text-xs text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-50"
+                onClick={() => { void markAllRead(); }}
+                disabled={loading || unreadCount <= 0}
+              >
+                Mark all read
+              </button>
+              <button
+                type="button"
+                className="text-xs text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-50"
+                onClick={() => { void clearAll(); }}
+                disabled={loading || items.length <= 0}
+              >
+                Clear all
+              </button>
+            </div>
           </div>
           <div className="max-h-[420px] overflow-y-auto scrollbar-theme">
             {!items.length ? (

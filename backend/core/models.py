@@ -511,14 +511,14 @@ class NotificationPreference(models.Model):
     push_assignment_changes = models.BooleanField(default=False)
     push_deliverable_date_changes = models.BooleanField(default=False)
     push_rate_limit_enabled = models.BooleanField(default=True)
-    push_weekend_mute = models.BooleanField(default=False)
-    push_quiet_hours_enabled = models.BooleanField(default=False)
+    push_weekend_mute = models.BooleanField(default=True)
+    push_quiet_hours_enabled = models.BooleanField(default=True)
     push_quiet_hours_start = models.PositiveSmallIntegerField(
-        default=22,
+        default=17,
         validators=[MinValueValidator(0), MaxValueValidator(23)],
     )
     push_quiet_hours_end = models.PositiveSmallIntegerField(
-        default=7,
+        default=5,
         validators=[MinValueValidator(0), MaxValueValidator(23)],
     )
     push_digest_window = models.CharField(

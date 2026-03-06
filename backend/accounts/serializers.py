@@ -255,10 +255,10 @@ class NotificationPreferencesSerializer(serializers.Serializer):
     pushAssignmentChanges = serializers.BooleanField(required=False, default=False)
     pushDeliverableDateChanges = serializers.BooleanField(required=False, default=False)
     pushRateLimitEnabled = serializers.BooleanField(required=False, default=True)
-    pushWeekendMute = serializers.BooleanField(required=False, default=False)
-    pushQuietHoursEnabled = serializers.BooleanField(required=False, default=False)
-    pushQuietHoursStart = serializers.IntegerField(min_value=0, max_value=23, required=False, default=22)
-    pushQuietHoursEnd = serializers.IntegerField(min_value=0, max_value=23, required=False, default=7)
+    pushWeekendMute = serializers.BooleanField(required=False, default=True)
+    pushQuietHoursEnabled = serializers.BooleanField(required=False, default=True)
+    pushQuietHoursStart = serializers.IntegerField(min_value=0, max_value=23, required=False, default=17)
+    pushQuietHoursEnd = serializers.IntegerField(min_value=0, max_value=23, required=False, default=5)
     pushDigestWindowEnabled = serializers.BooleanField(required=False, default=True)
     pushDigestWindow = serializers.ChoiceField(
         choices=['instant', 'morning', 'evening'],
