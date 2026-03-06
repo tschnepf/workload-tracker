@@ -132,8 +132,8 @@ class BulkUpdateHoursTests(TestCase):
         WEB_PUSH_VAPID_PRIVATE_KEY='private',
         WEB_PUSH_SUBJECT='mailto:test@example.com',
     )
-    @patch('assignments.views.queue_push_to_users')
-    def test_bulk_update_hours_queues_assignment_push_summary(self, queue_mock):
+    @patch('assignments.views.dispatch_event_to_users')
+    def test_bulk_update_hours_queues_assignment_push_summary(self, dispatch_mock):
         payload = {
             'updates': [
                 {'assignmentId': self.assignment_b.id, 'weeklyHours': {self.sunday: 14}},
@@ -141,7 +141,7 @@ class BulkUpdateHoursTests(TestCase):
         }
         response = self.client.patch('/api/assignments/bulk_update_hours/', payload, format='json')
         self.assertEqual(response.status_code, 200)
-        queue_mock.assert_called_once()
-        args, kwargs = queue_mock.call_args
-        self.assertEqual(args[0], [self.affected_user.id])
-        self.assertEqual(kwargs.get('preference_field'), 'push_assignment_changes')
+        dispatch_mock.assert_called_once()
+        kwargs = dispatch_mock.call_args.kwargs
+        self.assertEqual(kwargs.get('user_ids'), [self.affected_user.id])
+        self.assertEqual(kwargs.get('event_key'), 'assignment.bulk_updated')

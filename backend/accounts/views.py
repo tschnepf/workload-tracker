@@ -27,17 +27,22 @@ from .serializers import (
     PushSubscriptionUpsertSerializer,
     PushSubscriptionItemSerializer,
     PushActionSerializer,
+    InAppNotificationItemSerializer,
+    InAppNotificationsListSerializer,
+    InAppMarkReadSerializer,
+    InAppClearSerializer,
 )
 from people.models import Person
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
-from core.models import NotificationPreference, WebPushProjectMute, WebPushSubscription
+from core.models import InAppNotification, NotificationPreference, WebPushProjectMute, WebPushSubscription
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings as django_settings
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from datetime import timedelta
 from core.webpush import (
     build_push_payload,
@@ -45,6 +50,13 @@ from core.webpush import (
     web_push_configured,
     web_push_event_enabled,
     web_push_feature_enabled,
+)
+from core.notification_dispatch import get_effective_channel_availability
+from core.notification_matrix import (
+    apply_availability,
+    legacy_user_matrix_from_preference,
+    normalize_notification_channel_matrix,
+    user_legacy_fields_from_matrix,
 )
 
 
@@ -470,8 +482,55 @@ class NotificationPreferencesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @staticmethod
-    def _apply_global_push_availability(pref: NotificationPreference) -> bool:
+    def _effective_channel_availability() -> dict:
+        return get_effective_channel_availability()
+
+    @classmethod
+    def _normalized_user_matrix(
+        cls,
+        pref: NotificationPreference,
+        *,
+        incoming_matrix: dict | None = None,
+    ) -> dict:
+        fallback = legacy_user_matrix_from_preference(pref)
+        return normalize_notification_channel_matrix(
+            incoming_matrix if isinstance(incoming_matrix, dict) else getattr(pref, 'notification_channel_matrix', None),
+            fallback=fallback,
+        )
+
+    @classmethod
+    def _apply_global_push_availability(cls, pref: NotificationPreference) -> bool:
         changed = False
+        availability = cls._effective_channel_availability()
+
+        matrix = cls._normalized_user_matrix(pref)
+        effective_matrix = apply_availability(matrix, availability)
+        if effective_matrix != matrix:
+            pref.notification_channel_matrix = effective_matrix
+            changed = True
+        else:
+            pref.notification_channel_matrix = matrix
+
+        legacy_from_matrix = user_legacy_fields_from_matrix(pref.notification_channel_matrix)
+        if pref.email_pre_deliverable_reminders != legacy_from_matrix['email_pre_deliverable_reminders']:
+            pref.email_pre_deliverable_reminders = legacy_from_matrix['email_pre_deliverable_reminders']
+            changed = True
+        if pref.daily_digest != legacy_from_matrix['daily_digest']:
+            pref.daily_digest = legacy_from_matrix['daily_digest']
+            changed = True
+        if pref.push_pre_deliverable_reminders != legacy_from_matrix['push_pre_deliverable_reminders']:
+            pref.push_pre_deliverable_reminders = legacy_from_matrix['push_pre_deliverable_reminders']
+            changed = True
+        if pref.push_daily_digest != legacy_from_matrix['push_daily_digest']:
+            pref.push_daily_digest = legacy_from_matrix['push_daily_digest']
+            changed = True
+        if pref.push_assignment_changes != legacy_from_matrix['push_assignment_changes']:
+            pref.push_assignment_changes = legacy_from_matrix['push_assignment_changes']
+            changed = True
+        if pref.push_deliverable_date_changes != legacy_from_matrix['push_deliverable_date_changes']:
+            pref.push_deliverable_date_changes = legacy_from_matrix['push_deliverable_date_changes']
+            changed = True
+
         if not web_push_event_enabled('push_pre_deliverable_reminders') and pref.push_pre_deliverable_reminders:
             pref.push_pre_deliverable_reminders = False
             changed = True
@@ -521,9 +580,12 @@ class NotificationPreferencesView(APIView):
     @extend_schema(responses=NotificationPreferencesSerializer)
     def get(self, request):
         pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        availability = self._effective_channel_availability()
         if self._apply_global_push_availability(pref):
             pref.save(
                 update_fields=[
+                    'email_pre_deliverable_reminders',
+                    'daily_digest',
                     'push_pre_deliverable_reminders',
                     'push_daily_digest',
                     'push_assignment_changes',
@@ -538,10 +600,16 @@ class NotificationPreferencesView(APIView):
                     'push_actions_enabled',
                     'push_deep_links_enabled',
                     'push_subscription_cleanup_enabled',
+                    'notification_channel_matrix',
                     'updated_at',
                 ]
             )
-        return Response(NotificationPreferencesSerializer.from_model(pref))
+        return Response(
+            NotificationPreferencesSerializer.from_model(
+                pref,
+                effective_channel_availability=availability,
+            )
+        )
 
     @extend_schema(request=NotificationPreferencesSerializer, responses=NotificationPreferencesSerializer)
     def put(self, request):
@@ -579,6 +647,22 @@ class NotificationPreferencesView(APIView):
             'pushSubscriptionCleanupEnabled',
             pref.push_subscription_cleanup_enabled,
         )
+        incoming_matrix = data.get('notificationChannelMatrix')
+        if isinstance(incoming_matrix, dict):
+            pref.notification_channel_matrix = self._normalized_user_matrix(
+                pref,
+                incoming_matrix=incoming_matrix,
+            )
+            legacy_from_matrix = user_legacy_fields_from_matrix(pref.notification_channel_matrix)
+            pref.email_pre_deliverable_reminders = legacy_from_matrix['email_pre_deliverable_reminders']
+            pref.daily_digest = legacy_from_matrix['daily_digest']
+            pref.push_pre_deliverable_reminders = legacy_from_matrix['push_pre_deliverable_reminders']
+            pref.push_daily_digest = legacy_from_matrix['push_daily_digest']
+            pref.push_assignment_changes = legacy_from_matrix['push_assignment_changes']
+            pref.push_deliverable_date_changes = legacy_from_matrix['push_deliverable_date_changes']
+        else:
+            pref.notification_channel_matrix = self._normalized_user_matrix(pref)
+
         self._apply_global_push_availability(pref)
         pref.save(
             update_fields=[
@@ -603,10 +687,16 @@ class NotificationPreferencesView(APIView):
                 'push_actions_enabled',
                 'push_deep_links_enabled',
                 'push_subscription_cleanup_enabled',
+                'notification_channel_matrix',
                 'updated_at',
             ]
         )
-        return Response(NotificationPreferencesSerializer.from_model(pref))
+        return Response(
+            NotificationPreferencesSerializer.from_model(
+                pref,
+                effective_channel_availability=self._effective_channel_availability(),
+            )
+        )
 
 
 class PushSubscriptionsView(APIView):
@@ -718,6 +808,120 @@ class PushActionView(APIView):
             return Response({'mutedUntil': muted_until}, status=status.HTTP_200_OK)
 
         return Response({'detail': 'Unsupported action'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class InAppNotificationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, required=False),
+            OpenApiParameter(name='cursor', type=int, required=False),
+            OpenApiParameter(name='since', type=str, required=False, description='ISO datetime'),
+        ],
+        responses=InAppNotificationsListSerializer,
+    )
+    def get(self, request):
+        now_ts = timezone.now()
+        try:
+            limit = int(request.query_params.get('limit') or 50)
+        except Exception:
+            limit = 50
+        limit = max(1, min(100, limit))
+
+        cursor_raw = request.query_params.get('cursor')
+        cursor = None
+        if cursor_raw not in (None, ''):
+            try:
+                cursor = int(cursor_raw)
+            except Exception:
+                cursor = None
+
+        since_raw = request.query_params.get('since')
+        since_dt = parse_datetime(str(since_raw or '').strip()) if since_raw else None
+
+        base_qs = InAppNotification.objects.filter(
+            user=request.user,
+            cleared_at__isnull=True,
+            expires_at__gt=now_ts,
+        )
+        unread_count = base_qs.filter(read_at__isnull=True).count()
+
+        qs = base_qs
+        if cursor is not None:
+            qs = qs.filter(id__lt=cursor)
+        if since_dt is not None:
+            qs = qs.filter(created_at__gt=since_dt)
+
+        rows = list(qs.order_by('-id')[: limit + 1])
+        next_cursor = int(rows[limit].id) if len(rows) > limit else None
+        rows = rows[:limit]
+
+        return Response(
+            {
+                'items': [InAppNotificationItemSerializer.from_model(row) for row in rows],
+                'unreadCount': int(unread_count),
+                'nextCursor': next_cursor,
+            }
+        )
+
+
+class InAppNotificationsMarkReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=InAppMarkReadSerializer, responses={200: inline_serializer(
+        name='InAppMarkReadResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        ser = InAppMarkReadSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
+        now_ts = timezone.now()
+        updated = InAppNotification.objects.filter(
+            user=request.user,
+            id__in=ids,
+            read_at__isnull=True,
+        ).update(read_at=now_ts, updated_at=now_ts)
+        return Response({'updated': int(updated or 0)})
+
+
+class InAppNotificationsMarkAllReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses={200: inline_serializer(
+        name='InAppMarkAllReadResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        now_ts = timezone.now()
+        updated = InAppNotification.objects.filter(
+            user=request.user,
+            cleared_at__isnull=True,
+            expires_at__gt=now_ts,
+            read_at__isnull=True,
+        ).update(read_at=now_ts, updated_at=now_ts)
+        return Response({'updated': int(updated or 0)})
+
+
+class InAppNotificationsClearView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=InAppClearSerializer, responses={200: inline_serializer(
+        name='InAppClearResponse',
+        fields={'updated': serializers.IntegerField()},
+    )})
+    def post(self, request):
+        ser = InAppClearSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ids = [int(v) for v in (ser.validated_data.get('ids') or [])]
+        now_ts = timezone.now()
+        updated = InAppNotification.objects.filter(
+            user=request.user,
+            id__in=ids,
+            cleared_at__isnull=True,
+        ).update(cleared_at=now_ts, updated_at=now_ts)
+        return Response({'updated': int(updated or 0)})
 
 
 class AdminAuditLogsView(APIView):

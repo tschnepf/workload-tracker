@@ -6,7 +6,12 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 
 from .models import UserProfile, AdminAuditLog
-from core.models import NotificationPreference, WebPushSubscription
+from core.models import InAppNotification, NotificationPreference, WebPushSubscription
+from core.notification_matrix import (
+    apply_availability,
+    legacy_user_matrix_from_preference,
+    normalize_notification_channel_matrix,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -265,9 +270,24 @@ class NotificationPreferencesSerializer(serializers.Serializer):
     pushActionsEnabled = serializers.BooleanField(required=False, default=True)
     pushDeepLinksEnabled = serializers.BooleanField(required=False, default=True)
     pushSubscriptionCleanupEnabled = serializers.BooleanField(required=False, default=True)
+    notificationChannelMatrix = serializers.JSONField(required=False)
+    effectiveChannelAvailability = serializers.JSONField(required=False)
 
     @staticmethod
-    def from_model(p: NotificationPreference):
+    def from_model(
+        p: NotificationPreference,
+        *,
+        effective_channel_availability: dict | None = None,
+    ):
+        matrix = normalize_notification_channel_matrix(
+            getattr(p, 'notification_channel_matrix', None),
+            fallback=legacy_user_matrix_from_preference(p),
+        )
+        effective = (
+            apply_availability(matrix, effective_channel_availability)
+            if isinstance(effective_channel_availability, dict)
+            else matrix
+        )
         return {
             'emailPreDeliverableReminders': p.email_pre_deliverable_reminders,
             'reminderDaysBefore': p.reminder_days_before,
@@ -290,7 +310,12 @@ class NotificationPreferencesSerializer(serializers.Serializer):
             'pushActionsEnabled': p.push_actions_enabled,
             'pushDeepLinksEnabled': p.push_deep_links_enabled,
             'pushSubscriptionCleanupEnabled': p.push_subscription_cleanup_enabled,
+            'notificationChannelMatrix': matrix,
+            'effectiveChannelAvailability': effective,
         }
+
+    def validate_notificationChannelMatrix(self, value):
+        return normalize_notification_channel_matrix(value)
 
 
 class PushActionSerializer(serializers.Serializer):
@@ -332,3 +357,53 @@ class PushSubscriptionItemSerializer(serializers.Serializer):
             'lastSuccessAt': subscription.last_success_at,
             'lastError': subscription.last_error,
         }
+
+
+class InAppNotificationItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    eventKey = serializers.CharField()
+    title = serializers.CharField()
+    body = serializers.CharField()
+    url = serializers.CharField()
+    payload = serializers.JSONField(required=False)
+    readAt = serializers.DateTimeField(allow_null=True)
+    clearedAt = serializers.DateTimeField(allow_null=True)
+    expiresAt = serializers.DateTimeField()
+    createdAt = serializers.DateTimeField()
+
+    @staticmethod
+    def from_model(row: InAppNotification) -> dict:
+        return {
+            'id': row.id,
+            'eventKey': row.event_key,
+            'title': row.title,
+            'body': row.body,
+            'url': row.url,
+            'payload': row.payload or {},
+            'readAt': row.read_at,
+            'clearedAt': row.cleared_at,
+            'expiresAt': row.expires_at,
+            'createdAt': row.created_at,
+        }
+
+
+class InAppNotificationsListSerializer(serializers.Serializer):
+    items = InAppNotificationItemSerializer(many=True)
+    unreadCount = serializers.IntegerField()
+    nextCursor = serializers.IntegerField(allow_null=True)
+
+
+class InAppMarkReadSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        required=True,
+    )
+
+
+class InAppClearSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        required=True,
+    )

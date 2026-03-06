@@ -5,9 +5,74 @@ import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFra
 import { useSettingsData } from '../SettingsDataContext';
 import { isAdminUser } from '@/utils/roleAccess';
 import { showToast } from '@/lib/toastBus';
-import { webPushGlobalSettingsApi, webPushVapidKeysApi, type WebPushVapidKeysStatus } from '@/services/api';
+import {
+  webPushGlobalSettingsApi,
+  webPushVapidKeysApi,
+  type NotificationChannelMatrix,
+  type NotificationEventCatalogItem,
+  type WebPushVapidKeysStatus,
+} from '@/services/api';
 
 export const PUSH_NOTIFICATIONS_SECTION_ID = 'push-notifications';
+
+const DEFAULT_EVENT_CATALOG: NotificationEventCatalogItem[] = [
+  {
+    key: 'pred.reminder',
+    label: 'Pre-deliverable reminder',
+    description: 'Reminder for upcoming pre-deliverable work.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+  {
+    key: 'pred.digest',
+    label: 'Daily digest',
+    description: 'Daily summary of relevant pre-deliverables.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+  {
+    key: 'assignment.created',
+    label: 'Assignment created',
+    description: 'A new assignment was created for your linked person.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+  {
+    key: 'assignment.removed',
+    label: 'Assignment removed',
+    description: 'An assignment was removed for your linked person.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+  {
+    key: 'assignment.bulk_updated',
+    label: 'Assignment bulk updated',
+    description: 'Bulk assignment updates affected your linked person.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+  {
+    key: 'deliverable.reminder',
+    label: 'Deliverable reminder',
+    description: 'Reminder for upcoming deliverables on your assigned projects.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+  {
+    key: 'deliverable.date_changed',
+    label: 'Deliverable date changed',
+    description: 'A project deliverable date changed for an assigned project.',
+    supports: { mobilePush: true, email: true, inBrowser: true },
+  },
+];
+
+const defaultMatrix = (): NotificationChannelMatrix => ({
+  'pred.reminder': { mobilePush: true, email: true, inBrowser: true },
+  'pred.digest': { mobilePush: true, email: true, inBrowser: true },
+  'assignment.created': { mobilePush: true, email: true, inBrowser: true },
+  'assignment.removed': { mobilePush: true, email: true, inBrowser: true },
+  'assignment.bulk_updated': { mobilePush: true, email: true, inBrowser: true },
+  'deliverable.reminder': { mobilePush: true, email: true, inBrowser: true },
+  'deliverable.date_changed': { mobilePush: true, email: true, inBrowser: true },
+});
+
+const matrixChanged = (a: NotificationChannelMatrix, b: NotificationChannelMatrix): boolean => (
+  JSON.stringify(a) !== JSON.stringify(b)
+);
 
 const PushNotificationsSection: React.FC = () => {
   const { auth, caps } = useSettingsData();
@@ -40,18 +105,9 @@ const PushNotificationsSection: React.FC = () => {
     pushDeepLinksEnabled: true,
     pushSubscriptionHealthcheckEnabled: true,
   });
-  const [eventToggles, setEventToggles] = React.useState({
-    pushPreDeliverableRemindersEnabled: true,
-    pushDailyDigestEnabled: true,
-    pushAssignmentChangesEnabled: true,
-    pushDeliverableDateChangesEnabled: true,
-  });
-  const [initialEventToggles, setInitialEventToggles] = React.useState({
-    pushPreDeliverableRemindersEnabled: true,
-    pushDailyDigestEnabled: true,
-    pushAssignmentChangesEnabled: true,
-    pushDeliverableDateChangesEnabled: true,
-  });
+  const [channelMatrix, setChannelMatrix] = React.useState<NotificationChannelMatrix>(defaultMatrix());
+  const [initialChannelMatrix, setInitialChannelMatrix] = React.useState<NotificationChannelMatrix>(defaultMatrix());
+  const [eventCatalog, setEventCatalog] = React.useState<NotificationEventCatalogItem[]>(DEFAULT_EVENT_CATALOG);
   const [deliverableScope, setDeliverableScope] = React.useState<'next_upcoming' | 'all_upcoming'>('next_upcoming');
   const [initialDeliverableScope, setInitialDeliverableScope] = React.useState<'next_upcoming' | 'all_upcoming'>('next_upcoming');
   const [deliverableWithinTwoWeeksOnly, setDeliverableWithinTwoWeeksOnly] = React.useState(false);
@@ -85,14 +141,12 @@ const PushNotificationsSection: React.FC = () => {
       };
       setFeatureToggles(nextFeatures);
       setInitialFeatureToggles(nextFeatures);
-      const nextEvents = {
-        pushPreDeliverableRemindersEnabled: Boolean(globalData.pushPreDeliverableRemindersEnabled ?? true),
-        pushDailyDigestEnabled: Boolean(globalData.pushDailyDigestEnabled ?? true),
-        pushAssignmentChangesEnabled: Boolean(globalData.pushAssignmentChangesEnabled ?? true),
-        pushDeliverableDateChangesEnabled: Boolean(globalData.pushDeliverableDateChangesEnabled ?? true),
-      };
-      setEventToggles(nextEvents);
-      setInitialEventToggles(nextEvents);
+
+      const nextMatrix = (globalData.notificationChannelMatrix || defaultMatrix()) as NotificationChannelMatrix;
+      setChannelMatrix(nextMatrix);
+      setInitialChannelMatrix(nextMatrix);
+      setEventCatalog((globalData.notificationEventCatalog || DEFAULT_EVENT_CATALOG) as NotificationEventCatalogItem[]);
+
       const scope = globalData.pushDeliverableDateChangeScope === 'all_upcoming' ? 'all_upcoming' : 'next_upcoming';
       setDeliverableScope(scope);
       setInitialDeliverableScope(scope);
@@ -102,7 +156,7 @@ const PushNotificationsSection: React.FC = () => {
       setVapidStatus(keyData);
       setVapidSubject(keyData.subject || '');
     } catch (e: any) {
-      setError(e?.message || 'Failed to load mobile push settings');
+      setError(e?.message || 'Failed to load notification settings');
     } finally {
       setLoading(false);
     }
@@ -111,6 +165,16 @@ const PushNotificationsSection: React.FC = () => {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  const setMatrixCell = (eventKey: keyof NotificationChannelMatrix, channel: 'mobilePush' | 'email' | 'inBrowser', value: boolean) => {
+    setChannelMatrix((prev) => ({
+      ...prev,
+      [eventKey]: {
+        ...(prev[eventKey] || { mobilePush: true, email: true, inBrowser: true }),
+        [channel]: value,
+      },
+    }));
+  };
 
   const saveGlobal = async () => {
     setSavingGlobal(true);
@@ -127,12 +191,9 @@ const PushNotificationsSection: React.FC = () => {
         pushActionsEnabled: featureToggles.pushActionsEnabled,
         pushDeepLinksEnabled: featureToggles.pushDeepLinksEnabled,
         pushSubscriptionHealthcheckEnabled: featureToggles.pushSubscriptionHealthcheckEnabled,
-        pushPreDeliverableRemindersEnabled: eventToggles.pushPreDeliverableRemindersEnabled,
-        pushDailyDigestEnabled: eventToggles.pushDailyDigestEnabled,
-        pushAssignmentChangesEnabled: eventToggles.pushAssignmentChangesEnabled,
-        pushDeliverableDateChangesEnabled: eventToggles.pushDeliverableDateChangesEnabled,
         pushDeliverableDateChangeScope: deliverableScope,
         pushDeliverableDateChangeWithinTwoWeeksOnly: deliverableWithinTwoWeeksOnly,
+        notificationChannelMatrix: channelMatrix,
       });
       setEnabled(Boolean(data.enabled));
       setInitialEnabled(Boolean(data.enabled));
@@ -151,23 +212,19 @@ const PushNotificationsSection: React.FC = () => {
       };
       setFeatureToggles(nextFeatures);
       setInitialFeatureToggles(nextFeatures);
-      const nextEvents = {
-        pushPreDeliverableRemindersEnabled: Boolean(data.pushPreDeliverableRemindersEnabled ?? true),
-        pushDailyDigestEnabled: Boolean(data.pushDailyDigestEnabled ?? true),
-        pushAssignmentChangesEnabled: Boolean(data.pushAssignmentChangesEnabled ?? true),
-        pushDeliverableDateChangesEnabled: Boolean(data.pushDeliverableDateChangesEnabled ?? true),
-      };
-      setEventToggles(nextEvents);
-      setInitialEventToggles(nextEvents);
+      const savedMatrix = (data.notificationChannelMatrix || defaultMatrix()) as NotificationChannelMatrix;
+      setChannelMatrix(savedMatrix);
+      setInitialChannelMatrix(savedMatrix);
+      setEventCatalog((data.notificationEventCatalog || DEFAULT_EVENT_CATALOG) as NotificationEventCatalogItem[]);
       const scope = data.pushDeliverableDateChangeScope === 'all_upcoming' ? 'all_upcoming' : 'next_upcoming';
       setDeliverableScope(scope);
       setInitialDeliverableScope(scope);
       const withinTwoWeeks = Boolean(data.pushDeliverableDateChangeWithinTwoWeeksOnly ?? false);
       setDeliverableWithinTwoWeeksOnly(withinTwoWeeks);
       setInitialDeliverableWithinTwoWeeksOnly(withinTwoWeeks);
-      showToast(`Push notifications ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
+      showToast(`Notifications ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
     } catch (e: any) {
-      setError(e?.message || 'Failed to update push notification settings');
+      setError(e?.message || 'Failed to update notification settings');
     } finally {
       setSavingGlobal(false);
     }
@@ -206,21 +263,23 @@ const PushNotificationsSection: React.FC = () => {
     || featureToggles.pushActionsEnabled !== initialFeatureToggles.pushActionsEnabled
     || featureToggles.pushDeepLinksEnabled !== initialFeatureToggles.pushDeepLinksEnabled
     || featureToggles.pushSubscriptionHealthcheckEnabled !== initialFeatureToggles.pushSubscriptionHealthcheckEnabled
-    || eventToggles.pushPreDeliverableRemindersEnabled !== initialEventToggles.pushPreDeliverableRemindersEnabled
-    || eventToggles.pushDailyDigestEnabled !== initialEventToggles.pushDailyDigestEnabled
-    || eventToggles.pushAssignmentChangesEnabled !== initialEventToggles.pushAssignmentChangesEnabled
-    || eventToggles.pushDeliverableDateChangesEnabled !== initialEventToggles.pushDeliverableDateChangesEnabled
+    || matrixChanged(channelMatrix, initialChannelMatrix)
     || deliverableScope !== initialDeliverableScope
     || deliverableWithinTwoWeeksOnly !== initialDeliverableWithinTwoWeeksOnly
   );
+
   const hasVapidKey = Boolean(vapidStatus?.configured);
   const busy = loading || savingGlobal || savingKeys;
+  const deliverableRow = channelMatrix['deliverable.date_changed'];
+  const deliverableAnyChannelEnabled = Boolean(
+    deliverableRow?.mobilePush || deliverableRow?.email || deliverableRow?.inBrowser,
+  );
 
   return (
     <SettingsSectionFrame
       id={PUSH_NOTIFICATIONS_SECTION_ID}
-      title="Mobile"
-      description="Manage mobile app behavior: web push delivery and secure VAPID key management."
+      title="Notifications"
+      description="Manage notification channels, push delivery behavior, and secure VAPID key management."
       className="mt-6"
       actions={(
         <div className="flex items-center gap-2">
@@ -234,12 +293,10 @@ const PushNotificationsSection: React.FC = () => {
       )}
     >
       {error ? <div className="text-sm text-red-400 mb-3">{error}</div> : null}
-      {loading ? <div className="text-sm text-[var(--muted)]">Loading mobile settings...</div> : null}
+      {loading ? <div className="text-sm text-[var(--muted)]">Loading notification settings...</div> : null}
       {!loading ? (
-        <div className="space-y-3">
-          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
-            Push Delivery
-          </div>
+        <div className="space-y-4">
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">Push Delivery</div>
           <label className="flex items-center gap-3 text-sm text-[var(--text)]">
             <input
               type="checkbox"
@@ -247,22 +304,17 @@ const PushNotificationsSection: React.FC = () => {
               onChange={(e) => setEnabled(e.target.checked)}
               disabled={busy}
             />
-            Enable push notifications globally
+            Enable mobile push notifications globally
           </label>
-          <div className="text-xs text-[var(--muted)]">
-            Runtime status: {caps?.pwa?.pushEnabled ? 'enabled' : 'disabled'}
-          </div>
-          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">
-            Global Push Features
-          </div>
+          <div className="text-xs text-[var(--muted)]">Runtime status: {caps?.pwa?.pushEnabled ? 'enabled' : 'disabled'}</div>
+
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">Global Push Features</div>
+
           <label className="flex items-center gap-3 text-sm text-[var(--text)]">
             <input
               type="checkbox"
               checked={featureToggles.pushRateLimitEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushRateLimitEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushRateLimitEnabled: e.target.checked }))}
               disabled={busy}
             />
             Rate limiting and bundled overflow
@@ -280,14 +332,12 @@ const PushNotificationsSection: React.FC = () => {
               onChange={(e) => setRateLimitPerHour(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
             />
           </div>
+
           <label className="flex items-center gap-3 text-sm text-[var(--text)]">
             <input
               type="checkbox"
               checked={featureToggles.pushWeekendMuteEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushWeekendMuteEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushWeekendMuteEnabled: e.target.checked }))}
               disabled={busy}
             />
             Weekend mute controls
@@ -296,10 +346,7 @@ const PushNotificationsSection: React.FC = () => {
             <input
               type="checkbox"
               checked={featureToggles.pushQuietHoursEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushQuietHoursEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushQuietHoursEnabled: e.target.checked }))}
               disabled={busy}
             />
             Quiet-hours controls
@@ -308,10 +355,7 @@ const PushNotificationsSection: React.FC = () => {
             <input
               type="checkbox"
               checked={featureToggles.pushSnoozeEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushSnoozeEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushSnoozeEnabled: e.target.checked }))}
               disabled={busy}
             />
             Snooze controls
@@ -320,10 +364,7 @@ const PushNotificationsSection: React.FC = () => {
             <input
               type="checkbox"
               checked={featureToggles.pushDigestWindowEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushDigestWindowEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushDigestWindowEnabled: e.target.checked }))}
               disabled={busy}
             />
             Digest-window scheduling controls
@@ -332,10 +373,7 @@ const PushNotificationsSection: React.FC = () => {
             <input
               type="checkbox"
               checked={featureToggles.pushActionsEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushActionsEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushActionsEnabled: e.target.checked }))}
               disabled={busy}
             />
             Notification action buttons
@@ -344,10 +382,7 @@ const PushNotificationsSection: React.FC = () => {
             <input
               type="checkbox"
               checked={featureToggles.pushDeepLinksEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushDeepLinksEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushDeepLinksEnabled: e.target.checked }))}
               disabled={busy}
             />
             Deep links from notifications
@@ -356,74 +391,67 @@ const PushNotificationsSection: React.FC = () => {
             <input
               type="checkbox"
               checked={featureToggles.pushSubscriptionHealthcheckEnabled}
-              onChange={(e) => setFeatureToggles((prev) => ({
-                ...prev,
-                pushSubscriptionHealthcheckEnabled: e.target.checked,
-              }))}
+              onChange={(e) => setFeatureToggles((prev) => ({ ...prev, pushSubscriptionHealthcheckEnabled: e.target.checked }))}
               disabled={busy}
             />
             Subscription health check cleanup
           </label>
-          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">
-            Global Push Event Types
+
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">Notification Channel Availability</div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border border-[var(--border)] text-sm">
+              <thead>
+                <tr className="bg-[var(--surface)] text-[var(--muted)]">
+                  <th className="text-left px-3 py-2 border-b border-[var(--border)]">Notification</th>
+                  <th className="text-center px-3 py-2 border-b border-[var(--border)]">Mobile Push</th>
+                  <th className="text-center px-3 py-2 border-b border-[var(--border)]">Email</th>
+                  <th className="text-center px-3 py-2 border-b border-[var(--border)]">In Browser</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eventCatalog.map((row) => (
+                  <tr key={row.key} className="border-b border-[var(--border)] last:border-b-0">
+                    <td className="px-3 py-2 align-top">
+                      <div className="text-[var(--text)] font-medium">{row.label}</div>
+                      <div className="text-xs text-[var(--muted)]">{row.description}</div>
+                    </td>
+                    <td className="px-3 py-2 text-center align-middle">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(channelMatrix[row.key]?.mobilePush)}
+                        onChange={(e) => setMatrixCell(row.key, 'mobilePush', e.target.checked)}
+                        disabled={busy || !row.supports.mobilePush}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center align-middle">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(channelMatrix[row.key]?.email)}
+                        onChange={(e) => setMatrixCell(row.key, 'email', e.target.checked)}
+                        disabled={busy || !row.supports.email}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center align-middle">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(channelMatrix[row.key]?.inBrowser)}
+                        onChange={(e) => setMatrixCell(row.key, 'inBrowser', e.target.checked)}
+                        disabled={busy || !row.supports.inBrowser}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <label className="flex items-center gap-3 text-sm text-[var(--text)]">
-            <input
-              type="checkbox"
-              checked={eventToggles.pushPreDeliverableRemindersEnabled}
-              onChange={(e) => setEventToggles((prev) => ({
-                ...prev,
-                pushPreDeliverableRemindersEnabled: e.target.checked,
-              }))}
-              disabled={busy}
-            />
-            Pre-deliverable reminders
-          </label>
-          <label className="flex items-center gap-3 text-sm text-[var(--text)]">
-            <input
-              type="checkbox"
-              checked={eventToggles.pushDailyDigestEnabled}
-              onChange={(e) => setEventToggles((prev) => ({
-                ...prev,
-                pushDailyDigestEnabled: e.target.checked,
-              }))}
-              disabled={busy}
-            />
-            Daily digest
-          </label>
-          <label className="flex items-center gap-3 text-sm text-[var(--text)]">
-            <input
-              type="checkbox"
-              checked={eventToggles.pushAssignmentChangesEnabled}
-              onChange={(e) => setEventToggles((prev) => ({
-                ...prev,
-                pushAssignmentChangesEnabled: e.target.checked,
-              }))}
-              disabled={busy}
-            />
-            Assignment changes
-          </label>
-          <label className="flex items-center gap-3 text-sm text-[var(--text)]">
-            <input
-              type="checkbox"
-              checked={eventToggles.pushDeliverableDateChangesEnabled}
-              onChange={(e) => setEventToggles((prev) => ({
-                ...prev,
-                pushDeliverableDateChangesEnabled: e.target.checked,
-              }))}
-              disabled={busy}
-            />
-            Deliverable date changes
-          </label>
-          <div className="pl-6 space-y-2">
-            <label className="block text-xs text-[var(--muted)]">
-              Deliverable date-change scope
-            </label>
+
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-2">Deliverable Date-Change Scope</div>
+          <div className="pl-1 space-y-2">
             <select
               className="w-full max-w-sm bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-sm text-[var(--text)]"
               value={deliverableScope}
               onChange={(e) => setDeliverableScope(e.target.value === 'all_upcoming' ? 'all_upcoming' : 'next_upcoming')}
-              disabled={busy || !eventToggles.pushDeliverableDateChangesEnabled}
+              disabled={busy || !deliverableAnyChannelEnabled}
             >
               <option value="next_upcoming">Only next upcoming deliverable</option>
               <option value="all_upcoming">All upcoming deliverables</option>
@@ -433,19 +461,14 @@ const PushNotificationsSection: React.FC = () => {
                 type="checkbox"
                 checked={deliverableWithinTwoWeeksOnly}
                 onChange={(e) => setDeliverableWithinTwoWeeksOnly(e.target.checked)}
-                disabled={busy || !eventToggles.pushDeliverableDateChangesEnabled}
+                disabled={busy || !deliverableAnyChannelEnabled}
               />
               Only include date changes within the next 2 weeks
             </label>
           </div>
-          <div className="text-xs text-[var(--muted)]">
-            Disabled features or events are blocked globally and users cannot opt into them in Profile.
-          </div>
 
           <div className="pt-2 border-t border-[var(--border)]" />
-          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
-            VAPID Keys
-          </div>
+          <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">VAPID Keys</div>
           <div className="text-xs text-[var(--muted)]">
             Status: {vapidStatus?.configured ? 'configured' : 'not configured'} (source: {vapidStatus?.source || 'none'})
           </div>

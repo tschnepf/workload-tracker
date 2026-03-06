@@ -136,6 +136,32 @@ export type NotificationPreferences = {
   pushActionsEnabled: boolean;
   pushDeepLinksEnabled: boolean;
   pushSubscriptionCleanupEnabled: boolean;
+  notificationChannelMatrix: NotificationChannelMatrix;
+  effectiveChannelAvailability: NotificationChannelMatrix;
+};
+
+export type NotificationEventKey =
+  | 'pred.reminder'
+  | 'pred.digest'
+  | 'assignment.created'
+  | 'assignment.removed'
+  | 'assignment.bulk_updated'
+  | 'deliverable.reminder'
+  | 'deliverable.date_changed';
+
+export type NotificationChannelState = {
+  mobilePush: boolean;
+  email: boolean;
+  inBrowser: boolean;
+};
+
+export type NotificationChannelMatrix = Record<NotificationEventKey, NotificationChannelState>;
+
+export type NotificationEventCatalogItem = {
+  key: NotificationEventKey;
+  label: string;
+  description: string;
+  supports: NotificationChannelState;
 };
 
 export type PushSubscriptionItem = {
@@ -166,6 +192,8 @@ export type WebPushGlobalSettings = {
   pushDeliverableDateChangesEnabled: boolean;
   pushDeliverableDateChangeScope: 'next_upcoming' | 'all_upcoming';
   pushDeliverableDateChangeWithinTwoWeeksOnly: boolean;
+  notificationChannelMatrix: NotificationChannelMatrix;
+  notificationEventCatalog: NotificationEventCatalogItem[];
   updatedAt: string;
 };
 
@@ -176,6 +204,25 @@ export type WebPushVapidKeysStatus = {
   publicKeyMasked: string | null;
   privateKeyMasked: string | null;
   updatedAt: string | null;
+};
+
+export type InAppNotificationItem = {
+  id: number;
+  eventKey: NotificationEventKey;
+  title: string;
+  body: string;
+  url: string;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  clearedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type InAppNotificationsResponse = {
+  items: InAppNotificationItem[];
+  unreadCount: number;
+  nextCursor: number | null;
 };
 
 // Delegate to shared error mapper to avoid duplication
@@ -734,6 +781,7 @@ export const webPushGlobalSettingsApi = {
       | 'pushDeliverableDateChangesEnabled'
       | 'pushDeliverableDateChangeScope'
       | 'pushDeliverableDateChangeWithinTwoWeeksOnly'
+      | 'notificationChannelMatrix'
     >>
   ): Promise<WebPushGlobalSettings> => {
     const res = await apiClient.PUT('/core/web_push_settings/' as any, { body: payload as any, headers: authHeaders() });
@@ -2592,6 +2640,36 @@ export const authApi = {
     return fetchApi<NotificationPreferences>('/auth/notification-preferences/', {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+  listInAppNotifications: async (params?: {
+    limit?: number;
+    cursor?: number | null;
+    since?: string | null;
+  }): Promise<InAppNotificationsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.cursor) query.set('cursor', String(params.cursor));
+    if (params?.since) query.set('since', String(params.since));
+    const qs = query.toString();
+    return fetchApi<InAppNotificationsResponse>(`/auth/in-app-notifications/${qs ? `?${qs}` : ''}`);
+  },
+  markInAppNotificationsRead: async (ids: number[]): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/mark-read/', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  },
+  markAllInAppNotificationsRead: async (): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/mark-all-read/', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+  clearInAppNotifications: async (ids: number[]): Promise<{ updated: number }> => {
+    return fetchApi<{ updated: number }>('/auth/in-app-notifications/clear/', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
     });
   },
   listPushSubscriptions: async (): Promise<PushSubscriptionItem[]> => {

@@ -731,6 +731,10 @@ CELERY_BEAT_SCHEDULE['web-push-subscription-healthcheck'] = {
     'task': 'core.tasks.web_push_subscription_health_check_task',
     'schedule': timedelta(hours=int(os.getenv('WEB_PUSH_SUBSCRIPTION_HEALTHCHECK_HOURS', '6'))),
 }
+CELERY_BEAT_SCHEDULE['email-notification-daily-summary'] = {
+    'task': 'core.tasks.send_email_notification_daily_summary',
+    'schedule': timedelta(hours=1),
+}
 
 # CSP rollout configuration
 CSP_ENABLED = os.getenv('CSP_ENABLED', 'true').lower() == 'true'

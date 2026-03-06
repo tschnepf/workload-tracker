@@ -5,17 +5,22 @@ from __future__ import annotations
 
 from typing import Dict, List, Any, Optional
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from celery import shared_task
 import os
 from django.db.models import Prefetch
 from django.conf import settings
+from django.utils import timezone
+from django.core.cache import cache
 from core.webpush import (
-    build_push_payload,
     flush_due_deferred_push_notifications,
     run_web_push_subscription_health_check,
     send_push_to_users,
-    web_push_event_enabled,
+)
+from core.notification_dispatch import (
+    channel_enabled_for_preference,
+    dispatch_event_to_users,
 )
 
 
@@ -286,56 +291,95 @@ def bulk_skill_matching_async(self, skills: List[str], filters: Dict[str, Any]) 
 def send_pre_deliverable_reminders(self):
     # Gated by env flags
     if os.getenv('PRED_ITEMS_NOTIFICATIONS_ENABLED', 'false').lower() != 'true':
-        return {'sent': 0}
+        return {'sent': 0, 'dispatches': 0}
     from core.models import NotificationPreference, NotificationLog
+    from assignments.models import Assignment
+    from deliverables.models import Deliverable
     from deliverables.services import PreDeliverableService
-    from django.core.mail import send_mail
     from datetime import date as _date
     sent = 0
+    dispatches = 0
     for pref in NotificationPreference.objects.select_related('user'):
-        if not pref.email_pre_deliverable_reminders:
+        # Reminder horizon remains controlled by existing user preference days-before.
+        if int(getattr(pref, 'reminder_days_before', 1) or 1) < 0:
             continue
         upcoming = PreDeliverableService.get_upcoming_for_user(pref.user, days_ahead=max(0, int(pref.reminder_days_before or 1)))
         for it in upcoming:
             subject = f"Reminder: {getattr(it.pre_deliverable_type, 'name', 'Pre-Deliverable')} ({it.generated_date})"
-            body = f"Project: {getattr(it.deliverable.project, 'name', '')}\nDeliverable: {it.deliverable.description or 'Milestone'}\nDue: {it.generated_date}"
-            ok = True
-            try:
-                if pref.user.email:
-                    send_mail(subject, body, None, [pref.user.email])
-                    sent += 1
-            except Exception:
-                ok = False
-            if (
-                getattr(pref, 'web_push_enabled', False)
-                and getattr(pref, 'push_pre_deliverable_reminders', True)
-                and web_push_event_enabled('push_pre_deliverable_reminders')
-            ):
-                payload = build_push_payload(
-                    event_type='pred.reminder',
-                    title='Pre-Deliverable Reminder',
-                    body=f"{getattr(it.deliverable.project, 'name', 'Project')} • {it.generated_date}",
-                    url=f"/deliverables/calendar?project={it.deliverable.project_id}&deliverable={it.deliverable_id}&preItem={it.id}",
-                    tag=f"pred.reminder.{it.id}",
-                    project_id=getattr(it.deliverable, 'project_id', None),
-                    entity_type='pre_deliverable',
-                    entity_id=getattr(it, 'id', None),
-                    priority='normal',
+            body = f"{getattr(it.deliverable.project, 'name', 'Project')} • {it.generated_date}"
+            result = dispatch_event_to_users(
+                user_ids=[pref.user_id],
+                event_key='pred.reminder',
+                title='Pre-Deliverable Reminder',
+                body=body,
+                url=f"/deliverables/calendar?project={it.deliverable.project_id}&deliverable={it.deliverable_id}&preItem={it.id}",
+                tag=f"pred.reminder.{it.id}",
+                project_id=getattr(it.deliverable, 'project_id', None),
+                entity_type='pre_deliverable',
+                entity_id=getattr(it, 'id', None),
+                priority='normal',
+            )
+            dispatches += int(result.get('pushQueued', 0)) + int(result.get('inAppCreated', 0)) + int(result.get('emailQueued', 0))
+            sent += 1
+            NotificationLog.objects.create(
+                user=pref.user,
+                pre_deliverable_item=it,
+                notification_type='reminder',
+                sent_at=_date.today(),
+                email_subject=subject,
+                success=True,
+            )
+        # Standard deliverable reminder stream (separate from pre-deliverables).
+        person_id = getattr(getattr(pref.user, 'profile', None), 'person_id', None)
+        if person_id:
+            project_ids = list(
+                Assignment.objects.filter(
+                    person_id=person_id,
+                    is_active=True,
+                    project_id__isnull=False,
+                ).values_list('project_id', flat=True).distinct()
+            )
+            if project_ids:
+                horizon_days = max(0, int(pref.reminder_days_before or 1))
+                today = _date.today()
+                horizon_end = today + timedelta(days=horizon_days)
+                deliverables = (
+                    Deliverable.objects
+                    .filter(
+                        project_id__in=project_ids,
+                        date__isnull=False,
+                        date__gte=today,
+                        date__lte=horizon_end,
+                    )
+                    .select_related('project')
+                    .order_by('date', 'id')
                 )
-                try:
-                    send_push_to_users_task.delay(
-                        [pref.user_id],
-                        payload,
-                        'push_pre_deliverable_reminders',
+                for deliverable in deliverables:
+                    project_name = getattr(getattr(deliverable, 'project', None), 'name', None) or 'Project'
+                    deliverable_name = (deliverable.description or '').strip() or f"Deliverable {deliverable.id}"
+                    body = f"{project_name} • {deliverable_name} • due {deliverable.date.isoformat()}"
+                    result = dispatch_event_to_users(
+                        user_ids=[pref.user_id],
+                        event_key='deliverable.reminder',
+                        title='Deliverable Reminder',
+                        body=body,
+                        url=f"/deliverables/calendar?project={deliverable.project_id}&deliverable={deliverable.id}",
+                        tag=f"deliverable.reminder.{deliverable.id}",
+                        project_id=deliverable.project_id,
+                        entity_type='deliverable',
+                        entity_id=deliverable.id,
+                        priority='normal',
                     )
-                except Exception:
-                    send_push_to_users(
-                        [pref.user_id],
-                        payload,
-                        preference_field='push_pre_deliverable_reminders',
+                    dispatches += int(result.get('pushQueued', 0)) + int(result.get('inAppCreated', 0)) + int(result.get('emailQueued', 0))
+                    NotificationLog.objects.create(
+                        user=pref.user,
+                        pre_deliverable_item=None,
+                        notification_type='deliverable_reminder',
+                        sent_at=_date.today(),
+                        email_subject=f"Deliverable Reminder: {deliverable_name} ({deliverable.date.isoformat()})",
+                        success=True,
                     )
-            NotificationLog.objects.create(user=pref.user, pre_deliverable_item=it, notification_type='reminder', sent_at=_date.today(), email_subject=subject, success=ok)
-    return {'sent': sent}
+    return {'sent': sent, 'dispatches': dispatches}
 
 
 @shared_task(bind=True, soft_time_limit=120)
@@ -356,38 +400,107 @@ def send_daily_digest(self):
         body = '\n'.join(lines) if lines else 'No upcoming items.'
         ok = True
         try:
-            if pref.user.email:
+            if pref.user.email and channel_enabled_for_preference(pref, event_key='pred.digest', channel='email'):
                 send_mail(subject, body, None, [pref.user.email])
                 sent += 1
         except Exception:
             ok = False
-        if (
-            getattr(pref, 'web_push_enabled', False)
-            and getattr(pref, 'push_daily_digest', False)
-            and web_push_event_enabled('push_daily_digest')
-        ):
-            payload = build_push_payload(
-                event_type='pred.digest',
-                title='Daily Pre-Deliverables Digest',
-                body=f"{len(items)} upcoming item(s).",
-                url='/deliverables/calendar?mine_only=1',
-                tag='pred.digest',
-                priority='normal',
-            )
-            try:
-                send_push_to_users_task.delay(
-                    [pref.user_id],
-                    payload,
-                    'push_daily_digest',
-                )
-            except Exception:
-                send_push_to_users(
-                    [pref.user_id],
-                    payload,
-                    preference_field='push_daily_digest',
-                )
+        dispatch_event_to_users(
+            user_ids=[pref.user_id],
+            event_key='pred.digest',
+            title='Daily Pre-Deliverables Digest',
+            body=f"{len(items)} upcoming item(s).",
+            url='/deliverables/calendar?mine_only=1',
+            tag='pred.digest',
+            priority='normal',
+        )
         NotificationLog.objects.create(user=pref.user, pre_deliverable_item=None, notification_type='digest', sent_at=_date.today(), email_subject=subject, success=ok)
     return {'sent': sent}
+
+
+@shared_task(bind=True, soft_time_limit=180)
+def send_email_notification_daily_summary(self):
+    from core.models import EmailNotificationDigestItem, NotificationPreference
+    from django.core.mail import send_mail
+
+    now_ts = timezone.now()
+    unsent_qs = (
+        EmailNotificationDigestItem.objects
+        .filter(sent_at__isnull=True)
+        .select_related('user')
+        .order_by('user_id', 'created_at', 'id')
+    )
+    rows = list(unsent_qs[:5000])
+    if not rows:
+        return {'processedUsers': 0, 'sentEmails': 0, 'markedItems': 0}
+
+    user_ids = sorted({int(row.user_id) for row in rows})
+    pref_map = NotificationPreference.objects.filter(user_id__in=user_ids).in_bulk(field_name='user_id')
+
+    grouped: dict[int, list] = {}
+    for row in rows:
+        grouped.setdefault(int(row.user_id), []).append(row)
+
+    sent_emails = 0
+    marked_items = 0
+
+    for user_id, user_rows in grouped.items():
+        user = user_rows[0].user
+        if not user or not getattr(user, 'email', None):
+            # Drop unsendable rows to avoid unbounded backlog for users without email.
+            ids = [int(row.id) for row in user_rows]
+            marked_items += int(
+                EmailNotificationDigestItem.objects.filter(id__in=ids, sent_at__isnull=True).update(sent_at=now_ts)
+            )
+            continue
+
+        pref = pref_map.get(user_id)
+        tz_name = (getattr(pref, 'push_timezone', '') or '').strip() if pref else ''
+        try:
+            tzinfo = ZoneInfo(tz_name) if tz_name else timezone.get_current_timezone()
+        except Exception:
+            tzinfo = timezone.get_current_timezone()
+        local_now = now_ts.astimezone(tzinfo)
+        if int(local_now.hour) != 8:
+            continue
+
+        lock_key = f"email-notification-summary:{user_id}:{local_now.date().isoformat()}"
+        try:
+            if not cache.add(lock_key, 1, timeout=26 * 60 * 60):
+                continue
+        except Exception:
+            pass
+
+        lines = []
+        for row in user_rows[:100]:
+            title = str(getattr(row, 'title', '') or 'Notification').strip()
+            body = str(getattr(row, 'body', '') or '').strip()
+            url = str(getattr(row, 'url', '') or '/').strip()
+            if body:
+                lines.append(f"- {title}: {body} ({url})")
+            else:
+                lines.append(f"- {title} ({url})")
+        if len(user_rows) > 100:
+            lines.append(f"- ...and {len(user_rows) - 100} more updates")
+
+        subject = 'Daily Notification Summary'
+        message = '\n'.join(lines) if lines else 'No new updates.'
+        try:
+            send_mail(subject, message, None, [user.email])
+            sent_emails += 1
+            ids = [int(row.id) for row in user_rows]
+            marked_items += int(
+                EmailNotificationDigestItem.objects.filter(id__in=ids, sent_at__isnull=True).update(sent_at=now_ts)
+            )
+        except Exception:
+            # Keep unsent items for retry.
+            continue
+
+    return {
+        'processedUsers': len(grouped),
+        'sentEmails': sent_emails,
+        'markedItems': marked_items,
+    }
 
 
 @shared_task(bind=True, soft_time_limit=60)

@@ -95,8 +95,8 @@ class DeliverableDateChangePushTests(TestCase):
             ]
         )
 
-    @patch('deliverables.views.queue_push_to_users')
-    def test_next_upcoming_scope_only_pushes_for_next_deliverable(self, queue_mock):
+    @patch('deliverables.views.dispatch_event_to_users')
+    def test_next_upcoming_scope_only_pushes_for_next_deliverable(self, dispatch_mock):
         self._set_global_options(scope='next_upcoming', within_two_weeks_only=False)
 
         response = self.client.patch(
@@ -105,23 +105,22 @@ class DeliverableDateChangePushTests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        queue_mock.assert_called_once()
-        recipient_ids, payload = queue_mock.call_args[0]
-        self.assertEqual(recipient_ids, [self.recipient_user.id])
-        self.assertEqual(payload.get('type'), 'deliverable.date_changed')
-        self.assertEqual(queue_mock.call_args.kwargs.get('preference_field'), 'push_deliverable_date_changes')
+        dispatch_mock.assert_called_once()
+        kwargs = dispatch_mock.call_args.kwargs
+        self.assertEqual(kwargs.get('user_ids'), [self.recipient_user.id])
+        self.assertEqual(kwargs.get('event_key'), 'deliverable.date_changed')
 
-        queue_mock.reset_mock()
+        dispatch_mock.reset_mock()
         response = self.client.patch(
             f'/api/deliverables/{self.later_deliverable.id}/',
             {'date': (self.later_deliverable.date + timedelta(days=1)).isoformat()},
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        queue_mock.assert_not_called()
+        dispatch_mock.assert_not_called()
 
-    @patch('deliverables.views.queue_push_to_users')
-    def test_two_week_window_filters_deliverable_date_change_push(self, queue_mock):
+    @patch('deliverables.views.dispatch_event_to_users')
+    def test_two_week_window_filters_deliverable_date_change_push(self, dispatch_mock):
         self._set_global_options(scope='all_upcoming', within_two_weeks_only=True)
 
         response = self.client.patch(
@@ -130,19 +129,19 @@ class DeliverableDateChangePushTests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        queue_mock.assert_called_once()
+        dispatch_mock.assert_called_once()
 
-        queue_mock.reset_mock()
+        dispatch_mock.reset_mock()
         response = self.client.patch(
             f'/api/deliverables/{self.later_deliverable.id}/',
             {'date': (self.later_deliverable.date + timedelta(days=2)).isoformat()},
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        queue_mock.assert_not_called()
+        dispatch_mock.assert_not_called()
 
-    @patch('deliverables.views.queue_push_to_users')
-    def test_actor_is_excluded_from_project_assignment_recipient_list(self, queue_mock):
+    @patch('deliverables.views.dispatch_event_to_users')
+    def test_actor_is_excluded_from_project_assignment_recipient_list(self, dispatch_mock):
         self.recipient_profile.person = None
         self.recipient_profile.save(update_fields=['person', 'updated_at'])
         self.actor_profile.person = self.recipient_person
@@ -161,4 +160,4 @@ class DeliverableDateChangePushTests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
-        queue_mock.assert_not_called()
+        dispatch_mock.assert_not_called()

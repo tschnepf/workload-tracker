@@ -42,12 +42,9 @@ from accounts.permissions import is_admin_or_manager, IsAdminOrManager
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from projects.change_log import record_project_change
 from core.webpush import (
-    build_push_payload,
-    queue_push_to_users,
-    web_push_configured,
     web_push_deliverable_date_change_options,
-    web_push_event_enabled,
 )
+from core.notification_dispatch import dispatch_event_to_users
 try:
     from core.tasks import backfill_pre_deliverables_async  # type: ignore
 except Exception:
@@ -148,14 +145,7 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         new_date,
         next_upcoming_before_id: int | None,
     ) -> bool:
-        if not web_push_configured():
-            return False
-        if not web_push_event_enabled('push_deliverable_date_changes'):
-            return False
-
         options = web_push_deliverable_date_change_options()
-        if not bool(options.get('enabled', True)):
-            return False
 
         scope = str(options.get('scope') or '')
         if scope not in {'next_upcoming', 'all_upcoming'}:
@@ -207,8 +197,9 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         old_label = self._deliverable_push_date_label(old_date)
         new_label = self._deliverable_push_date_label(new_date)
 
-        payload = build_push_payload(
-            event_type='deliverable.date_changed',
+        dispatch_event_to_users(
+            user_ids=recipient_ids,
+            event_key='deliverable.date_changed',
             title='Deliverable Date Changed',
             body=f"{project_name} • {deliverable_name}: {old_label} -> {new_label}",
             url=f"/deliverables/calendar?project={deliverable.project_id}&deliverable={deliverable.id}",
@@ -217,11 +208,6 @@ class DeliverableViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             entity_type='deliverable',
             entity_id=deliverable.id,
             priority='normal',
-        )
-        queue_push_to_users(
-            recipient_ids,
-            payload,
-            preference_field='push_deliverable_date_changes',
         )
 
     def perform_create(self, serializer):

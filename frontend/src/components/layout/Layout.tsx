@@ -24,6 +24,7 @@ import { ProjectDetailsDrawerProvider } from '@/components/projects/detailsDrawe
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useDepartments } from '@/hooks/useDepartments';
+import NotificationBell from '@/components/layout/NotificationBell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -343,6 +344,7 @@ const TopBarInner: React.FC<{
             Install App
           </Button>
         )}
+        {authPresent ? <NotificationBell enabled={authPresent} /> : null}
         {authPresent && (
           <Button
             variant="ghost"

@@ -5,6 +5,12 @@ NEVER write manual field mappings - always use these base classes.
 
 from rest_framework import serializers
 from .fields import PERSON_FIELDS, PROJECT_FIELDS, ASSIGNMENT_FIELDS, DEPARTMENT_FIELDS
+from .notification_matrix import (
+    catalog_payload,
+    global_legacy_push_fields_from_matrix,
+    legacy_global_matrix_from_settings,
+    normalize_notification_channel_matrix,
+)
 from .models import (
     UtilizationScheme,
     ProjectRole,
@@ -250,7 +256,79 @@ class WebPushGlobalSettingsSerializer(serializers.ModelSerializer):
         source='push_deliverable_date_change_within_two_weeks_only',
         required=False,
     )
+    notificationChannelMatrix = serializers.JSONField(
+        source='notification_channel_matrix',
+        required=False,
+    )
+    notificationEventCatalog = serializers.SerializerMethodField(read_only=True)
     updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    def get_notificationEventCatalog(self, obj):
+        return catalog_payload()
+
+    def validate_notificationChannelMatrix(self, value):
+        return normalize_notification_channel_matrix(
+            value,
+            fallback=legacy_global_matrix_from_settings(self.instance),
+        )
+
+    def to_representation(self, instance):
+        payload = super().to_representation(instance)
+        payload['notificationChannelMatrix'] = normalize_notification_channel_matrix(
+            payload.get('notificationChannelMatrix'),
+            fallback=legacy_global_matrix_from_settings(instance),
+        )
+        return payload
+
+    def update(self, instance, validated_data):
+        matrix = validated_data.get('notification_channel_matrix')
+
+        def _apply_legacy_push_overrides(target_matrix: dict) -> bool:
+            changed = False
+            if 'push_pre_deliverable_reminders_enabled' in validated_data:
+                target_matrix['pred.reminder']['mobilePush'] = bool(
+                    validated_data['push_pre_deliverable_reminders_enabled']
+                )
+                changed = True
+            if 'push_daily_digest_enabled' in validated_data:
+                target_matrix['pred.digest']['mobilePush'] = bool(validated_data['push_daily_digest_enabled'])
+                changed = True
+            if 'push_deliverable_date_changes_enabled' in validated_data:
+                target_matrix['deliverable.date_changed']['mobilePush'] = bool(
+                    validated_data['push_deliverable_date_changes_enabled']
+                )
+                changed = True
+            if 'push_assignment_changes_enabled' in validated_data:
+                assignment_enabled = bool(validated_data['push_assignment_changes_enabled'])
+                for event_key in (
+                    'assignment.created',
+                    'assignment.removed',
+                    'assignment.bulk_updated',
+                ):
+                    target_matrix[event_key]['mobilePush'] = assignment_enabled
+                changed = True
+            return changed
+
+        if isinstance(matrix, dict):
+            normalized_matrix = normalize_notification_channel_matrix(
+                matrix,
+                fallback=legacy_global_matrix_from_settings(instance),
+            )
+            _apply_legacy_push_overrides(normalized_matrix)
+            validated_data['notification_channel_matrix'] = normalized_matrix
+
+            legacy_fields = global_legacy_push_fields_from_matrix(normalized_matrix)
+            for field, field_value in legacy_fields.items():
+                validated_data.setdefault(field, field_value)
+        else:
+            current_matrix = normalize_notification_channel_matrix(
+                getattr(instance, 'notification_channel_matrix', None),
+                fallback=legacy_global_matrix_from_settings(instance),
+            )
+            if _apply_legacy_push_overrides(current_matrix):
+                validated_data['notification_channel_matrix'] = current_matrix
+
+        return super().update(instance, validated_data)
 
     class Meta:
         model = WebPushGlobalSettings
@@ -271,6 +349,8 @@ class WebPushGlobalSettingsSerializer(serializers.ModelSerializer):
             'pushDeliverableDateChangesEnabled',
             'pushDeliverableDateChangeScope',
             'pushDeliverableDateChangeWithinTwoWeeksOnly',
+            'notificationChannelMatrix',
+            'notificationEventCatalog',
             'updatedAt',
         ]
 

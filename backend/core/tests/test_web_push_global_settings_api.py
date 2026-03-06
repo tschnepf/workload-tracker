@@ -48,6 +48,9 @@ class WebPushGlobalSettingsApiTests(TestCase):
         self.assertTrue(get_response.json()['pushDeliverableDateChangesEnabled'])
         self.assertEqual(get_response.json()['pushDeliverableDateChangeScope'], 'next_upcoming')
         self.assertFalse(get_response.json()['pushDeliverableDateChangeWithinTwoWeeksOnly'])
+        self.assertIn('notificationChannelMatrix', get_response.json())
+        self.assertIn('notificationEventCatalog', get_response.json())
+        self.assertTrue(get_response.json()['notificationChannelMatrix']['pred.reminder']['mobilePush'])
 
         put_response = self.client.put(
             '/api/core/web_push_settings/',
@@ -68,6 +71,15 @@ class WebPushGlobalSettingsApiTests(TestCase):
                 'pushDeliverableDateChangesEnabled': False,
                 'pushDeliverableDateChangeScope': 'all_upcoming',
                 'pushDeliverableDateChangeWithinTwoWeeksOnly': True,
+                'notificationChannelMatrix': {
+                    'pred.reminder': {'mobilePush': True, 'email': True, 'inBrowser': True},
+                    'pred.digest': {'mobilePush': True, 'email': True, 'inBrowser': True},
+                    'assignment.created': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                    'assignment.removed': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                    'assignment.bulk_updated': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                    'deliverable.reminder': {'mobilePush': True, 'email': True, 'inBrowser': True},
+                    'deliverable.date_changed': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                },
             },
             format='json',
         )
@@ -88,6 +100,7 @@ class WebPushGlobalSettingsApiTests(TestCase):
         self.assertFalse(put_response.json()['pushDeliverableDateChangesEnabled'])
         self.assertEqual(put_response.json()['pushDeliverableDateChangeScope'], 'all_upcoming')
         self.assertTrue(put_response.json()['pushDeliverableDateChangeWithinTwoWeeksOnly'])
+        self.assertFalse(put_response.json()['notificationChannelMatrix']['assignment.created']['mobilePush'])
 
         get_after_put = self.client.get('/api/core/web_push_settings/')
         self.assertEqual(get_after_put.status_code, status.HTTP_200_OK, get_after_put.content)

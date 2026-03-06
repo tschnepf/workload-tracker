@@ -47,7 +47,7 @@ from deliverables.models import Deliverable
 from .services import WorkloadRebalancingService
 from accounts.permissions import is_admin_or_manager
 from accounts.models import UserProfile
-from core.webpush import build_push_payload, queue_push_to_users, web_push_configured, web_push_event_enabled
+from core.notification_dispatch import dispatch_event_to_users
 from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponseNotModified
@@ -156,12 +156,6 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             'isPlaceholder': assignment.person_id is None,
         }
 
-    def _push_assignment_events_enabled(self) -> bool:
-        return bool(
-            web_push_configured()
-            and web_push_event_enabled('push_assignment_changes')
-        )
-
     def _recipient_user_ids_for_persons(self, person_ids: list[int], actor_user_id: int | None = None) -> list[int]:
         normalized = sorted({int(pid) for pid in person_ids if pid is not None})
         if not normalized:
@@ -170,6 +164,26 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if actor_user_id:
             qs = qs.exclude(user_id=actor_user_id)
         return list(qs.values_list('user_id', flat=True).distinct())
+
+    def _actor_display_name(self, actor_user) -> str:
+        if actor_user is None:
+            return 'Someone'
+        try:
+            profile = getattr(actor_user, 'profile', None)
+            person = getattr(profile, 'person', None)
+            person_name = str(getattr(person, 'name', '') or '').strip()
+            if person_name:
+                return person_name
+        except Exception:
+            pass
+        try:
+            full_name = str(actor_user.get_full_name() or '').strip()
+            if full_name:
+                return full_name
+        except Exception:
+            pass
+        username = str(getattr(actor_user, 'username', '') or '').strip()
+        return username or 'Someone'
 
     def _queue_assignment_push_event(
         self,
@@ -184,13 +198,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         project_id: int | None = None,
         assignment_id: int | None = None,
     ) -> None:
-        if not self._push_assignment_events_enabled():
-            return
         recipient_ids = self._recipient_user_ids_for_persons(person_ids, actor_user_id=actor_user_id)
         if not recipient_ids:
             return
-        payload = build_push_payload(
-            event_type=event_type,
+        dispatch_event_to_users(
+            user_ids=recipient_ids,
+            event_key=event_type,
             title=title,
             body=body,
             url=url,
@@ -200,7 +213,6 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             entity_id=assignment_id,
             priority='normal',
         )
-        queue_push_to_users(recipient_ids, payload, preference_field='push_assignment_changes')
 
     def _apply_department_filter(self, queryset, dept_param, include_children, include_placeholders):
         """Apply department scoping for assignment/person filters."""
@@ -3766,7 +3778,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 results.append({'assignmentId': assignment.id, 'status': 'ok', 'etag': _etag_for_assignment(assignment)})
 
         success = all(item['status'] in ('ok', 'noop') for item in results)
-        if changed_person_ids and self._push_assignment_events_enabled():
+        if changed_person_ids:
             actor_user_id = getattr(getattr(request, 'user', None), 'id', None)
             recipient_counts: dict[int, int] = {}
             profile_qs = UserProfile.objects.filter(
@@ -3782,14 +3794,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 for user_id in person_to_users.get(int(person_id), []):
                     recipient_counts[user_id] = recipient_counts.get(user_id, 0) + 1
             for user_id, count in recipient_counts.items():
-                payload = build_push_payload(
-                    event_type='assignment.bulk_updated',
+                dispatch_event_to_users(
+                    user_ids=[user_id],
+                    event_key='assignment.bulk_updated',
                     title='Assignments Updated',
                     body=f"{count} assignment update(s) were applied.",
                     url='/assignments',
                     tag=f'assignment.bulk_updated.{user_id}',
                 )
-                queue_push_to_users([user_id], payload, preference_field='push_assignment_changes')
         return Response({'success': success, 'results': results})
 
     def create(self, request, *args, **kwargs):
@@ -3811,11 +3823,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 )
             if assignment.person_id:
                 project_name = assignment.project_display
-                person_name = getattr(getattr(assignment, 'person', None), 'name', 'Person')
+                actor_name = self._actor_display_name(getattr(request, 'user', None))
                 self._queue_assignment_push_event(
                     event_type='assignment.created',
                     title='Assignment Added',
-                    body=f"{person_name} was assigned to {project_name}.",
+                    body=f"{actor_name} assigned you to {project_name}.",
                     url=f"/assignments?projectId={assignment.project_id}&assignmentId={assignment.id}",
                     tag=f'assignment.created.{assignment.id}',
                     person_ids=[assignment.person_id],
@@ -3832,9 +3844,6 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        before_person_id = instance.person_id
-        before_person_name = getattr(getattr(instance, 'person', None), 'name', 'Person')
-        before_project_name = instance.project_display
 
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
@@ -3854,36 +3863,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 detail={'assignment': self._assignment_log_payload(assignment)},
             )
 
-        recipient_person_ids = [pid for pid in {before_person_id, assignment.person_id} if pid]
-        if recipient_person_ids:
-            if before_person_id and assignment.person_id and before_person_id != assignment.person_id:
-                current_person_name = getattr(getattr(assignment, 'person', None), 'name', 'Person')
-                body = (
-                    f"{before_person_name} was replaced by {current_person_name} on {assignment.project_display}."
-                )
-            else:
-                current_person_name = getattr(getattr(assignment, 'person', None), 'name', 'Person')
-                project_name = assignment.project_display or before_project_name
-                body = f"{current_person_name}'s assignment on {project_name} was updated."
-            self._queue_assignment_push_event(
-                event_type='assignment.updated',
-                title='Assignment Updated',
-                body=body,
-                url=f"/assignments?projectId={assignment.project_id}&assignmentId={assignment.id}",
-                tag=f'assignment.updated.{assignment.id}',
-                person_ids=recipient_person_ids,
-                actor_user_id=getattr(getattr(request, 'user', None), 'id', None),
-                project_id=assignment.project_id,
-                assignment_id=assignment.id,
-            )
-
         return Response(self.get_serializer(assignment).data)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         project = instance.project
         person_id = instance.person_id
-        person_name = getattr(getattr(instance, 'person', None), 'name', 'Person')
         project_name = instance.project_display
         detail = {'assignment': self._assignment_log_payload(instance)}
         response = super().destroy(request, *args, **kwargs)
@@ -3895,10 +3880,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 detail=detail,
             )
         if person_id:
+            actor_name = self._actor_display_name(getattr(request, 'user', None))
             self._queue_assignment_push_event(
                 event_type='assignment.removed',
                 title='Assignment Removed',
-                body=f"{person_name} was removed from {project_name}.",
+                body=f"{actor_name} removed you from {project_name}.",
                 url=f"/assignments?projectId={instance.project_id}&assignmentId={instance.id}",
                 tag=f'assignment.removed.{instance.id}',
                 person_ids=[person_id],

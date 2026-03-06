@@ -71,7 +71,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
   },
   {
     id: PUSH_NOTIFICATIONS_SECTION_ID,
-    title: 'Mobile',
+    title: 'Notifications',
     requiresAdmin: true,
     component: PushNotificationsSection,
   },

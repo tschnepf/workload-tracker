@@ -7,6 +7,7 @@ import {
   authApi,
   peopleApi,
   systemApi,
+  type NotificationChannelMatrix,
   type NotificationPreferences,
   type PushSubscriptionItem,
 } from '@/services/api';
@@ -16,6 +17,26 @@ import Layout from '@/components/layout/Layout';
 import { setSettings } from '@/store/auth';
 import { setColorScheme } from '@/theme/themeManager';
 import { base64UrlToUint8Array, isWebPushSupported } from '@/utils/push';
+
+const defaultNotificationMatrix = (): NotificationChannelMatrix => ({
+  'pred.reminder': { mobilePush: true, email: true, inBrowser: true },
+  'pred.digest': { mobilePush: true, email: true, inBrowser: true },
+  'assignment.created': { mobilePush: true, email: true, inBrowser: true },
+  'assignment.removed': { mobilePush: true, email: true, inBrowser: true },
+  'assignment.bulk_updated': { mobilePush: true, email: true, inBrowser: true },
+  'deliverable.reminder': { mobilePush: true, email: true, inBrowser: true },
+  'deliverable.date_changed': { mobilePush: true, email: true, inBrowser: true },
+});
+
+const notificationMatrixRows: Array<{ key: keyof NotificationChannelMatrix; label: string }> = [
+  { key: 'pred.reminder', label: 'Pre-deliverable reminder' },
+  { key: 'pred.digest', label: 'Daily digest' },
+  { key: 'assignment.created', label: 'Assignment created' },
+  { key: 'assignment.removed', label: 'Assignment removed' },
+  { key: 'assignment.bulk_updated', label: 'Assignment bulk updated' },
+  { key: 'deliverable.reminder', label: 'Deliverable reminder' },
+  { key: 'deliverable.date_changed', label: 'Deliverable date changed' },
+];
 
 const Profile: React.FC = () => {
   const auth = useAuth();
@@ -40,12 +61,6 @@ const Profile: React.FC = () => {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushServerEnabled, setPushServerEnabled] = useState(false);
   const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
-  const [pushEventAvailability, setPushEventAvailability] = useState({
-    preDeliverableReminders: true,
-    dailyDigest: true,
-    assignmentChanges: true,
-    deliverableDateChanges: true,
-  });
   const [pushFeatureAvailability, setPushFeatureAvailability] = useState({
     rateLimit: true,
     weekendMute: true,
@@ -86,6 +101,8 @@ const Profile: React.FC = () => {
     pushActionsEnabled: true,
     pushDeepLinksEnabled: true,
     pushSubscriptionCleanupEnabled: true,
+    notificationChannelMatrix: defaultNotificationMatrix(),
+    effectiveChannelAvailability: defaultNotificationMatrix(),
   }), [browserTimezone]);
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
@@ -124,15 +141,11 @@ const Profile: React.FC = () => {
           ...prefs,
           pushTimezone: (prefs as any)?.pushTimezone || browserTimezone || '',
           pushSnoozeUntil: (prefs as any)?.pushSnoozeUntil || null,
+          notificationChannelMatrix: (prefs as any)?.notificationChannelMatrix || defaultNotificationMatrix(),
+          effectiveChannelAvailability: (prefs as any)?.effectiveChannelAvailability || defaultNotificationMatrix(),
         });
         setPushServerEnabled(Boolean(caps?.pwa?.enabled && caps?.pwa?.pushEnabled));
         setVapidPublicKey(caps?.pwa?.vapidPublicKey || null);
-        setPushEventAvailability({
-          preDeliverableReminders: Boolean(caps?.pwa?.pushEvents?.preDeliverableReminders ?? true),
-          dailyDigest: Boolean(caps?.pwa?.pushEvents?.dailyDigest ?? true),
-          assignmentChanges: Boolean(caps?.pwa?.pushEvents?.assignmentChanges ?? true),
-          deliverableDateChanges: Boolean(caps?.pwa?.pushEvents?.deliverableDateChanges ?? true),
-        });
         setPushFeatureAvailability({
           rateLimit: Boolean(caps?.pwa?.pushFeatures?.rateLimit ?? true),
           weekendMute: Boolean(caps?.pwa?.pushFeatures?.weekendMute ?? true),
@@ -182,11 +195,11 @@ const Profile: React.FC = () => {
   }, [notificationPrefs?.webPushEnabled, pushSupported, pushServerEnabled, vapidPublicKey]);
 
   const canEditName = !!auth.person?.id;
-  const hasGlobalPushEventRestriction = (
-    !pushEventAvailability.preDeliverableReminders
-    || !pushEventAvailability.dailyDigest
-    || !pushEventAvailability.assignmentChanges
-    || !pushEventAvailability.deliverableDateChanges
+  const hasGlobalPushEventRestriction = Boolean(
+    notificationPrefs
+    && Object.values(notificationPrefs.effectiveChannelAvailability || {}).some((row: any) => (
+      !row?.mobilePush || !row?.email || !row?.inBrowser
+    )),
   );
   const hasGlobalPushFeatureRestriction = (
     !pushFeatureAvailability.rateLimit
@@ -389,73 +402,73 @@ const Profile: React.FC = () => {
                 Enable push notifications
               </label>
 
-              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={notificationPrefs.pushPreDeliverableReminders}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.preDeliverableReminders}
-                  onChange={async (e) => {
-                    const next = { ...notificationPrefs, pushPreDeliverableReminders: (e.target as HTMLInputElement).checked };
-                    try {
-                      await saveNotificationPrefs(next);
-                    } catch {
-                      setToast({ message: 'Failed to update reminder push preference', type: 'error' });
-                    }
-                  }}
-                />
-                Push pre-deliverable reminders
-              </label>
-
-              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={notificationPrefs.pushDailyDigest}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.dailyDigest}
-                  onChange={async (e) => {
-                    const next = { ...notificationPrefs, pushDailyDigest: (e.target as HTMLInputElement).checked };
-                    try {
-                      await saveNotificationPrefs(next);
-                    } catch {
-                      setToast({ message: 'Failed to update digest push preference', type: 'error' });
-                    }
-                  }}
-                />
-                Push daily digest
-              </label>
-
-              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={notificationPrefs.pushAssignmentChanges}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.assignmentChanges}
-                  onChange={async (e) => {
-                    const next = { ...notificationPrefs, pushAssignmentChanges: (e.target as HTMLInputElement).checked };
-                    try {
-                      await saveNotificationPrefs(next);
-                    } catch {
-                      setToast({ message: 'Failed to update assignment push preference', type: 'error' });
-                    }
-                  }}
-                />
-                Push assignment changes
-              </label>
-
-              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={notificationPrefs.pushDeliverableDateChanges}
-                  disabled={notificationBusy || !notificationPrefs.webPushEnabled || !pushEventAvailability.deliverableDateChanges}
-                  onChange={async (e) => {
-                    const next = { ...notificationPrefs, pushDeliverableDateChanges: (e.target as HTMLInputElement).checked };
-                    try {
-                      await saveNotificationPrefs(next);
-                    } catch {
-                      setToast({ message: 'Failed to update deliverable date-change push preference', type: 'error' });
-                    }
-                  }}
-                />
-                Push deliverable date changes
-              </label>
+              <div className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide pt-1">
+                Channel Preferences
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-[var(--border)] text-sm">
+                  <thead>
+                    <tr className="bg-[var(--surface)] text-[var(--muted)]">
+                      <th className="text-left px-3 py-2 border-b border-[var(--border)]">Notification</th>
+                      <th className="text-center px-3 py-2 border-b border-[var(--border)]">Mobile Push</th>
+                      <th className="text-center px-3 py-2 border-b border-[var(--border)]">Email</th>
+                      <th className="text-center px-3 py-2 border-b border-[var(--border)]">In Browser</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {notificationMatrixRows.map((row) => {
+                      const current = notificationPrefs.notificationChannelMatrix?.[row.key] || { mobilePush: true, email: true, inBrowser: true };
+                      const available = notificationPrefs.effectiveChannelAvailability?.[row.key] || { mobilePush: true, email: true, inBrowser: true };
+                      const toggleCell = async (channel: 'mobilePush' | 'email' | 'inBrowser', checked: boolean) => {
+                        const next: NotificationPreferences = {
+                          ...notificationPrefs,
+                          notificationChannelMatrix: {
+                            ...notificationPrefs.notificationChannelMatrix,
+                            [row.key]: {
+                              ...current,
+                              [channel]: checked,
+                            },
+                          },
+                        };
+                        try {
+                          await saveNotificationPrefs(next);
+                        } catch {
+                          setToast({ message: 'Failed to update notification channel preference', type: 'error' });
+                        }
+                      };
+                      return (
+                        <tr key={row.key} className="border-b border-[var(--border)] last:border-b-0">
+                          <td className="px-3 py-2 text-[var(--text)]">{row.label}</td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(current.mobilePush)}
+                              disabled={notificationBusy || !available.mobilePush}
+                              onChange={(e) => void toggleCell('mobilePush', (e.target as HTMLInputElement).checked)}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(current.email)}
+                              disabled={notificationBusy || !available.email}
+                              onChange={(e) => void toggleCell('email', (e.target as HTMLInputElement).checked)}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(current.inBrowser)}
+                              disabled={notificationBusy || !available.inBrowser}
+                              onChange={(e) => void toggleCell('inBrowser', (e.target as HTMLInputElement).checked)}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
               <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                 <input

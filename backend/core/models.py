@@ -2,12 +2,20 @@ import base64
 import hashlib
 import secrets
 import re
+from datetime import timedelta
 
 from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+from django.utils import timezone
+
+from core.notification_matrix import (
+    default_notification_channel_matrix,
+    legacy_global_matrix_from_settings,
+    normalize_notification_channel_matrix,
+)
 
 
 def default_auto_hours_phase_keys():
@@ -524,6 +532,7 @@ class NotificationPreference(models.Model):
     push_actions_enabled = models.BooleanField(default=True)
     push_deep_links_enabled = models.BooleanField(default=True)
     push_subscription_cleanup_enabled = models.BooleanField(default=True)
+    notification_channel_matrix = models.JSONField(default=default_notification_channel_matrix, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -565,6 +574,7 @@ class WebPushGlobalSettings(models.Model):
         default=DELIVERABLE_SCOPE_NEXT_UPCOMING,
     )
     push_deliverable_date_change_within_two_weeks_only = models.BooleanField(default=False)
+    notification_channel_matrix = models.JSONField(default=default_notification_channel_matrix, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -576,6 +586,13 @@ class WebPushGlobalSettings(models.Model):
 
     @classmethod
     def get_active(cls):
+        class _LegacyDefaults:
+            push_pre_deliverable_reminders_enabled = bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
+            push_daily_digest_enabled = bool(getattr(settings, 'WEB_PUSH_REMINDER_EVENTS_ENABLED', True))
+            push_assignment_changes_enabled = bool(getattr(settings, 'WEB_PUSH_ASSIGNMENT_EVENTS_ENABLED', True))
+            push_deliverable_date_changes_enabled = bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True))
+
+        legacy_default_matrix = legacy_global_matrix_from_settings(_LegacyDefaults())
         obj, _ = cls.objects.get_or_create(
             key='default',
             defaults={
@@ -595,6 +612,7 @@ class WebPushGlobalSettings(models.Model):
                 'push_deliverable_date_changes_enabled': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_EVENTS_ENABLED', True)),
                 'push_deliverable_date_change_scope': str(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_SCOPE', cls.DELIVERABLE_SCOPE_NEXT_UPCOMING) or cls.DELIVERABLE_SCOPE_NEXT_UPCOMING),
                 'push_deliverable_date_change_within_two_weeks_only': bool(getattr(settings, 'WEB_PUSH_DELIVERABLE_DATE_CHANGE_WITHIN_TWO_WEEKS_ONLY', False)),
+                'notification_channel_matrix': legacy_default_matrix,
             },
         )
         if obj.push_deliverable_date_change_scope not in {
@@ -607,6 +625,13 @@ class WebPushGlobalSettings(models.Model):
         if int(getattr(obj, 'push_rate_limit_per_hour', 3) or 3) != normalized_rate:
             obj.push_rate_limit_per_hour = normalized_rate
             obj.save(update_fields=['push_rate_limit_per_hour', 'updated_at'])
+        normalized_matrix = normalize_notification_channel_matrix(
+            getattr(obj, 'notification_channel_matrix', None),
+            fallback=legacy_global_matrix_from_settings(obj),
+        )
+        if normalized_matrix != (getattr(obj, 'notification_channel_matrix', None) or {}):
+            obj.notification_channel_matrix = normalized_matrix
+            obj.save(update_fields=['notification_channel_matrix', 'updated_at'])
         return obj
 
 
@@ -665,6 +690,56 @@ class WebPushVapidKeys(models.Model):
     @property
     def configured(self) -> bool:
         return bool(self.get_public_key() and self.get_private_key() and str(self.subject or '').strip())
+
+
+def default_in_app_notification_expiry():
+    return timezone.now() + timedelta(days=7)
+
+
+class InAppNotification(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='in_app_notifications')
+    event_key = models.CharField(max_length=120)
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True, default='')
+    url = models.CharField(max_length=500, blank=True, default='/')
+    payload = models.JSONField(default=dict, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    cleared_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(default=default_in_app_notification_expiry)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['user', 'cleared_at', 'created_at'], name='idx_inapp_user_clear'),
+            models.Index(fields=['user', 'read_at', 'created_at'], name='idx_inapp_user_read'),
+            models.Index(fields=['expires_at'], name='idx_inapp_expires'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"InAppNotification(user={self.user_id}, event={self.event_key})"
+
+
+class EmailNotificationDigestItem(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='email_notification_digest_items')
+    event_key = models.CharField(max_length=120)
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True, default='')
+    url = models.CharField(max_length=500, blank=True, default='/')
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [
+            models.Index(fields=['user', 'sent_at', 'created_at'], name='idx_emaildig_user_sent'),
+            models.Index(fields=['sent_at', 'created_at'], name='idx_emaildig_sent'),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"EmailNotificationDigestItem(user={self.user_id}, event={self.event_key})"
 
 
 class NotificationLog(models.Model):

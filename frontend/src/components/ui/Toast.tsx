@@ -1,6 +1,6 @@
 /**
  * Toast notification component - Windows 11 style floating notification
- * Appears in lower right corner with proper shadow and elevation
+ * Appears in upper right corner with proper shadow and elevation
  * Auto-dismisses after specified time with manual dismiss option
  */
 
@@ -64,12 +64,12 @@ const Toast: React.FC<ToastProps> = ({
 
   const styles = getTypeStyles();
 
-  const bottomOffset = `${24 + (stackIndex * 88)}px`;
+  const topOffset = `${24 + (stackIndex * 88)}px`;
 
   const toastElement = (
     <div
       className="fixed right-6 z-[9999] animate-in slide-in-from-right-5 duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none"
-      style={{ bottom: bottomOffset }}
+      style={{ top: topOffset }}
     >
       <div className={`
         relative rounded-xl px-4 py-4 pr-10 min-w-[320px] max-w-[400px]

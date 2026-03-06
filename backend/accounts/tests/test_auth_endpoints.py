@@ -8,7 +8,7 @@ from rest_framework import status
 from people.models import Person
 from projects.models import Project
 from integrations.models import AuthMethodPolicy
-from core.models import NotificationPreference, WebPushGlobalSettings, WebPushProjectMute
+from core.models import InAppNotification, NotificationPreference, WebPushGlobalSettings, WebPushProjectMute
 
 
 class AuthEndpointsTests(TestCase):
@@ -151,6 +151,8 @@ class AuthEndpointsTests(TestCase):
         self.assertIn('pushActionsEnabled', response.data)
         self.assertIn('pushDeepLinksEnabled', response.data)
         self.assertIn('pushSubscriptionCleanupEnabled', response.data)
+        self.assertIn('notificationChannelMatrix', response.data)
+        self.assertIn('effectiveChannelAvailability', response.data)
 
         payload = {
             'emailPreDeliverableReminders': True,
@@ -174,11 +176,20 @@ class AuthEndpointsTests(TestCase):
             'pushActionsEnabled': False,
             'pushDeepLinksEnabled': False,
             'pushSubscriptionCleanupEnabled': False,
+            'notificationChannelMatrix': {
+                'pred.reminder': {'mobilePush': True, 'email': True, 'inBrowser': True},
+                'pred.digest': {'mobilePush': False, 'email': False, 'inBrowser': True},
+                'assignment.created': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                'assignment.removed': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                'assignment.bulk_updated': {'mobilePush': False, 'email': True, 'inBrowser': True},
+                'deliverable.reminder': {'mobilePush': True, 'email': True, 'inBrowser': True},
+                'deliverable.date_changed': {'mobilePush': True, 'email': True, 'inBrowser': True},
+            },
         }
         response = self.client.put('/api/auth/notification-preferences/', payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['webPushEnabled'])
-        self.assertTrue(response.data['pushDailyDigest'])
+        self.assertFalse(response.data['pushDailyDigest'])
         self.assertFalse(response.data['pushAssignmentChanges'])
         self.assertTrue(response.data['pushDeliverableDateChanges'])
         self.assertFalse(response.data['pushRateLimitEnabled'])
@@ -193,6 +204,9 @@ class AuthEndpointsTests(TestCase):
         self.assertFalse(response.data['pushActionsEnabled'])
         self.assertFalse(response.data['pushDeepLinksEnabled'])
         self.assertFalse(response.data['pushSubscriptionCleanupEnabled'])
+        self.assertIn('notificationChannelMatrix', response.data)
+        self.assertFalse(response.data['notificationChannelMatrix']['pred.digest']['mobilePush'])
+        self.assertFalse(response.data['notificationChannelMatrix']['pred.digest']['email'])
 
     def test_notification_preferences_respect_global_push_event_availability(self):
         cfg = WebPushGlobalSettings.get_active()
@@ -334,6 +348,58 @@ class AuthEndpointsTests(TestCase):
 
         deleted = self.client.delete(f'/api/auth/push-subscriptions/{sub_id}/')
         self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_in_app_notifications_crud(self):
+        self._auth(self.user)
+        other = get_user_model().objects.create_user(username='other', email='other@example.com', password='x')
+
+        first = InAppNotification.objects.create(
+            user=self.user,
+            event_key='assignment.removed',
+            title='Assignment removed',
+            body='Assigned hours changed.',
+            url='/assignments',
+        )
+        second = InAppNotification.objects.create(
+            user=self.user,
+            event_key='deliverable.date_changed',
+            title='Deliverable date changed',
+            body='Date was updated.',
+            url='/deliverables/calendar',
+        )
+        InAppNotification.objects.create(
+            user=other,
+            event_key='assignment.created',
+            title='Other user item',
+            body='Hidden',
+            url='/assignments',
+        )
+
+        listed = self.client.get('/api/auth/in-app-notifications/?limit=10')
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(int(listed.data.get('unreadCount') or 0), 2)
+        self.assertEqual(len(listed.data.get('items') or []), 2)
+
+        mark_read = self.client.post(
+            '/api/auth/in-app-notifications/mark-read/',
+            {'ids': [first.id]},
+            format='json',
+        )
+        self.assertEqual(mark_read.status_code, status.HTTP_200_OK)
+        first.refresh_from_db()
+        self.assertIsNotNone(first.read_at)
+
+        clear_resp = self.client.post(
+            '/api/auth/in-app-notifications/clear/',
+            {'ids': [second.id]},
+            format='json',
+        )
+        self.assertEqual(clear_resp.status_code, status.HTTP_200_OK)
+        second.refresh_from_db()
+        self.assertIsNotNone(second.cleared_at)
+
+        mark_all = self.client.post('/api/auth/in-app-notifications/mark-all-read/', {}, format='json')
+        self.assertEqual(mark_all.status_code, status.HTTP_200_OK)
 
     @override_settings(
         WEB_PUSH_TEST_STAFF_ONLY=True,

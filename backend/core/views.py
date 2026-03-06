@@ -914,7 +914,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'project-statuses', 'title': 'Project Status and Colors', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'project-templates', 'title': 'Project Manloader Template', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'pre-deliverables', 'title': 'Pre-Deliverables', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
-        {'id': 'push-notifications', 'title': 'Mobile', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
+        {'id': 'push-notifications', 'title': 'Notifications', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'project-task-templates', 'title': 'Project Task Templates', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
         {'id': 'calendar-feeds', 'title': 'Calendar Feeds', 'requires_admin': False, 'allow_manager': False, 'integrations_only': False},
         {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
