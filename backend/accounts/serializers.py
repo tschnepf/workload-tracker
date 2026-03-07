@@ -47,6 +47,7 @@ ALLOWED_DASHBOARD_CARD_IDS = {
         "availability-alerting",
     },
     "my-work-dashboard": {
+        "my-summary",
         "my-projects",
         "my-deliverables",
         "upcoming-pre-deliverables",

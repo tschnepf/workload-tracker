@@ -28,7 +28,7 @@ export const GlobalVerticalFilter: React.FC<Props> = ({ expand = false }) => {
         }}
         disabled={isLoading}
         size="sm"
-        className={`${expand ? 'min-w-[180px] flex-1' : 'w-[140px] sm:w-[190px]'}`}
+        className={`${expand ? 'min-w-[180px] flex-1 h-10' : 'w-[140px] sm:w-[190px] h-10'}`}
       >
         <option value="">{isLoading ? 'Loading…' : 'All Verticals'}</option>
         {verticals.map((v) => (

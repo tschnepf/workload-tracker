@@ -219,7 +219,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           value={selectedOp}
           onChange={(e) => setSelectedOp((e.target as HTMLSelectElement).value as DepartmentFilterOp)}
           size="sm"
-          className="w-[78px] sm:w-[86px]"
+          className="h-10 w-[78px] sm:w-[86px]"
         >
           <option value="and">AND</option>
           <option value="or">OR</option>

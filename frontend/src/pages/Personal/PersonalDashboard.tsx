@@ -78,6 +78,30 @@ const PersonalDashboard: React.FC = () => {
 
   const personalCards = React.useMemo<DashboardCardDefinition[]>(() => [
     {
+      id: 'my-summary',
+      title: 'My Summary',
+      render: () => (
+        summary && alerts ? (
+          <MySummaryCard summary={summary} alerts={alerts} className="h-full min-h-0" compact />
+        ) : (
+          <Card className="h-full min-h-0 p-4">
+            <div className="h-5 w-28 bg-[var(--surface)] rounded mb-3" />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="h-8 bg-[var(--surface)] rounded" />
+              <div className="h-8 bg-[var(--surface)] rounded" />
+              <div className="h-8 bg-[var(--surface)] rounded" />
+              <div className="h-8 bg-[var(--surface)] rounded" />
+            </div>
+          </Card>
+        )
+      ),
+      renderPreview: () => (
+        <span>
+          {summary ? `${summary.utilizationPercent}% utilization` : 'Summary loading'}
+        </span>
+      ),
+    },
+    {
       id: 'my-projects',
       title: 'My Projects',
       render: () => <MyProjectsCard className="h-full min-h-0" projects={projects} />,
@@ -146,6 +170,8 @@ const PersonalDashboard: React.FC = () => {
     leadProjectGrid.loading,
     leadProjectGrid.refresh,
     leadWeeks,
+    summary,
+    alerts,
     schedule,
   ]);
 
@@ -188,17 +214,6 @@ const PersonalDashboard: React.FC = () => {
             {renderMobileSkeletons()}
           </div>
         ) : null}
-
-        {/* Summary (full width) */}
-        {summary && alerts ? (
-          <MySummaryCard summary={summary} alerts={alerts} />
-        ) : (
-          <section aria-busy="true" role="status" className="bg-[var(--card)] border border-[var(--border)] rounded p-4">
-            <div className="h-5 w-40 bg-[var(--surface)] rounded mb-3" />
-            <div className="h-3 w-full bg-[var(--surface)] rounded mb-2" />
-            <div className="h-3 w-5/6 bg-[var(--surface)] rounded" />
-          </section>
-        )}
 
         {loading && !data ? (
           <div className="text-sm text-[var(--muted)]">Loading assignments…</div>

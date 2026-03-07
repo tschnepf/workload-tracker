@@ -94,6 +94,11 @@ class AuthEndpointsTests(TestCase):
                                 ],
                             },
                         },
+                        'my-work-dashboard': {
+                            'widgets': [
+                                {'i': 'my-summary', 'cardId': 'my-summary', 'x': 0, 'y': 0, 'w': 2, 'h': 2},
+                            ],
+                        },
                     },
                 },
                 'unknownKey': 'ignored',
@@ -116,6 +121,11 @@ class AuthEndpointsTests(TestCase):
         self.assertIn('4', widgets_by_cols)
         self.assertEqual(widgets_by_cols['4'][0], {'i': 'recent-assignments', 'cardId': 'recent-assignments', 'x': 0, 'y': 0, 'w': 4, 'h': 1})
         self.assertEqual(widgets_by_cols['4'][1], {'i': 'avg-utilization', 'cardId': 'avg-utilization', 'x': 0, 'y': 0, 'w': 4, 'h': 2})
+        my_work_layout = ((s.get('dashboardLayouts') or {}).get('surfaces') or {}).get('my-work-dashboard') or {}
+        self.assertEqual(
+            my_work_layout.get('widgets'),
+            [{'i': 'my-summary', 'cardId': 'my-summary', 'x': 0, 'y': 0, 'w': 2, 'h': 2}],
+        )
         self.assertNotIn('unknownKey', s)
 
     def test_link_person_email_match_and_unlink(self):

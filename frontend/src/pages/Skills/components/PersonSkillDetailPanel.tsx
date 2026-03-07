@@ -72,14 +72,14 @@ function renderSection(
       {skills.length === 0 ? (
         <div className="text-xs text-[var(--muted)]">No skills in this section.</div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {skills.map((skill) => {
             const draft = getDraftForSkill(skill);
             const saveState = getSaveStateForSkill(skill.id);
             const error = getErrorForSkill(skill.id);
             return (
               <div key={skill.id} className="rounded border border-[var(--border)] bg-[var(--card)] p-2">
-                <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-[var(--text)]">{skill.skillTagName || 'Skill'}</div>
                   </div>
@@ -99,12 +99,12 @@ function renderSection(
                     />
                   </div>
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 xl:grid-cols-[150px_150px_minmax(0,1fr)] xl:items-end">
                   <label className="text-xs text-[var(--muted)]">
                     Skill Type
                     <select
                       value={draft.skillType || 'strength'}
-                      className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+                      className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
                       onChange={(event) =>
                         onSkillDraftChange(skill, {
                           skillType: event.target.value as PersonSkill['skillType'],
@@ -123,7 +123,7 @@ function renderSection(
                     Skill Level
                     <select
                       value={draft.proficiencyLevel || 'beginner'}
-                      className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+                      className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
                       onChange={(event) =>
                         onSkillDraftChange(skill, {
                           proficiencyLevel: event.target.value as PersonSkill['proficiencyLevel'],
@@ -141,10 +141,10 @@ function renderSection(
 
                   <label className="text-xs text-[var(--muted)]">
                     Notes
-                    <textarea
+                    <input
+                      type="text"
                       value={draft.notes || ''}
-                      rows={2}
-                      className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+                      className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
                       placeholder="Add context for this skill..."
                       onChange={(event) => onSkillDraftChange(skill, { notes: event.target.value })}
                       onBlur={() => onSkillDraftBlur(skill.id)}
@@ -202,12 +202,12 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
 
       <section className="rounded border border-[var(--border)] bg-[var(--surface)] p-3">
         <h4 className="mb-2 text-sm font-semibold text-[var(--text)]">Add Skill</h4>
-        <div className="grid gap-2">
+        <div className="grid gap-2 xl:grid-cols-[160px_minmax(0,1fr)] xl:items-end">
           <label className="text-xs text-[var(--muted)]">
             Add As
             <select
               value={addSkillType}
-              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+              className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
               onChange={(event) => onAddSkillTypeChange(event.target.value as PersonSkill['skillType'])}
               disabled={addSkillDisabled}
             >
@@ -224,38 +224,38 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
               type="text"
               value={addSkillQuery}
               onChange={(event) => onAddSkillQueryChange(event.target.value)}
-              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] placeholder-[var(--muted)]"
+              className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)] placeholder-[var(--muted)]"
               placeholder="Type to search and click a skill..."
               disabled={addSkillDisabled}
             />
           </label>
         </div>
-        <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)]">
-          {addSkillQuery.trim().length === 0 ? (
-            <div className="px-2 py-2 text-xs text-[var(--muted)]">Type a skill name to search.</div>
-          ) : addSkillLoading ? (
-            <div className="px-2 py-2 text-xs text-[var(--muted)]">Searching skills...</div>
-          ) : addSkillResults.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-[var(--muted)]">No skills found.</div>
-          ) : (
-            <div className="max-h-48 overflow-y-auto">
-              {addSkillResults.map((skill) => (
-                <button
-                  key={skill.id}
-                  type="button"
-                  className="w-full border-b border-[var(--border)] px-2 py-1 text-left text-xs text-[var(--text)] transition-colors hover:bg-[var(--cardHover)] last:border-b-0 disabled:opacity-60"
-                  onClick={() => onAddSkill(skill)}
-                  disabled={addSkillDisabled}
-                >
-                  <div className="truncate font-medium">{skill.name}</div>
-                  <div className="truncate text-[var(--muted)]">
-                    {skill.scopeType === 'global' ? 'Global' : (skill.departmentName || 'Department')}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {addSkillQuery.trim().length > 0 ? (
+          <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)]">
+            {addSkillLoading ? (
+              <div className="px-2 py-2 text-xs text-[var(--muted)]">Searching skills...</div>
+            ) : addSkillResults.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-[var(--muted)]">No skills found.</div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto">
+                {addSkillResults.map((skill) => (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    className="w-full border-b border-[var(--border)] px-2 py-1 text-left text-xs text-[var(--text)] transition-colors hover:bg-[var(--cardHover)] last:border-b-0 disabled:opacity-60"
+                    onClick={() => onAddSkill(skill)}
+                    disabled={addSkillDisabled}
+                  >
+                    <div className="truncate font-medium">{skill.name}</div>
+                    <div className="truncate text-[var(--muted)]">
+                      {skill.scopeType === 'global' ? 'Global' : (skill.departmentName || 'Department')}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
       </section>
 
       {renderSection(

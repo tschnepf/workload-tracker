@@ -60,15 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const hideGlobalVerticalFilter = location.pathname.startsWith('/departments/manager');
   const showGlobalVerticalFilter = !hideGlobalVerticalFilter;
-  const hideGlobalDepartmentFilter =
-    location.pathname === '/my-work' ||
-    location.pathname === '/dashboard' ||
-    location.pathname.startsWith('/departments/manager') ||
-    location.pathname.startsWith('/departments/reports') ||
-    location.pathname.startsWith('/departments/hierarchy') ||
-    location.pathname.startsWith('/deliverables/calendar') ||
-    location.pathname.startsWith('/settings');
-  const showGlobalDepartmentFilter = !hideGlobalDepartmentFilter;
+  const showGlobalDepartmentFilter = true;
   const { state: verticalState } = useVerticalFilter();
   const { state: deptState, setDepartmentFilters, clearDepartment } = useDepartmentFilter();
   const { departments: verticalDepartments, isLoading: departmentsLoading } = useDepartments({

@@ -352,7 +352,7 @@ const SkillsDashboard: React.FC = () => {
 
   useAuthenticatedEffect(() => {
     void refreshData();
-  }, [refreshData]);
+  }, [verticalState.selectedVerticalId]);
 
   useEffect(() => {
     void loadSkills(1, false);
@@ -1222,7 +1222,7 @@ const SkillsDashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="h-full min-h-0 w-full space-y-4">
+      <div className="flex h-full min-h-0 w-full flex-col gap-4">
         <div className="ux-page-hero flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[var(--text)]">Skills Workspace</h1>
@@ -1273,8 +1273,8 @@ const SkillsDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <Card className="ux-panel p-3">
+        <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <Card className="ux-panel h-full min-h-0 p-3">
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-[var(--text)]">Departments</h2>
               <Input
@@ -1314,7 +1314,7 @@ const SkillsDashboard: React.FC = () => {
             </div>
           </Card>
 
-          <Card className="ux-panel p-3">
+          <Card className="ux-panel h-full min-h-0 p-3">
             {mode === 'skill_to_people' ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1573,8 +1573,8 @@ const SkillsDashboard: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
-                <div className="space-y-3">
+              <div className="grid h-full min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="flex h-full min-h-0 flex-col gap-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-[var(--text)]">People ({selectedDepartmentName})</h2>
                     <div className="text-xs text-[var(--muted)]">{people.length} loaded</div>
@@ -1585,7 +1585,7 @@ const SkillsDashboard: React.FC = () => {
                     placeholder="Search people..."
                   />
 
-                  <div className="max-h-[620px] overflow-auto rounded border border-[var(--border)]">
+                  <div className="flex-1 min-h-0 overflow-auto rounded border border-[var(--border)]">
                     {people.map((person) => {
                       const personSkills = person.id ? (peopleModeSkillsByPerson.get(person.id) || []) : [];
                       const isSelected = person.id != null && selectedPersonId === person.id;
@@ -1597,10 +1597,10 @@ const SkillsDashboard: React.FC = () => {
                               ? 'border-l-2 border-l-[var(--focus)] bg-[var(--surfaceHover)]/80'
                               : 'border-l-2 border-l-transparent'
                           }`}
+                          onClick={() => selectPersonForDetails(person)}
                         >
                           <div
                             className="flex cursor-pointer items-center justify-between gap-2"
-                            onClick={() => selectPersonForDetails(person)}
                           >
                             <div className="min-w-0">
                               <div className="truncate text-sm text-[var(--text)]">{person.name}</div>
@@ -1625,7 +1625,10 @@ const SkillsDashboard: React.FC = () => {
                             </div>
                           </div>
                           {addSkillsPersonId === person.id && (
-                            <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)] p-2">
+                            <div
+                              className="mt-2 rounded border border-[var(--border)] bg-[var(--card)] p-2"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               <div className="relative">
                                 <input
                                   type="text"
@@ -1734,7 +1737,7 @@ const SkillsDashboard: React.FC = () => {
                   )}
                 </div>
 
-                <div className="hidden xl:block">
+                <div className="hidden xl:block min-h-0 overflow-y-auto pr-1">
                   <PersonSkillDetailPanel
                     person={selectedPerson}
                     groupedSkills={selectedPersonSkillsGrouped}
