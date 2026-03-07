@@ -14,29 +14,27 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
   const { data: schemeData } = useUtilizationScheme();
   const scheme = schemeData || defaultUtilizationScheme;
   const weekLabels = weekKeys.map((wk) => {
-    const [year, month, day] = wk.split('-');
+    const [, month, day] = wk.split('-');
     return `${month}/${day}`;
   });
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] h-full min-h-0 ${className || ''}`}>
-      <div className="p-4 h-full min-h-0 flex flex-col space-y-4">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+      <div className="p-4 h-full min-h-0 flex flex-col">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h3 className="text-lg font-semibold text-[var(--text)]">My Schedule</h3>
             <p className="text-xs text-[var(--muted)]">Scroll sideways to preview upcoming weeks</p>
           </div>
           <div className="text-xs text-[#94a3b8]">Capacity {weeklyCapacity}h</div>
         </div>
-        <div className="relative min-h-0 flex-1">
-          <div className="sticky left-0 top-0 h-full flex items-center pr-3 bg-gradient-to-r from-[var(--card)] to-transparent text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">
-            Weeks
-          </div>
+        <div className="mt-4 min-h-0 flex-1 flex flex-col">
+          <div className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Weeks</div>
           <div
-            className="overflow-x-auto pl-12 snap-x snap-mandatory pb-2"
+            className="mt-2 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pb-2"
             aria-label="Upcoming weeks utilization"
             role="list"
           >
-            <div className="min-w-[320px] flex gap-4">
+            <div className="inline-flex min-w-max gap-3 pr-2">
               {weekKeys.map((wk, idx) => {
                 const hours = weekTotals[wk] || 0;
                 const pill = getUtilizationPill({ hours, capacity: weeklyCapacity || 0, scheme, output: 'token' });
@@ -44,18 +42,18 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
                 return (
                   <div
                     key={wk}
-                    className="w-20 shrink-0 snap-center flex flex-col items-center gap-2 border border-[var(--border)] rounded-lg p-2 bg-[var(--surface)]"
+                    className="w-24 h-36 shrink-0 snap-center flex flex-col items-center justify-between gap-2 border border-[var(--border)] rounded-lg p-2 bg-[var(--surface)]"
                     role="listitem"
                     aria-label={`Week of ${weekLabels[idx]}: ${Math.round(hours)} hours booked`}
                   >
-                    <div className="text-xs text-[var(--muted)] font-medium sticky top-2 text-center w-full bg-[var(--surface)]/80">
+                    <div className="text-[11px] text-[var(--muted)] font-medium text-center w-full">
                       {weekLabels[idx]}
                     </div>
                     <div className="flex flex-col items-center gap-1">
-                      <div className="text-xs text-[var(--muted)]">{Math.round(hours)}h</div>
+                      <div className="text-sm font-semibold text-[var(--text)]">{Math.round(hours)}h</div>
                       <div
                         title={`${wk} · ${Math.round(hours)}h`}
-                        className="w-12 h-12 rounded-lg border border-[var(--border)]"
+                        className="w-14 h-14 rounded-lg border border-[var(--border)]"
                         style={{ background: bg, opacity: 0.9 }}
                       />
                     </div>

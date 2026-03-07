@@ -1,248 +1,188 @@
 import * as React from 'react';
+import type { Layout } from 'react-grid-layout';
 import { useAuth } from '@/hooks/useAuth';
 import { setSettings } from '@/store/auth';
 import { showToast } from '@/lib/toastBus';
 import {
+  DASHBOARD_BREAKPOINT_COLS,
+  CANONICAL_COLS,
   DASHBOARD_LAYOUT_VERSION,
   DASHBOARD_LOCAL_STORAGE_PREFIX,
+  DASHBOARD_LOCAL_STORAGE_PREFIX_V3,
   DASHBOARD_LOCAL_STORAGE_PREFIX_V1,
-  DASHBOARD_MEDIUM_ITEM_SIZE,
-  type DashboardItemSize,
+  DASHBOARD_LOCAL_STORAGE_PREFIX_V2,
+  DASHBOARD_MEDIUM_SIZE,
+  MAX_WIDGET_HEIGHT_UNITS,
+  type DashboardBreakpointCols,
+  type DashboardBreakpointKey,
   type DashboardLayoutSettings,
-  type DashboardLayoutItem,
-  type DashboardSizeStep,
+  type DashboardWidthUnit,
   type DashboardSurfaceId,
   type DashboardSurfaceLayout,
-  dashboardItemId,
+  type DashboardWidgetLayoutItem,
+  clampDashboardHeightUnits,
+  clampDashboardWidthUnit,
   nowIso,
-  parseDashboardItemId,
-  isDashboardSizeStep,
+  widgetKey,
 } from './dashboardLayoutTypes';
 
+const DASHBOARD_SURFACES: DashboardSurfaceId[] = ['team-dashboard', 'my-work-dashboard'];
+const DASHBOARD_UPGRADE_TOAST_KEY = 'dashboard-layout:v4:reset-toast-shown';
+
+export function emitDashboardTelemetry(eventName: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = '__dashboardTelemetryCounters';
+    const counters = (window as any)[key] || {};
+    counters[eventName] = Number(counters[eventName] || 0) + 1;
+    (window as any)[key] = counters;
+    window.dispatchEvent(new CustomEvent('dashboard-layout-telemetry', { detail: { eventName, count: counters[eventName] } }));
+  } catch {
+    // Best effort only.
+  }
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
-function uniqueStrings(values: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  values.forEach((value) => {
-    if (!value || seen.has(value)) return;
-    seen.add(value);
-    out.push(value);
-  });
-  return out;
-}
-
-function normalizeItems(rawItems: unknown[]): DashboardLayoutItem[] {
-  const out: DashboardLayoutItem[] = [];
-  rawItems.forEach((item) => {
-    if (!item || typeof item !== 'object') return;
-    const obj = item as Record<string, unknown>;
-    if (obj.type === 'card' && typeof obj.cardId === 'string' && obj.cardId) {
-      out.push({ type: 'card', cardId: obj.cardId });
-      return;
-    }
-    if (obj.type === 'group' && typeof obj.groupId === 'string' && obj.groupId) {
-      out.push({ type: 'group', groupId: obj.groupId });
-    }
-  });
-  return out;
-}
-
-function normalizeSizeStep(value: unknown, fallback: DashboardSizeStep): DashboardSizeStep {
-  if (isDashboardSizeStep(value)) return value;
-
-  if (typeof value === 'number') {
-    const rounded = Math.round(value);
-    if (rounded >= 1 && rounded <= 4) return rounded as DashboardSizeStep;
+function parseNonNegativeInt(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
   }
-
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'sm' || normalized === 'small') return 1;
-    if (normalized === 'md' || normalized === 'medium') return 2;
-    if (normalized === 'lg' || normalized === 'large') return 3;
-    if (normalized === 'xl' || normalized === 'xlarge') return 4;
-    if (normalized === '1' || normalized === '2' || normalized === '3' || normalized === '4') {
-      return Number(normalized) as DashboardSizeStep;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.floor(parsed));
     }
   }
-
   return fallback;
 }
 
-function normalizeItemSize(raw: unknown, fallback: DashboardItemSize = DASHBOARD_MEDIUM_ITEM_SIZE): DashboardItemSize {
-  const obj = asRecord(raw);
+function colsToKey(cols: DashboardBreakpointCols): DashboardBreakpointKey {
+  return String(cols) as DashboardBreakpointKey;
+}
+
+function keyToCols(key: string): DashboardBreakpointCols | null {
+  const numeric = Number(key);
+  if (numeric === 2 || numeric === 4 || numeric === 6 || numeric === 8 || numeric === 10) {
+    return numeric;
+  }
+  return null;
+}
+
+function clampWidth(value: unknown, maxUnits: number = CANONICAL_COLS): DashboardWidthUnit {
+  return clampDashboardWidthUnit(value, 2, maxUnits);
+}
+
+function clampHeight(value: unknown): number {
+  return clampDashboardHeightUnits(value, DASHBOARD_MEDIUM_SIZE.h, MAX_WIDGET_HEIGHT_UNITS);
+}
+
+function normalizeWidget(
+  rawWidget: unknown,
+  allowedCardIds: Set<string>,
+  usedCardIds: Set<string>,
+  maxCols: number,
+  fallbackWidget?: DashboardWidgetLayoutItem
+): DashboardWidgetLayoutItem | null {
+  const widget = asRecord(rawWidget);
+  const cardIdRaw = typeof widget.cardId === 'string' ? widget.cardId.trim() : '';
+  const cardId = cardIdRaw || fallbackWidget?.cardId || '';
+  if (!cardId || !allowedCardIds.has(cardId) || usedCardIds.has(cardId)) {
+    return null;
+  }
+
+  const w = clampWidth(widget.w ?? fallbackWidget?.w ?? DASHBOARD_MEDIUM_SIZE.w, maxCols);
+  const h = clampHeight(widget.h ?? fallbackWidget?.h ?? DASHBOARD_MEDIUM_SIZE.h);
+  const xFallback = fallbackWidget?.x ?? 0;
+  const yFallback = fallbackWidget?.y ?? 0;
+  const xRaw = parseNonNegativeInt(widget.x, xFallback);
+  const y = parseNonNegativeInt(widget.y, yFallback);
+  const x = Math.max(0, Math.min(Math.max(0, maxCols - w), xRaw));
+  const iRaw = typeof widget.i === 'string' ? widget.i.trim() : '';
+
+  usedCardIds.add(cardId);
   return {
-    w: normalizeSizeStep(obj.w, fallback.w),
-    h: normalizeSizeStep(obj.h, fallback.h),
+    i: iRaw || widgetKey(cardId),
+    cardId,
+    x,
+    y,
+    w,
+    h,
   };
 }
 
-function normalizeCardSizes(
-  rawCardSizes: unknown,
-  cardIds: string[]
-): Record<string, DashboardItemSize> {
-  const out: Record<string, DashboardItemSize> = {};
-  const raw = asRecord(rawCardSizes);
-
-  cardIds.forEach((cardId) => {
-    out[cardId] = normalizeItemSize(raw[cardId], DASHBOARD_MEDIUM_ITEM_SIZE);
-  });
-
-  return out;
-}
-
-function normalizeGroupSizes(
-  rawGroupSizes: unknown,
-  groupIds: string[]
-): Record<string, DashboardItemSize> {
-  const out: Record<string, DashboardItemSize> = {};
-  const raw = asRecord(rawGroupSizes);
-
-  groupIds.forEach((groupId) => {
-    out[groupId] = normalizeItemSize(raw[groupId], DASHBOARD_MEDIUM_ITEM_SIZE);
-  });
-
-  return out;
-}
-
-function cloneLayoutSizeMaps(layout: DashboardSurfaceLayout): Pick<DashboardSurfaceLayout, 'cardSizes' | 'groupSizes'> {
-  return {
-    cardSizes: { ...layout.cardSizes },
-    groupSizes: { ...layout.groupSizes },
-  };
-}
-
-export function resolveColumnCount(width?: number): number {
-  if (!width || !Number.isFinite(width)) return 1;
-  if (width >= 2200) return 5;
-  if (width >= 1700) return 4;
-  if (width >= 1200) return 3;
-  if (width >= 760) return 2;
-  return 1;
-}
-
-export function createDefaultSurfaceLayout(args: {
-  items: DashboardLayoutItem[];
-  groups?: Record<string, { title: string; cardIds: string[] }>;
-  cardSizes?: Record<string, DashboardItemSize>;
-  groupSizes?: Record<string, DashboardItemSize>;
-}): DashboardSurfaceLayout {
-  const groups: Record<string, { id: string; title: string; cardIds: string[] }> = {};
-  Object.entries(args.groups || {}).forEach(([id, group]) => {
-    groups[id] = {
-      id,
-      title: group.title,
-      cardIds: uniqueStrings(group.cardIds || []),
-    };
-  });
-
-  const cardIds = uniqueStrings([
-    ...args.items.filter((item): item is { type: 'card'; cardId: string } => item.type === 'card').map((item) => item.cardId),
-    ...Object.values(groups).flatMap((group) => group.cardIds),
-  ]);
-
-  const groupIds = Object.keys(groups);
-
-  return {
-    items: args.items,
-    groups,
-    cardSizes: normalizeCardSizes(args.cardSizes || {}, cardIds),
-    groupSizes: normalizeGroupSizes(args.groupSizes || {}, groupIds),
-    hiddenCardIds: [],
-    updatedAt: nowIso(),
-  };
-}
-
-export function normalizeSurfaceLayout(
-  rawLayout: unknown,
-  allowedCardIds: string[]
-): DashboardSurfaceLayout {
+function normalizeWidgets(
+  rawWidgets: unknown,
+  allowedCardIds: string[],
+  defaultWidgets: DashboardWidgetLayoutItem[],
+  maxCols: number
+): DashboardWidgetLayoutItem[] {
   const allowed = new Set(allowedCardIds);
-  const layoutObj = asRecord(rawLayout);
-  const groupsObj = asRecord(layoutObj.groups);
+  const defaultByCard = new Map(defaultWidgets.map((widget) => [widget.cardId, widget]));
+  const usedCardIds = new Set<string>();
+  const widgets: DashboardWidgetLayoutItem[] = [];
+  const rawList = Array.isArray(rawWidgets) ? rawWidgets : [];
 
-  const groups: DashboardSurfaceLayout['groups'] = {};
-  Object.entries(groupsObj).forEach(([groupId, groupValue]) => {
-    const group = asRecord(groupValue);
-    const title = typeof group.title === 'string' && group.title.trim() ? group.title.trim() : 'Group';
-    const cardIdsRaw = Array.isArray(group.cardIds) ? group.cardIds : [];
-    const cardIds = uniqueStrings(
-      cardIdsRaw
-        .filter((id): id is string => typeof id === 'string')
-        .filter((id) => allowed.has(id))
+  for (const rawWidget of rawList) {
+    const cardId = typeof asRecord(rawWidget).cardId === 'string' ? String(asRecord(rawWidget).cardId).trim() : '';
+    const fallback = cardId ? defaultByCard.get(cardId) : undefined;
+    const normalized = normalizeWidget(rawWidget, allowed, usedCardIds, maxCols, fallback);
+    if (normalized) widgets.push(normalized);
+  }
+
+  let appendY = widgets.reduce((max, widget) => Math.max(max, widget.y + widget.h), 0);
+  for (const cardId of allowedCardIds) {
+    if (usedCardIds.has(cardId)) continue;
+    const fallback = defaultByCard.get(cardId);
+    const candidate = normalizeWidget(
+      {
+        i: widgetKey(cardId),
+        cardId,
+        x: fallback?.x ?? 0,
+        y: fallback?.y ?? appendY,
+        w: fallback?.w ?? DASHBOARD_MEDIUM_SIZE.w,
+        h: fallback?.h ?? DASHBOARD_MEDIUM_SIZE.h,
+      },
+      allowed,
+      usedCardIds,
+      maxCols,
+      fallback
     );
-    if (groupId && cardIds.length > 0) {
-      groups[groupId] = {
-        id: groupId,
-        title,
-        cardIds,
-      };
-    }
-  });
 
-  const rawItems = Array.isArray(layoutObj.items) ? normalizeItems(layoutObj.items) : [];
-  const seenCards = new Set<string>();
-  const items: DashboardLayoutItem[] = [];
+    if (!candidate) continue;
 
-  rawItems.forEach((item) => {
-    if (item.type === 'card') {
-      if (!allowed.has(item.cardId) || seenCards.has(item.cardId)) return;
-      seenCards.add(item.cardId);
-      items.push(item);
-      return;
+    if (!fallback) {
+      candidate.x = 0;
+      candidate.y = appendY;
+      appendY += candidate.h;
     }
 
-    const group = groups[item.groupId];
-    if (!group) return;
+    widgets.push(candidate);
+  }
 
-    const remaining = group.cardIds.filter((cardId) => !seenCards.has(cardId));
-    if (remaining.length === 0) {
-      delete groups[item.groupId];
-      return;
-    }
-
-    group.cardIds = remaining;
-    remaining.forEach((cardId) => seenCards.add(cardId));
-    items.push(item);
-  });
-
-  allowedCardIds.forEach((cardId) => {
-    if (seenCards.has(cardId)) return;
-    seenCards.add(cardId);
-    items.push({ type: 'card', cardId });
-  });
-
-  const hiddenRaw = Array.isArray(layoutObj.hiddenCardIds) ? layoutObj.hiddenCardIds : [];
-  const hiddenCardIds = uniqueStrings(
-    hiddenRaw
-      .filter((id): id is string => typeof id === 'string')
-      .filter((id) => allowed.has(id))
-  );
-
-  const updatedAt = typeof layoutObj.updatedAt === 'string' && layoutObj.updatedAt ? layoutObj.updatedAt : nowIso();
-
-  return {
-    items,
-    groups,
-    cardSizes: normalizeCardSizes(layoutObj.cardSizes, allowedCardIds),
-    groupSizes: normalizeGroupSizes(layoutObj.groupSizes, Object.keys(groups)),
-    hiddenCardIds,
-    updatedAt,
-  };
+  return widgets;
 }
 
 function isLayoutEqual(a: DashboardSurfaceLayout, b: DashboardSurfaceLayout): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function parseLayoutSettings(raw: unknown): DashboardLayoutSettings {
+type ParsedLayoutSettings = DashboardLayoutSettings & { hasPayload: boolean };
+
+function parseLayoutSettings(raw: unknown): ParsedLayoutSettings {
   const obj = asRecord(raw);
-  const version = Number(obj.version) || DASHBOARD_LAYOUT_VERSION;
+  const hasPayload = Object.prototype.hasOwnProperty.call(obj, 'version')
+    || Object.prototype.hasOwnProperty.call(obj, 'surfaces');
+  const versionRaw = Number(obj.version);
+  const version = Number.isFinite(versionRaw) ? versionRaw : 0;
   const surfacesObj = asRecord(obj.surfaces);
+
   return {
+    hasPayload,
     version,
     surfaces: {
       'team-dashboard': surfacesObj['team-dashboard'] as DashboardSurfaceLayout | undefined,
@@ -256,222 +196,417 @@ function localStorageKey(prefix: string, userId: number | null, surfaceId: Dashb
   return `${prefix}:${userSegment}:${surfaceId}`;
 }
 
-function readLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId): unknown {
+function readLocalLayoutV3(userId: number | null, surfaceId: DashboardSurfaceId): unknown {
   if (typeof window === 'undefined') return null;
   try {
-    const v2Raw = window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId));
-    if (v2Raw) return JSON.parse(v2Raw);
-
-    const v1Raw = window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V1, userId, surfaceId));
-    if (v1Raw) return JSON.parse(v1Raw);
-
-    return null;
+    const raw = window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId));
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function writeLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId, layout: DashboardSurfaceLayout) {
+function writeLocalLayoutV3(userId: number | null, surfaceId: DashboardSurfaceId, layout: DashboardSurfaceLayout) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId), JSON.stringify(layout));
+    window.localStorage.setItem(
+      localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId),
+      JSON.stringify(layout)
+    );
   } catch {
     // Ignore storage failures.
   }
 }
 
-function clearLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId) {
+function clearLocalLayoutV3(userId: number | null, surfaceId: DashboardSurfaceId) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId));
-    window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V1, userId, surfaceId));
   } catch {
     // Ignore storage failures.
   }
 }
 
-function nextGroupId(groups: DashboardSurfaceLayout['groups']): string {
-  let idx = Object.keys(groups).length + 1;
-  let id = `group-${idx}`;
-  while (groups[id]) {
-    idx += 1;
-    id = `group-${idx}`;
+function hasLegacyLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return Boolean(
+      window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V3, userId, surfaceId)) ||
+      window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V1, userId, surfaceId)) ||
+      window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V2, userId, surfaceId))
+    );
+  } catch {
+    return false;
   }
-  return id;
 }
 
-export function reorderLayoutItems(
-  layout: DashboardSurfaceLayout,
-  activeItemId: string,
-  overItemId: string
-): DashboardSurfaceLayout {
-  if (!activeItemId || !overItemId || activeItemId === overItemId) return layout;
-  const items = layout.items.slice();
-  const fromIndex = items.findIndex((item) => dashboardItemId(item) === activeItemId);
-  const toIndex = items.findIndex((item) => dashboardItemId(item) === overItemId);
-  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return layout;
-  const [moved] = items.splice(fromIndex, 1);
-  items.splice(toIndex, 0, moved);
-  return {
-    ...layout,
-    items,
-    updatedAt: nowIso(),
-  };
+function clearLegacyLocalLayouts(userId: number | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    for (const surfaceId of DASHBOARD_SURFACES) {
+      window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V3, userId, surfaceId));
+      window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V1, userId, surfaceId));
+      window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V2, userId, surfaceId));
+    }
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
-export function setLayoutItemSize(
-  layout: DashboardSurfaceLayout,
-  itemId: string,
-  nextSize: DashboardItemSize
-): DashboardSurfaceLayout {
-  const parsed = parseDashboardItemId(itemId);
-  if (!parsed) return layout;
+function announceUpgradeResetOnce() {
+  if (typeof window === 'undefined') return;
+  try {
+    const shown = window.sessionStorage.getItem(DASHBOARD_UPGRADE_TOAST_KEY);
+    if (shown === '1') return;
+    window.sessionStorage.setItem(DASHBOARD_UPGRADE_TOAST_KEY, '1');
+  } catch {
+    // Best effort; still show toast.
+  }
+  emitDashboardTelemetry('reset_triggered_initialization');
+  showToast('Dashboard layout reset due to layout engine upgrade.', 'info');
+}
 
-  const normalizedNext = normalizeItemSize(nextSize, DASHBOARD_MEDIUM_ITEM_SIZE);
+export function resolveUnitColumnCount(width?: number): 2 | 4 | 6 | 8 | 10 {
+  if (!width || !Number.isFinite(width)) return 2;
+  if (width >= 2200) return 10;
+  if (width >= 1700) return 8;
+  if (width >= 1200) return 6;
+  if (width >= 760) return 4;
+  return 2;
+}
 
-  if (parsed.type === 'card') {
-    if (!layout.cardSizes[parsed.cardId]) return layout;
-    const current = layout.cardSizes[parsed.cardId];
-    if (current.w === normalizedNext.w && current.h === normalizedNext.h) return layout;
+export function resolveUnitColumnCountWithHysteresis(
+  width: number | undefined,
+  previousCols: 2 | 4 | 6 | 8 | 10,
+  hysteresisPx = 24
+): 2 | 4 | 6 | 8 | 10 {
+  const safeWidth = Number.isFinite(width) ? Number(width) : 0;
+  const h = Math.max(0, Math.floor(hysteresisPx));
+  const low760 = 760 - h;
+  const low1200 = 1200 - h;
+  const low1700 = 1700 - h;
+  const low2200 = 2200 - h;
+  const high760 = 760 + h;
+  const high1200 = 1200 + h;
+  const high1700 = 1700 + h;
+  const high2200 = 2200 + h;
+
+  switch (previousCols) {
+    case 2:
+      if (safeWidth >= high2200) return 10;
+      if (safeWidth >= high1700) return 8;
+      if (safeWidth >= high1200) return 6;
+      if (safeWidth >= high760) return 4;
+      return 2;
+    case 4:
+      if (safeWidth < low760) return 2;
+      if (safeWidth >= high2200) return 10;
+      if (safeWidth >= high1700) return 8;
+      if (safeWidth >= high1200) return 6;
+      return 4;
+    case 6:
+      if (safeWidth < low1200) {
+        if (safeWidth < low760) return 2;
+        return 4;
+      }
+      if (safeWidth >= high2200) return 10;
+      if (safeWidth >= high1700) return 8;
+      return 6;
+    case 8:
+      if (safeWidth < low1700) {
+        if (safeWidth < low760) return 2;
+        if (safeWidth < low1200) return 4;
+        return 6;
+      }
+      if (safeWidth >= high2200) return 10;
+      return 8;
+    case 10:
+      if (safeWidth < low2200) {
+        if (safeWidth < low760) return 2;
+        if (safeWidth < low1200) return 4;
+        if (safeWidth < low1700) return 6;
+        return 8;
+      }
+      return 10;
+    default:
+      return resolveUnitColumnCount(safeWidth);
+  }
+}
+
+function scaleInt(value: number, fromCols: number, toCols: number): number {
+  if (fromCols <= 0 || toCols <= 0) return 0;
+  return Math.round((value * toCols) / fromCols);
+}
+
+type GridRect = Pick<Layout[number], 'x' | 'y' | 'w' | 'h'>;
+
+function rectsOverlap(a: GridRect, b: GridRect): boolean {
+  return a.x < b.x + b.w
+    && a.x + a.w > b.x
+    && a.y < b.y + b.h
+    && a.y + a.h > b.y;
+}
+
+export function resolveProjectedLayoutCollisions(layout: Layout, activeCols: number): Layout {
+  const maxW = Math.max(1, activeCols);
+  let placed: Layout = [];
+
+  for (const item of layout) {
+    const w = Math.max(1, Math.min(maxW, parseNonNegativeInt(item.w, 1)));
+    const h = Math.max(1, clampHeight(item.h));
+    const candidate = {
+      ...item,
+      x: Math.max(0, Math.min(Math.max(0, activeCols - w), parseNonNegativeInt(item.x, 0))),
+      y: Math.max(0, parseNonNegativeInt(item.y, 0)),
+      w,
+      h,
+      minW: 1,
+      minH: 1,
+      maxW,
+      maxH: MAX_WIDGET_HEIGHT_UNITS,
+    };
+
+    while (placed.some((existing) => rectsOverlap(candidate, existing))) {
+      candidate.y += 1;
+    }
+
+    placed = [...placed, candidate];
+  }
+
+  return placed;
+}
+
+export function widgetsToActiveLayout(
+  widgets: DashboardWidgetLayoutItem[],
+  activeCols: number,
+  forceFullWidth: boolean
+): Layout {
+  const base = widgets.map((widget) => {
+    const w = forceFullWidth
+      ? activeCols
+      : Math.max(1, Math.min(activeCols, clampWidth(widget.w, activeCols)));
+    const x = forceFullWidth
+      ? 0
+      : Math.max(0, Math.min(Math.max(0, activeCols - w), parseNonNegativeInt(widget.x, 0)));
 
     return {
-      ...layout,
-      cardSizes: {
-        ...layout.cardSizes,
-        [parsed.cardId]: normalizedNext,
-      },
-      updatedAt: nowIso(),
+      i: widget.i,
+      x,
+      y: Math.max(0, parseNonNegativeInt(widget.y, 0)),
+      w,
+      h: Math.max(1, clampHeight(widget.h)),
+      minW: 1,
+      minH: 1,
+      maxW: Math.max(1, activeCols),
+      maxH: MAX_WIDGET_HEIGHT_UNITS,
     };
-  }
+  });
 
-  if (!layout.groups[parsed.groupId]) return layout;
-  const current = layout.groupSizes[parsed.groupId] || DASHBOARD_MEDIUM_ITEM_SIZE;
-  if (current.w === normalizedNext.w && current.h === normalizedNext.h) return layout;
-
-  return {
-    ...layout,
-    groupSizes: {
-      ...layout.groupSizes,
-      [parsed.groupId]: normalizedNext,
-    },
-    updatedAt: nowIso(),
-  };
+  return resolveProjectedLayoutCollisions(base, activeCols);
 }
 
-export function groupSelectedItems(
-  layout: DashboardSurfaceLayout,
-  selectedItemIds: string[]
-): DashboardSurfaceLayout {
-  const selectedSet = new Set(selectedItemIds);
-  if (selectedSet.size < 2) return layout;
-
-  const indexedSelected = layout.items
-    .map((item, index) => ({ item, index, id: dashboardItemId(item) }))
-    .filter((entry) => selectedSet.has(entry.id));
-
-  if (indexedSelected.length < 2) return layout;
-
-  const groups = { ...layout.groups };
-  const { cardSizes, groupSizes } = cloneLayoutSizeMaps(layout);
-  const selectedIndices = new Set(indexedSelected.map((entry) => entry.index));
-  const mergedCardIds: string[] = [];
-  let baseGroupId: string | null = null;
-  let baseGroupTitle = 'Group';
-
-  indexedSelected.forEach(({ item }) => {
-    if (item.type === 'card') {
-      if (!mergedCardIds.includes(item.cardId)) mergedCardIds.push(item.cardId);
-      return;
-    }
-
-    const group = groups[item.groupId];
-    if (!group) return;
-    if (!baseGroupId) {
-      baseGroupId = group.id;
-      baseGroupTitle = group.title || 'Group';
-    }
-    group.cardIds.forEach((cardId) => {
-      if (!mergedCardIds.includes(cardId)) mergedCardIds.push(cardId);
+export function layoutToWidgetsForCols(
+  activeLayout: Layout,
+  previousWidgets: DashboardWidgetLayoutItem[],
+  activeCols: number
+): DashboardWidgetLayoutItem[] {
+  const previousById = new Map(previousWidgets.map((widget) => [widget.i, widget]));
+  return [...activeLayout]
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+    .map((item) => {
+      const previous = previousById.get(item.i);
+      const cardId = previous?.cardId || item.i;
+      const w = clampWidth(item.w, activeCols);
+      const h = clampHeight(item.h);
+      const x = Math.max(0, Math.min(Math.max(0, activeCols - w), parseNonNegativeInt(item.x, previous?.x ?? 0)));
+      const y = parseNonNegativeInt(item.y, previous?.y ?? 0);
+      return { i: item.i, cardId, x, y, w, h };
     });
+}
+
+export function projectWidgetsToCols(
+  widgets: DashboardWidgetLayoutItem[],
+  fromCols: number,
+  toCols: DashboardBreakpointCols
+): DashboardWidgetLayoutItem[] {
+  const cardIdByWidgetId = new Map(widgets.map((widget) => [widget.i, widget.cardId]));
+  const projected = widgets.map((widget) => {
+    const scaledW = Math.max(1, scaleInt(clampWidth(widget.w, fromCols), fromCols, toCols));
+    const w = Math.max(1, Math.min(toCols, scaledW));
+    const scaledX = scaleInt(widget.x, fromCols, toCols);
+    const x = Math.max(0, Math.min(Math.max(0, toCols - w), scaledX));
+    return {
+      i: widget.i,
+      x,
+      y: widget.y,
+      w,
+      h: widget.h,
+      minW: 1,
+      minH: 1,
+      maxW: Math.max(1, toCols),
+      maxH: MAX_WIDGET_HEIGHT_UNITS,
+    };
   });
 
-  if (mergedCardIds.length < 2) return layout;
+  const settled = resolveProjectedLayoutCollisions(projected, toCols);
+  return settled.map((item) => ({
+    i: item.i,
+    cardId: cardIdByWidgetId.get(item.i) || item.i,
+    x: item.x,
+    y: item.y,
+    w: clampWidth(item.w, toCols),
+    h: clampHeight(item.h),
+  }));
+}
 
-  if (!baseGroupId) {
-    baseGroupId = nextGroupId(groups);
-    baseGroupTitle = `Group ${Object.keys(groups).length + 1}`;
-    groupSizes[baseGroupId] = DASHBOARD_MEDIUM_ITEM_SIZE;
-  }
+export function projectCanonicalToActiveLayout(
+  widgets: DashboardWidgetLayoutItem[],
+  activeCols: number,
+  forceFullWidth: boolean
+): Layout {
+  const projected = widgets.map((widget) => {
+    const scaledW = Math.max(1, scaleInt(widget.w, CANONICAL_COLS, activeCols));
+    const maxWidth = Math.max(1, activeCols);
+    const w = forceFullWidth ? activeCols : Math.min(maxWidth, scaledW);
+    const scaledX = scaleInt(widget.x, CANONICAL_COLS, activeCols);
+    const x = forceFullWidth ? 0 : Math.max(0, Math.min(Math.max(0, activeCols - w), scaledX));
 
-  groups[baseGroupId] = {
-    id: baseGroupId,
-    title: baseGroupTitle,
-    cardIds: mergedCardIds,
-  };
+    return {
+      i: widget.i,
+      x,
+      y: widget.y,
+      w,
+      h: widget.h,
+      minW: 1,
+      minH: 1,
+      maxW: Math.max(1, activeCols),
+      maxH: MAX_WIDGET_HEIGHT_UNITS,
+    };
+  });
 
-  if (!groupSizes[baseGroupId]) {
-    groupSizes[baseGroupId] = DASHBOARD_MEDIUM_ITEM_SIZE;
-  }
+  return resolveProjectedLayoutCollisions(projected, activeCols);
+}
 
-  indexedSelected.forEach(({ item }) => {
-    if (item.type === 'group' && item.groupId !== baseGroupId) {
-      delete groups[item.groupId];
-      delete groupSizes[item.groupId];
+export function projectActiveToCanonicalWidgets(
+  activeLayout: Layout,
+  previousWidgets: DashboardWidgetLayoutItem[],
+  activeCols: number
+): DashboardWidgetLayoutItem[] {
+  const previousById = new Map(previousWidgets.map((widget) => [widget.i, widget]));
+
+  return [...activeLayout]
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+    .map((item) => {
+      const previous = previousById.get(item.i);
+      const cardId = previous?.cardId || item.i;
+      const w = clampWidth(scaleInt(item.w, activeCols, CANONICAL_COLS));
+      const h = clampHeight(item.h);
+      const x = Math.max(0, Math.min(CANONICAL_COLS - w, scaleInt(item.x, activeCols, CANONICAL_COLS)));
+      const y = parseNonNegativeInt(item.y, previous?.y ?? 0);
+
+      return {
+        i: item.i,
+        cardId,
+        x,
+        y,
+        w,
+        h,
+      };
+    });
+}
+
+export function createDefaultSurfaceLayout(args: {
+  widgets: Array<Partial<DashboardWidgetLayoutItem> & { cardId: string }>;
+}): DashboardSurfaceLayout {
+  const initial: DashboardWidgetLayoutItem[] = [];
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+
+  for (const widget of args.widgets) {
+    const cardId = widget.cardId;
+    const i = typeof widget.i === 'string' && widget.i.trim() ? widget.i.trim() : widgetKey(cardId);
+    const w = clampWidth(widget.w ?? DASHBOARD_MEDIUM_SIZE.w, CANONICAL_COLS);
+    const h = clampHeight(widget.h ?? DASHBOARD_MEDIUM_SIZE.h);
+    const hasPosition = typeof widget.x === 'number' && Number.isFinite(widget.x) && typeof widget.y === 'number' && Number.isFinite(widget.y);
+
+    let x: number;
+    let y: number;
+
+    if (hasPosition) {
+      x = Math.max(0, Math.min(CANONICAL_COLS - w, Math.floor(widget.x!)));
+      y = Math.max(0, Math.floor(widget.y!));
+    } else {
+      if (cursorX + w > CANONICAL_COLS) {
+        cursorX = 0;
+        cursorY += Math.max(1, rowHeight);
+        rowHeight = 0;
+      }
+      x = cursorX;
+      y = cursorY;
+      cursorX += w;
+      rowHeight = Math.max(rowHeight, h);
     }
-  });
 
-  const insertIndex = Math.min(...indexedSelected.map((entry) => entry.index));
-  const nextItems = layout.items.filter((_, index) => !selectedIndices.has(index));
-  nextItems.splice(insertIndex, 0, { type: 'group', groupId: baseGroupId });
+    initial.push({ i, cardId, x, y, w, h });
+  }
+
+  const allowedCardIds = args.widgets.map((widget) => widget.cardId);
+  const canonicalWidgets = normalizeWidgets(initial, allowedCardIds, initial, CANONICAL_COLS);
+  const widgetsByCols: DashboardSurfaceLayout['widgetsByCols'] = {};
+  for (const cols of DASHBOARD_BREAKPOINT_COLS) {
+    const key = colsToKey(cols);
+    widgetsByCols[key] = cols === CANONICAL_COLS
+      ? canonicalWidgets
+      : projectWidgetsToCols(canonicalWidgets, CANONICAL_COLS, cols);
+  }
 
   return {
-    ...layout,
-    items: nextItems,
-    groups,
-    cardSizes,
-    groupSizes,
+    widgets: canonicalWidgets,
+    widgetsByCols,
     updatedAt: nowIso(),
   };
 }
 
-export function splitSelectedGroups(
-  layout: DashboardSurfaceLayout,
-  selectedItemIds: string[]
+export function normalizeSurfaceLayout(
+  rawLayout: unknown,
+  allowedCardIds: string[],
+  defaultLayout: DashboardSurfaceLayout
 ): DashboardSurfaceLayout {
-  const selectedSet = new Set(selectedItemIds);
-  if (!selectedSet.size) return layout;
+  const layoutObj = asRecord(rawLayout);
+  const widgets = normalizeWidgets(layoutObj.widgets, allowedCardIds, defaultLayout.widgets, CANONICAL_COLS);
+  const rawByCols = asRecord(layoutObj.widgetsByCols);
+  const widgetsByCols: DashboardSurfaceLayout['widgetsByCols'] = {};
 
-  const groups = { ...layout.groups };
-  const { cardSizes, groupSizes } = cloneLayoutSizeMaps(layout);
-  const nextItems: DashboardLayoutItem[] = [];
-  let didSplit = false;
+  for (const cols of DASHBOARD_BREAKPOINT_COLS) {
+    const key = colsToKey(cols);
+    const fallbackWidgets = cols === CANONICAL_COLS
+      ? widgets
+      : projectWidgetsToCols(widgets, CANONICAL_COLS, cols);
+    const rawWidgetsForCols = rawByCols[key];
+    widgetsByCols[key] = normalizeWidgets(rawWidgetsForCols, allowedCardIds, fallbackWidgets, cols);
+  }
 
-  layout.items.forEach((item) => {
-    const itemId = dashboardItemId(item);
-    if (item.type === 'group' && selectedSet.has(itemId)) {
-      const group = groups[item.groupId];
-      if (!group) return;
-      group.cardIds.forEach((cardId) => {
-        nextItems.push({ type: 'card', cardId });
-      });
-      delete groups[item.groupId];
-      delete groupSizes[item.groupId];
-      didSplit = true;
-      return;
-    }
-    nextItems.push(item);
-  });
-
-  if (!didSplit) return layout;
+  const updatedAt = typeof layoutObj.updatedAt === 'string' && layoutObj.updatedAt.trim()
+    ? layoutObj.updatedAt
+    : nowIso();
 
   return {
-    ...layout,
-    items: nextItems,
-    groups,
-    cardSizes,
-    groupSizes,
-    updatedAt: nowIso(),
+    widgets,
+    widgetsByCols,
+    updatedAt,
   };
+}
+
+export function getSurfaceWidgetsForCols(
+  layout: DashboardSurfaceLayout,
+  activeCols: DashboardBreakpointCols
+): DashboardWidgetLayoutItem[] {
+  const key = colsToKey(activeCols);
+  const explicit = layout.widgetsByCols[key];
+  if (Array.isArray(explicit) && explicit.length > 0) return explicit;
+  if (activeCols === CANONICAL_COLS) return layout.widgets;
+  return projectWidgetsToCols(layout.widgets, CANONICAL_COLS, activeCols);
 }
 
 export function mergeSurfaceIntoSettings(
@@ -479,13 +614,15 @@ export function mergeSurfaceIntoSettings(
   surfaceId: DashboardSurfaceId,
   layout: DashboardSurfaceLayout
 ): DashboardLayoutSettings {
-  const base = parseLayoutSettings(rawSettings);
+  const parsed = parseLayoutSettings(rawSettings);
+  const nextSurfaces: DashboardLayoutSettings['surfaces'] = {
+    ...(parsed.version === DASHBOARD_LAYOUT_VERSION ? parsed.surfaces : {}),
+    [surfaceId]: layout,
+  };
+
   return {
     version: DASHBOARD_LAYOUT_VERSION,
-    surfaces: {
-      ...base.surfaces,
-      [surfaceId]: layout,
-    },
+    surfaces: nextSurfaces,
   };
 }
 
@@ -504,13 +641,13 @@ export function useDashboardLayoutState(args: {
 
   const auth = useAuth();
   const userId = auth.user?.id ?? null;
+
   const normalizedDefault = React.useMemo(
-    () => normalizeSurfaceLayout(defaultLayout, cardIds),
+    () => normalizeSurfaceLayout(defaultLayout, cardIds, defaultLayout),
     [defaultLayout, cardIds]
   );
 
   const [layout, setLayout] = React.useState<DashboardSurfaceLayout>(normalizedDefault);
-  const [selectedItemIds, setSelectedItemIds] = React.useState<string[]>([]);
   const [unlocked, setUnlocked] = React.useState(false);
   const [rearrangeEnabled, setRearrangeEnabled] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -530,23 +667,31 @@ export function useDashboardLayoutState(args: {
   React.useEffect(() => {
     if (!rearrangeEnabled) {
       setUnlocked(false);
-      setSelectedItemIds([]);
     }
   }, [rearrangeEnabled]);
 
   React.useEffect(() => {
-    const settingsLayouts = parseLayoutSettings((auth.settings as Record<string, unknown> | undefined)?.dashboardLayouts);
-    const serverSurface = settingsLayouts.surfaces[surfaceId];
-    const localSurface = readLocalLayout(userId, surfaceId);
+    const parsed = parseLayoutSettings((auth.settings as Record<string, unknown> | undefined)?.dashboardLayouts);
+    const serverV4 = parsed.version === DASHBOARD_LAYOUT_VERSION;
+    const serverSurface = serverV4 ? parsed.surfaces[surfaceId] : undefined;
+    const localV4 = readLocalLayoutV3(userId, surfaceId);
+
+    const legacyLocalPresent = DASHBOARD_SURFACES.some((sid) => hasLegacyLocalLayout(userId, sid));
+    if (!serverV4 && parsed.hasPayload) {
+      clearLegacyLocalLayouts(userId);
+      announceUpgradeResetOnce();
+    } else if (legacyLocalPresent) {
+      clearLegacyLocalLayouts(userId);
+      announceUpgradeResetOnce();
+    }
 
     const next = serverSurface
-      ? normalizeSurfaceLayout(serverSurface, cardIds)
-      : localSurface
-        ? normalizeSurfaceLayout(localSurface, cardIds)
+      ? normalizeSurfaceLayout(serverSurface, cardIds, normalizedDefault)
+      : localV4
+        ? normalizeSurfaceLayout(localV4, cardIds, normalizedDefault)
         : normalizedDefault;
 
     setLayout((prev) => (isLayoutEqual(prev, next) ? prev : next));
-    setSelectedItemIds([]);
   }, [
     auth.settings,
     userId,
@@ -579,9 +724,10 @@ export function useDashboardLayoutState(args: {
 
       try {
         await setSettings({ dashboardLayouts: nextSettingsLayouts } as any);
-        clearLocalLayout(userId, surfaceId);
+        clearLocalLayoutV3(userId, surfaceId);
       } catch {
-        writeLocalLayout(userId, surfaceId, pending);
+        emitDashboardTelemetry('layout_save_failure');
+        writeLocalLayoutV3(userId, surfaceId, pending);
         showToast('Dashboard layout was saved locally because server sync failed.', 'warning');
       }
     }, saveDebounceMs);
@@ -589,65 +735,50 @@ export function useDashboardLayoutState(args: {
 
   const updateLayout = React.useCallback((updater: (prev: DashboardSurfaceLayout) => DashboardSurfaceLayout) => {
     setLayout((prev) => {
-      const next = normalizeSurfaceLayout(updater(prev), cardIds);
+      const next = normalizeSurfaceLayout(updater(prev), cardIds, normalizedDefault);
       if (isLayoutEqual(prev, next)) return prev;
       persistLayout(next);
       return next;
     });
-  }, [cardIds, persistLayout]);
-
-  const toggleSelected = React.useCallback((itemId: string) => {
-    setSelectedItemIds((prev) => (
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId]
-    ));
-  }, []);
-
-  const clearSelection = React.useCallback(() => {
-    setSelectedItemIds([]);
-  }, []);
-
-  const groupSelected = React.useCallback(() => {
-    updateLayout((prev) => groupSelectedItems(prev, selectedItemIds));
-    setSelectedItemIds([]);
-  }, [selectedItemIds, updateLayout]);
-
-  const splitSelected = React.useCallback(() => {
-    updateLayout((prev) => splitSelectedGroups(prev, selectedItemIds));
-    setSelectedItemIds([]);
-  }, [selectedItemIds, updateLayout]);
+  }, [cardIds, normalizedDefault, persistLayout]);
 
   const resetLayout = React.useCallback(() => {
-    const reset = normalizeSurfaceLayout(defaultLayout, cardIds);
     setLayout((prev) => {
-      if (isLayoutEqual(prev, reset)) return prev;
-      persistLayout(reset);
-      return reset;
+      if (isLayoutEqual(prev, normalizedDefault)) return prev;
+      persistLayout(normalizedDefault);
+      return normalizedDefault;
     });
-    setSelectedItemIds([]);
-  }, [cardIds, defaultLayout, persistLayout]);
+  }, [normalizedDefault, persistLayout]);
 
-  const reorder = React.useCallback((activeId: string, overId: string) => {
-    updateLayout((prev) => reorderLayoutItems(prev, activeId, overId));
+  const applyActiveLayout = React.useCallback((nextActiveLayout: Layout, activeCols: number) => {
+    const collisionFreeActive = resolveProjectedLayoutCollisions(nextActiveLayout, activeCols);
+    const breakpointCols = keyToCols(String(activeCols)) || CANONICAL_COLS;
+    updateLayout((prev) => ({
+      ...prev,
+      widgets: projectActiveToCanonicalWidgets(collisionFreeActive, prev.widgets, activeCols),
+      widgetsByCols: {
+        ...(prev.widgetsByCols || {}),
+        [colsToKey(breakpointCols)]: layoutToWidgetsForCols(
+          collisionFreeActive,
+          getSurfaceWidgetsForCols(prev, breakpointCols),
+          activeCols
+        ),
+      },
+      updatedAt: nowIso(),
+    }));
   }, [updateLayout]);
 
-  const setItemSize = React.useCallback((itemId: string, nextSize: DashboardItemSize) => {
-    updateLayout((prev) => setLayoutItemSize(prev, itemId, nextSize));
-  }, [updateLayout]);
+  const getWidgetsForCols = React.useCallback((activeCols: DashboardBreakpointCols) => {
+    return getSurfaceWidgetsForCols(layout, activeCols);
+  }, [layout]);
 
   return {
     layout,
-    selectedItemIds,
     unlocked,
     rearrangeEnabled,
     setUnlocked,
-    toggleSelected,
-    clearSelection,
-    groupSelected,
-    splitSelected,
     resetLayout,
-    reorder,
-    setItemSize,
+    applyActiveLayout,
+    getWidgetsForCols,
   };
 }

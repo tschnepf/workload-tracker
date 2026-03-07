@@ -19,8 +19,10 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
   const { state: verticalState } = useVerticalFilter();
   const personId = auth?.person?.id ?? null;
   const [showPre, setShowPre] = React.useState(false);
-  const [range, setRange] = React.useState<CalendarRange>(() => buildCalendarRange(PERSONAL_WEEKS));
-  const { data, isLoading, error, refetch } = useDeliverablesCalendar(personId ? range : null, {
+  const initialRange = React.useMemo<CalendarRange>(() => buildCalendarRange(PERSONAL_WEEKS), []);
+  const lastRequestedRangeRef = React.useRef<CalendarRange>(initialRange);
+  const [queryRange, setQueryRange] = React.useState<CalendarRange>(initialRange);
+  const { data, isLoading, error, refetch } = useDeliverablesCalendar(personId ? queryRange : null, {
     mineOnly: true,
     personId,
     vertical: verticalState.selectedVerticalId ?? undefined,
@@ -50,13 +52,23 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
     }),
     []
   );
+  const responsiveViews = React.useMemo(
+    () => ({ mobile: 'listWeek' as const, desktop: 'personalMultiWeek' as const }),
+    []
+  );
+  const eventOrder = React.useMemo(() => ['extendedProps.sortPriority', 'start'], []);
 
   const handleDatesSet = React.useCallback((arg: DatesSetArg) => {
     const nextRange = {
       start: toIsoDate(arg.start),
       end: toIsoDate(subtractOneDay(arg.end)),
     };
-    setRange((prev) => (prev.start === nextRange.start && prev.end === nextRange.end ? prev : nextRange));
+    const prevRange = lastRequestedRangeRef.current;
+    if (prevRange.start === nextRange.start && prevRange.end === nextRange.end) {
+      return;
+    }
+    lastRequestedRangeRef.current = nextRange;
+    setQueryRange(nextRange);
   }, []);
 
   const renderEventContent = React.useCallback((arg: EventContentArg) => {
@@ -136,16 +148,15 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
                   <div className="text-sm text-[var(--muted)]">No deliverables scheduled for this window.</div>
                 )
               }
-              initialDate={range.start}
+              initialDate={initialRange.start}
               initialView="personalMultiWeek"
-              responsiveViews={{ mobile: 'listWeek', desktop: 'personalMultiWeek' }}
+              responsiveViews={responsiveViews}
               views={personalViews}
-              validRange={{ start: range.start }}
               eventContent={renderEventContent}
               onEventClick={handleEventClick}
               onDatesSet={handleDatesSet}
               dayMaxEvents={false}
-              eventOrder={['extendedProps.sortPriority', 'start']}
+              eventOrder={eventOrder}
             />
           </div>
         )}

@@ -34,32 +34,14 @@ import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { getFlag } from '@/lib/flags';
 import PageState from '@/components/ui/PageState';
 import DashboardSurface from '@/components/dashboard/layout/DashboardSurface';
-import { createDefaultSurfaceLayout } from '@/components/dashboard/layout/dashboardLayoutState';
 import type { DashboardCardDefinition } from '@/components/dashboard/layout/dashboardLayoutTypes';
+import { TEAM_DEFAULT_LAYOUT } from './dashboardDefaults';
 
 const PRESET_WEEK_OPTIONS = [1, 2, 4, 8, 12] as const;
 type WeekSelectionMode = 'preset' | 'custom';
 const MIN_WEEKS = 1;
 const PRESET_MAX_WEEKS = 12;
 const CUSTOM_MAX_WEEKS = 52;
-
-const TEAM_DEFAULT_LAYOUT = createDefaultSurfaceLayout({
-  items: [
-    { type: 'card', cardId: 'upcoming-deliverables' },
-    { type: 'group', groupId: 'operations-snapshot' },
-    { type: 'card', cardId: 'recent-assignments' },
-    { type: 'card', cardId: 'utilization-distribution' },
-    { type: 'card', cardId: 'overallocated-team-members' },
-    { type: 'card', cardId: 'role-capacity-summary' },
-    { type: 'card', cardId: 'availability-alerting' },
-  ],
-  groups: {
-    'operations-snapshot': {
-      title: 'Operations Snapshot',
-      cardIds: ['avg-utilization', 'active-projects', 'assigned-hours-client'],
-    },
-  },
-});
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -84,7 +66,7 @@ const Dashboard: React.FC = () => {
   const heatWeeks = 12;
   const [projectCounts, setProjectCounts] = useState<Record<string, number>>({});
   const [projectsTotal, setProjectsTotal] = useState<number>(0);
-  const [showClientMixCard, setShowClientMixCard] = useState(false);
+  const [showClientMixCard, setShowClientMixCard] = useState(true);
   const deliverablesListRef = React.useRef<HTMLDivElement | null>(null);
   const [showDeliverablesScrollHint, setShowDeliverablesScrollHint] = useState(false);
   // People metadata (hire date, active) for availability filtering

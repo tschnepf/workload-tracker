@@ -6,10 +6,55 @@ import DashboardSurface from './DashboardSurface';
 import { createDefaultSurfaceLayout } from './dashboardLayoutState';
 import type { DashboardCardDefinition } from './dashboardLayoutTypes';
 
-const mockUseContainerWidth = vi.fn(() => ({ width: 1200, height: 800 }));
+const mockWidth = vi.fn(() => 1700);
 
-vi.mock('@/hooks/useContainerWidth', () => ({
-  useContainerWidth: (ref: React.RefObject<HTMLDivElement | null>) => mockUseContainerWidth(ref),
+vi.mock('react-grid-layout', async () => {
+  const React = await import('react');
+
+  const MockGrid = ({ children, gridConfig, dragConfig, resizeConfig }: any) => {
+    const handle = resizeConfig?.enabled && typeof resizeConfig?.handleComponent === 'function'
+      ? resizeConfig.handleComponent('se', null)
+      : null;
+
+    return (
+      <div
+        data-testid="rgl"
+        data-cols={String(gridConfig?.cols ?? '')}
+        data-drag-enabled={String(Boolean(dragConfig?.enabled))}
+        data-resize-enabled={String(Boolean(resizeConfig?.enabled))}
+      >
+        {React.Children.map(children, (child) => (
+          <div>
+            {child}
+            {handle}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return {
+    default: MockGrid,
+    noCompactor: {},
+    getCompactor: (_compactType: unknown, allowOverlap = false, preventCollision = false) => ({
+      type: null,
+      allowOverlap,
+      preventCollision,
+      compact: (layout: any) => layout,
+    }),
+    useContainerWidth: () => ({
+      width: mockWidth(),
+      mounted: true,
+      containerRef: { current: null },
+      measureWidth: () => {},
+    }),
+  };
+});
+
+vi.mock('react-grid-layout/extras', () => ({
+  GridBackground: ({ cols }: { cols: number }) => (
+    <div data-testid="grid-bg" data-cols={String(cols)} />
+  ),
 }));
 
 function setViewportWidth(width: number) {
@@ -25,39 +70,33 @@ const cards: DashboardCardDefinition[] = [
     id: 'a',
     title: 'Card A',
     render: () => <div>Card A content</div>,
-    renderPreview: () => <span>A</span>,
   },
   {
     id: 'b',
     title: 'Card B',
     render: () => <div>Card B content</div>,
-    renderPreview: () => <span>B</span>,
   },
 ];
 
-describe('DashboardSurface sizing', () => {
+describe('DashboardSurface (RGL v2)', () => {
   const originalInnerWidth = window.innerWidth;
 
   beforeEach(() => {
     vi.clearAllMocks();
     setViewportWidth(1280);
-    mockUseContainerWidth.mockReturnValue({ width: 1700, height: 900 });
+    mockWidth.mockReturnValue(1700);
   });
 
   afterEach(() => {
     setViewportWidth(originalInnerWidth);
   });
 
-  it('applies row/column spans from card size map', () => {
+  it('uses projected unit columns for the current container width', () => {
     const layout = createDefaultSurfaceLayout({
-      items: [
-        { type: 'card', cardId: 'a' },
-        { type: 'card', cardId: 'b' },
+      widgets: [
+        { cardId: 'a', x: 0, y: 0, w: 2, h: 2 },
+        { cardId: 'b', x: 2, y: 0, w: 2, h: 2 },
       ],
-      cardSizes: {
-        a: { w: 1, h: 1 },
-        b: { w: 3, h: 3 },
-      },
     });
 
     render(
@@ -65,57 +104,16 @@ describe('DashboardSurface sizing', () => {
         surfaceId="team-dashboard"
         cards={cards}
         defaultLayout={layout}
-        ariaLabel="Test dashboard"
       />
     );
 
-    const cardA = document.querySelector('[data-dashboard-item-id="card:a"]') as HTMLElement;
-    const cardB = document.querySelector('[data-dashboard-item-id="card:b"]') as HTMLElement;
-    expect(cardA).toBeTruthy();
-    expect(cardB).toBeTruthy();
-
-    expect(cardA.parentElement?.style.gridColumn).toBe('span 1 / span 1');
-    expect(cardA.parentElement?.style.gridRow).toBe('span 1 / span 1');
-    expect(cardB.parentElement?.style.gridColumn).toBe('span 3 / span 3');
-    expect(cardB.parentElement?.style.gridRow).toBe('span 3 / span 3');
+    expect(screen.getByTestId('rgl')).toHaveAttribute('data-cols', '8');
   });
 
-  it('forces full-width spans on mobile locked mode', () => {
-    setViewportWidth(390);
-    mockUseContainerWidth.mockReturnValue({ width: 2200, height: 900 });
-
-    const layout = createDefaultSurfaceLayout({
-      items: [{ type: 'card', cardId: 'a' }],
-      cardSizes: {
-        a: { w: 1, h: 1 },
-      },
-    });
-
-    render(
-      <DashboardSurface
-        surfaceId="my-work-dashboard"
-        cards={[cards[0]]}
-        defaultLayout={layout}
-        ariaLabel="Mobile dashboard"
-      />
-    );
-
-    const grid = screen.getByLabelText('Mobile dashboard');
-    expect((grid as HTMLElement).style.gridTemplateColumns).toContain('repeat(2');
-
-    const cardA = document.querySelector('[data-dashboard-item-id="card:a"]') as HTMLElement;
-    expect(cardA.parentElement?.style.gridColumn).toBe('span 2 / span 2');
-    expect(cardA.parentElement?.style.gridRow).toBe('span 1 / span 1');
-  });
-
-  it('shows corner resize handle only while unlocked', async () => {
+  it('enables drag and resize controls only while unlocked', async () => {
     const user = userEvent.setup();
-
     const layout = createDefaultSurfaceLayout({
-      items: [{ type: 'card', cardId: 'a' }],
-      cardSizes: {
-        a: { w: 2, h: 2 },
-      },
+      widgets: [{ cardId: 'a', x: 0, y: 0, w: 2, h: 2 }],
     });
 
     render(
@@ -126,12 +124,35 @@ describe('DashboardSurface sizing', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: 'Resize card' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('rgl')).toHaveAttribute('data-drag-enabled', 'false');
+    expect(screen.getByTestId('rgl')).toHaveAttribute('data-resize-enabled', 'false');
+    expect(screen.queryByTestId('grid-bg')).not.toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: 'Unlock Dashboard' }));
 
-    const resizeHandle = screen.getByRole('button', { name: 'Resize card' });
-    expect(resizeHandle).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Card width size' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Card height size' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('rgl')).toHaveAttribute('data-drag-enabled', 'true');
+    expect(screen.getByTestId('rgl')).toHaveAttribute('data-resize-enabled', 'true');
+    expect(screen.getByTestId('grid-bg')).toBeInTheDocument();
+    expect(document.querySelector('.dashboard-resize-handle')).toBeTruthy();
+  });
+
+  it('keeps mobile in locked two-column mode', () => {
+    setViewportWidth(390);
+    mockWidth.mockReturnValue(2200);
+
+    const layout = createDefaultSurfaceLayout({
+      widgets: [{ cardId: 'a', x: 0, y: 0, w: 2, h: 2 }],
+    });
+
+    render(
+      <DashboardSurface
+        surfaceId="my-work-dashboard"
+        cards={[cards[0]]}
+        defaultLayout={layout}
+      />
+    );
+
+    expect(screen.getByTestId('rgl')).toHaveAttribute('data-cols', '2');
+    expect(screen.getByRole('button', { name: 'Unlock Dashboard' })).toBeDisabled();
   });
 });

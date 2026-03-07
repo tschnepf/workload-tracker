@@ -112,7 +112,7 @@ function useFullCalendar(requiredPluginKeys: PluginKey[]): LoadedFullCalendar | 
     return () => {
       cancelled = true;
     };
-  }, [pluginSignature, requiredPluginKeys]);
+  }, [pluginSignature]);
   return module;
 }
 
@@ -253,6 +253,10 @@ const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
     }
     return toolbar;
   }, [toolbar, isMobile, responsiveViews.mobile]);
+  const eventClassNames = React.useCallback(
+    (arg: EventMountArg) => ['fc-event-accessible', ...(arg.event.classNames ?? [])],
+    []
+  );
 
   const isEmpty = !loading && (!events || events.length === 0);
 
@@ -461,8 +465,8 @@ const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
           displayEventEnd={!isMobile}
           navLinks
           eventClick={onEventClick}
-          eventContent={eventContent ? (arg) => eventContent(arg) : undefined}
-          eventClassNames={(arg) => ['fc-event-accessible', ...(arg.event.classNames ?? [])]}
+          eventContent={eventContent}
+          eventClassNames={eventClassNames}
           eventDidMount={handleEventDidMount}
           eventWillUnmount={handleEventWillUnmount}
           dayMaxEvents={dayMaxEvents}

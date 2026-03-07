@@ -1,27 +1,29 @@
 import type React from 'react';
 
-export const DASHBOARD_LAYOUT_VERSION = 2 as const;
+export const DASHBOARD_LAYOUT_VERSION = 4 as const;
+export const CANONICAL_COLS = 10 as const;
+export const MIN_WIDGET_UNITS = 1 as const;
+export const MAX_WIDGET_WIDTH_UNITS = CANONICAL_COLS;
+export const MAX_WIDGET_HEIGHT_UNITS = 60 as const;
+export const DASHBOARD_BREAKPOINT_COLS = [2, 4, 6, 8, 10] as const;
 
 export type DashboardSurfaceId = 'team-dashboard' | 'my-work-dashboard';
-export type DashboardSizeStep = 1 | 2 | 3 | 4;
-export type DashboardItemSize = { w: DashboardSizeStep; h: DashboardSizeStep };
+export type DashboardWidthUnit = number;
+export type DashboardBreakpointCols = (typeof DASHBOARD_BREAKPOINT_COLS)[number];
+export type DashboardBreakpointKey = `${DashboardBreakpointCols}`;
 
-export type DashboardLayoutItem =
-  | { type: 'card'; cardId: string }
-  | { type: 'group'; groupId: string };
-
-export type DashboardGroup = {
-  id: string;
-  title: string;
-  cardIds: string[];
+export type DashboardWidgetLayoutItem = {
+  i: string;
+  cardId: string;
+  x: number;
+  y: number;
+  w: DashboardWidthUnit;
+  h: number;
 };
 
 export type DashboardSurfaceLayout = {
-  items: DashboardLayoutItem[];
-  groups: Record<string, DashboardGroup>;
-  cardSizes: Record<string, DashboardItemSize>;
-  groupSizes: Record<string, DashboardItemSize>;
-  hiddenCardIds: string[];
+  widgets: DashboardWidgetLayoutItem[];
+  widgetsByCols: Partial<Record<DashboardBreakpointKey, DashboardWidgetLayoutItem[]>>;
   updatedAt: string;
 };
 
@@ -35,43 +37,78 @@ export type DashboardCardDefinition = {
   title: string;
   render: (ctx: { inGroup: boolean }) => React.ReactNode;
   renderPreview?: () => React.ReactNode;
-  defaultSize?: DashboardItemSize;
 };
 
-export const DASHBOARD_LOCAL_STORAGE_PREFIX = 'dashboard-layout:v2';
+export const DASHBOARD_LOCAL_STORAGE_PREFIX = 'dashboard-layout:v4';
+export const DASHBOARD_LOCAL_STORAGE_PREFIX_V3 = 'dashboard-layout:v3';
+export const DASHBOARD_LOCAL_STORAGE_PREFIX_V2 = 'dashboard-layout:v2';
 export const DASHBOARD_LOCAL_STORAGE_PREFIX_V1 = 'dashboard-layout:v1';
-export const DASHBOARD_MEDIUM_ITEM_SIZE: DashboardItemSize = { w: 2, h: 2 };
 
-const DASHBOARD_SIZE_UNITS: Record<DashboardSizeStep, number> = {
-  1: 1,
-  2: 2,
-  3: 3,
-  4: 4,
+export const DASHBOARD_MEDIUM_SIZE: Pick<DashboardWidgetLayoutItem, 'w' | 'h'> = {
+  w: 2,
+  h: 2,
 };
 
-export function isDashboardSizeStep(value: unknown): value is DashboardSizeStep {
-  return value === 1 || value === 2 || value === 3 || value === 4;
+export function isDashboardWidthUnit(value: unknown): value is DashboardWidthUnit {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && Number.isInteger(value)
+    && value >= MIN_WIDGET_UNITS
+    && value <= MAX_WIDGET_WIDTH_UNITS;
 }
 
-export function sizeStepToUnits(step: DashboardSizeStep): number {
-  return DASHBOARD_SIZE_UNITS[step];
-}
-
-export function dashboardItemId(item: DashboardLayoutItem): string {
-  return item.type === 'card' ? `card:${item.cardId}` : `group:${item.groupId}`;
-}
-
-export function parseDashboardItemId(value: string): { type: 'card'; cardId: string } | { type: 'group'; groupId: string } | null {
-  if (typeof value !== 'string') return null;
-  if (value.startsWith('card:')) {
-    const cardId = value.slice('card:'.length);
-    return cardId ? { type: 'card', cardId } : null;
+export function clampDashboardWidthUnit(
+  value: unknown,
+  fallback: DashboardWidthUnit = DASHBOARD_MEDIUM_SIZE.w,
+  maxUnits: number = MAX_WIDGET_WIDTH_UNITS
+): DashboardWidthUnit {
+  const min = MIN_WIDGET_UNITS;
+  const max = Math.max(min, Math.floor(maxUnits));
+  if (isDashboardWidthUnit(value)) return value;
+  if (typeof value === 'number') {
+    const rounded = Math.round(value);
+    if (rounded >= min && rounded <= max) return rounded as DashboardWidthUnit;
   }
-  if (value.startsWith('group:')) {
-    const groupId = value.slice('group:'.length);
-    return groupId ? { type: 'group', groupId } : null;
+  if (typeof value === 'string' && value.trim()) {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'sm' || normalized === 'small') return 1;
+    if (normalized === 'md' || normalized === 'medium') return 2;
+    if (normalized === 'lg' || normalized === 'large') return 3;
+    if (normalized === 'xl' || normalized === 'xlarge' || normalized === 'x-large') return 4;
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) {
+      return Math.max(min, Math.min(max, Math.round(parsed)));
+    }
   }
-  return null;
+  return Math.max(min, Math.min(max, Math.round(fallback)));
+}
+
+export function clampDashboardHeightUnits(
+  value: unknown,
+  fallback: number = DASHBOARD_MEDIUM_SIZE.h,
+  maxUnits: number = MAX_WIDGET_HEIGHT_UNITS
+): number {
+  const min = MIN_WIDGET_UNITS;
+  const max = Math.max(min, Math.floor(maxUnits));
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(min, Math.min(max, Math.round(value)));
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'sm' || normalized === 'small') return 1;
+    if (normalized === 'md' || normalized === 'medium') return 2;
+    if (normalized === 'lg' || normalized === 'large') return 3;
+    if (normalized === 'xl' || normalized === 'xlarge' || normalized === 'x-large') return 4;
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) {
+      return Math.max(min, Math.min(max, Math.round(parsed)));
+    }
+  }
+  return Math.max(min, Math.min(max, Math.round(fallback)));
+}
+
+export function widgetKey(cardId: string): string {
+  return cardId;
 }
 
 export function nowIso(): string {

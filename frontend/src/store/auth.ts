@@ -34,11 +34,22 @@ export type UserSettings = {
   dashboardLayouts?: {
     version?: number;
     surfaces?: Record<string, {
-      items?: Array<{ type?: 'card' | 'group'; cardId?: string; groupId?: string }>;
-      groups?: Record<string, { id?: string; title?: string; cardIds?: string[] }>;
-      cardSizes?: Record<string, { w?: 1 | 2 | 3 | 4; h?: 1 | 2 | 3 | 4 }>;
-      groupSizes?: Record<string, { w?: 1 | 2 | 3 | 4; h?: 1 | 2 | 3 | 4 }>;
-      hiddenCardIds?: string[];
+      widgets?: Array<{
+        i?: string;
+        cardId?: string;
+        x?: number;
+        y?: number;
+        w?: number;
+        h?: number;
+      }>;
+      widgetsByCols?: Record<string, Array<{
+        i?: string;
+        cardId?: string;
+        x?: number;
+        y?: number;
+        w?: number;
+        h?: number;
+      }>>;
       updatedAt?: string;
     }>;
   };

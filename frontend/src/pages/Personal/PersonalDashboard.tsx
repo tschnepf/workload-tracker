@@ -13,19 +13,8 @@ import { usePersonalLeadProjectGrid } from '@/hooks/usePersonalLeadProjectGrid';
 import { emitGridRefresh } from '@/lib/gridRefreshBus';
 import Card from '@/components/ui/Card';
 import DashboardSurface from '@/components/dashboard/layout/DashboardSurface';
-import { createDefaultSurfaceLayout } from '@/components/dashboard/layout/dashboardLayoutState';
 import type { DashboardCardDefinition } from '@/components/dashboard/layout/dashboardLayoutTypes';
-
-const MY_WORK_DEFAULT_LAYOUT = createDefaultSurfaceLayout({
-  items: [
-    { type: 'card', cardId: 'my-projects' },
-    { type: 'card', cardId: 'my-deliverables' },
-    { type: 'card', cardId: 'upcoming-pre-deliverables' },
-    { type: 'card', cardId: 'lead-project-assignments' },
-    { type: 'card', cardId: 'my-calendar' },
-    { type: 'card', cardId: 'my-schedule' },
-  ],
-});
+import { MY_WORK_DEFAULT_LAYOUT } from './personalDashboardDefaults';
 
 const PersonalDashboard: React.FC = () => {
   const auth = useAuth();
@@ -39,17 +28,6 @@ const PersonalDashboard: React.FC = () => {
   const projects = data?.projects ?? [];
   const deliverables = data?.deliverables ?? [];
   const schedule = data?.schedule ?? null;
-
-  if (!personId) {
-    return (
-      <Layout>
-        <div className="p-8 text-center text-[var(--text)]">
-          <h1 className="text-3xl font-bold mb-2">My Work</h1>
-          <p className="text-[var(--muted)]">Your account is not linked to a Person profile yet. Please contact your administrator.</p>
-        </div>
-      </Layout>
-    );
-  }
 
   React.useEffect(() => {
     if (headingRef.current) {
@@ -66,6 +44,17 @@ const PersonalDashboard: React.FC = () => {
       } catch {}
     }
   }, [loading, data]);
+
+  if (!personId) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-[var(--text)]">
+          <h1 className="text-3xl font-bold mb-2">My Work</h1>
+          <p className="text-[var(--muted)]">Your account is not linked to a Person profile yet. Please contact your administrator.</p>
+        </div>
+      </Layout>
+    );
+  }
 
   const renderMobileSkeletons = () => (
     <div className="md:hidden space-y-4" aria-label="Mobile fallback skeletons">

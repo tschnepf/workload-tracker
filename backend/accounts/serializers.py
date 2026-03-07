@@ -28,19 +28,45 @@ ALLOWED_SETTING_KEYS = {
 }
 
 ALLOWED_DASHBOARD_SURFACES = {"team-dashboard", "my-work-dashboard"}
-MAX_DASHBOARD_ITEMS = 40
-MAX_DASHBOARD_GROUPS = 20
-MAX_DASHBOARD_GROUP_CARDS = 20
-MAX_DASHBOARD_SIZE_ENTRIES = 80
+MAX_DASHBOARD_WIDGETS = 80
+CANONICAL_DASHBOARD_COLS = 10
+DASHBOARD_BREAKPOINT_COLS = (2, 4, 6, 8, 10)
+MAX_DASHBOARD_WIDGET_WIDTH_UNITS = CANONICAL_DASHBOARD_COLS
+MAX_DASHBOARD_WIDGET_HEIGHT_UNITS = 60
+
+ALLOWED_DASHBOARD_CARD_IDS = {
+    "team-dashboard": {
+        "upcoming-deliverables",
+        "avg-utilization",
+        "active-projects",
+        "assigned-hours-client",
+        "recent-assignments",
+        "utilization-distribution",
+        "overallocated-team-members",
+        "role-capacity-summary",
+        "availability-alerting",
+    },
+    "my-work-dashboard": {
+        "my-projects",
+        "my-deliverables",
+        "upcoming-pre-deliverables",
+        "lead-project-assignments",
+        "my-calendar",
+        "my-schedule",
+    },
+}
 
 
-def coerce_dashboard_size_step(raw_value) -> int:
+def coerce_dashboard_widget_width(raw_value) -> int:
     if isinstance(raw_value, (int, float)):
         value = int(raw_value)
-        if 1 <= value <= 4:
+        if 1 <= value <= MAX_DASHBOARD_WIDGET_WIDTH_UNITS:
             return value
 
     normalized = str(raw_value or "").strip().lower()
+    if not normalized:
+        return 2
+
     if normalized in {"1", "sm", "small"}:
         return 1
     if normalized in {"2", "md", "medium"}:
@@ -49,44 +75,74 @@ def coerce_dashboard_size_step(raw_value) -> int:
         return 3
     if normalized in {"4", "xl", "xlarge", "x-large"}:
         return 4
-    return 2
+
+    try:
+        numeric = int(float(normalized))
+    except (TypeError, ValueError):
+        return 2
+    if numeric < 1:
+        return 2
+    return min(numeric, MAX_DASHBOARD_WIDGET_WIDTH_UNITS)
 
 
-def sanitize_dashboard_size_map(payload: Dict, allowed_ids: set[str]) -> Dict:
-    if not isinstance(payload, dict) or not allowed_ids:
-        return {}
+def coerce_dashboard_widget_height(raw_value) -> int:
+    if isinstance(raw_value, (int, float)):
+        value = int(raw_value)
+        if value >= 1:
+            return min(value, MAX_DASHBOARD_WIDGET_HEIGHT_UNITS)
 
-    sizes: Dict = {}
-    for raw_id, raw_size in list(payload.items())[:MAX_DASHBOARD_SIZE_ENTRIES]:
-        item_id = str(raw_id or "").strip()
-        if not item_id or item_id not in allowed_ids:
-            continue
-        if not isinstance(raw_size, dict):
-            continue
+    normalized = str(raw_value or "").strip().lower()
+    if not normalized:
+        return 2
 
-        sizes[item_id[:120]] = {
-            "w": coerce_dashboard_size_step(raw_size.get("w")),
-            "h": coerce_dashboard_size_step(raw_size.get("h")),
-        }
+    if normalized in {"sm", "small"}:
+        return 1
+    if normalized in {"md", "medium"}:
+        return 2
+    if normalized in {"lg", "large"}:
+        return 3
+    if normalized in {"xl", "xlarge", "x-large"}:
+        return 4
 
-    return sizes
+    try:
+        numeric = int(float(normalized))
+    except (TypeError, ValueError):
+        return 2
+
+    if numeric < 1:
+        return 2
+    return min(numeric, MAX_DASHBOARD_WIDGET_HEIGHT_UNITS)
+
+
+def coerce_dashboard_coordinate(raw_value):
+    if isinstance(raw_value, bool):
+        return None
+    if isinstance(raw_value, (int, float)):
+        return max(0, int(raw_value))
+    normalized = str(raw_value or "").strip()
+    if not normalized:
+        return None
+    try:
+        return max(0, int(float(normalized)))
+    except (TypeError, ValueError):
+        return None
 
 
 def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
     if not isinstance(payload, dict):
         return None
 
-    version_raw = payload.get("version", 1)
+    version_raw = payload.get("version", 0)
     try:
         version = int(version_raw)
     except (TypeError, ValueError):
-        version = 1
-    if version < 1:
-        version = 1
+        version = 0
+    if version != 4:
+        return {"version": 4, "surfaces": {}}
 
     surfaces_raw = payload.get("surfaces")
     if not isinstance(surfaces_raw, dict):
-        return {"version": version, "surfaces": {}}
+        return {"version": 3, "surfaces": {}}
 
     surfaces: Dict = {}
     for surface_id in ALLOWED_DASHBOARD_SURFACES:
@@ -94,86 +150,69 @@ def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
         if not isinstance(surface_raw, dict):
             continue
 
-        items_raw = surface_raw.get("items")
-        items = []
-        if isinstance(items_raw, list):
-            for item in items_raw[:MAX_DASHBOARD_ITEMS]:
-                if not isinstance(item, dict):
-                    continue
-                item_type = str(item.get("type") or "").strip()
-                if item_type == "card":
-                    card_id = str(item.get("cardId") or "").strip()
-                    if card_id:
-                        items.append({"type": "card", "cardId": card_id[:120]})
-                elif item_type == "group":
-                    group_id = str(item.get("groupId") or "").strip()
-                    if group_id:
-                        items.append({"type": "group", "groupId": group_id[:120]})
+        allowed_card_ids = ALLOWED_DASHBOARD_CARD_IDS.get(surface_id, set())
 
-        top_level_group_ids = {item.get("groupId") for item in items if item.get("type") == "group" and item.get("groupId")}
-        top_level_card_ids = {item.get("cardId") for item in items if item.get("type") == "card" and item.get("cardId")}
+        def sanitize_widget_list(raw_widgets, max_cols: int):
+            widgets_local = []
+            seen_widget_ids_local = set()
+            seen_card_ids_local = set()
+            if not isinstance(raw_widgets, list):
+                return widgets_local
+            for raw_widget in raw_widgets[:MAX_DASHBOARD_WIDGETS]:
+                if not isinstance(raw_widget, dict):
+                    continue
 
-        groups_raw = surface_raw.get("groups")
-        groups = {}
-        if isinstance(groups_raw, dict):
-            for raw_group_id, raw_group in list(groups_raw.items())[:MAX_DASHBOARD_GROUPS]:
-                group_id = str(raw_group_id or "").strip()
-                if not group_id or not isinstance(raw_group, dict):
+                card_id = str(raw_widget.get("cardId") or "").strip()
+                if not card_id or card_id not in allowed_card_ids or card_id in seen_card_ids_local:
                     continue
-                title = str(raw_group.get("title") or "").strip() or "Group"
-                card_ids_raw = raw_group.get("cardIds")
-                if not isinstance(card_ids_raw, list):
-                    continue
-                seen = set()
-                card_ids = []
-                for card_id_raw in card_ids_raw[:MAX_DASHBOARD_GROUP_CARDS]:
-                    card_id = str(card_id_raw or "").strip()
-                    if not card_id or card_id in seen:
-                        continue
-                    seen.add(card_id)
-                    card_ids.append(card_id[:120])
-                if not card_ids:
-                    continue
-                groups[group_id[:120]] = {
-                    "id": group_id[:120],
-                    "title": title[:120],
-                    "cardIds": card_ids,
-                }
 
-        all_card_ids = set(top_level_card_ids)
-        for group in groups.values():
-            all_card_ids.update(group.get("cardIds") or [])
-
-        hidden_raw = surface_raw.get("hiddenCardIds")
-        hidden = []
-        if isinstance(hidden_raw, list):
-            seen_hidden = set()
-            for raw in hidden_raw[:MAX_DASHBOARD_ITEMS]:
-                value = str(raw or "").strip()
-                if not value or value in seen_hidden:
+                widget_id = str(raw_widget.get("i") or card_id).strip()[:120]
+                if not widget_id or widget_id in seen_widget_ids_local:
                     continue
-                seen_hidden.add(value)
-                hidden.append(value[:120])
+
+                x_raw = coerce_dashboard_coordinate(raw_widget.get("x"))
+                y_raw = coerce_dashboard_coordinate(raw_widget.get("y"))
+                if x_raw is None or y_raw is None:
+                    continue
+
+                w = min(max_cols, coerce_dashboard_widget_width(raw_widget.get("w")))
+                h = coerce_dashboard_widget_height(raw_widget.get("h"))
+                x = max(0, min(max_cols - w, x_raw))
+
+                widgets_local.append({
+                    "i": widget_id,
+                    "cardId": card_id[:120],
+                    "x": x,
+                    "y": y_raw,
+                    "w": w,
+                    "h": h,
+                })
+                seen_widget_ids_local.add(widget_id)
+                seen_card_ids_local.add(card_id)
+            return widgets_local
+
+        widgets = sanitize_widget_list(surface_raw.get("widgets"), CANONICAL_DASHBOARD_COLS)
+        widgets_by_cols = {}
+        widgets_by_cols_raw = surface_raw.get("widgetsByCols")
+        if isinstance(widgets_by_cols_raw, dict):
+            for cols in DASHBOARD_BREAKPOINT_COLS:
+                raw_for_cols = widgets_by_cols_raw.get(str(cols))
+                sanitized_for_cols = sanitize_widget_list(raw_for_cols, cols)
+                if sanitized_for_cols:
+                    widgets_by_cols[str(cols)] = sanitized_for_cols
 
         updated_at = str(surface_raw.get("updatedAt") or "").strip()
         if not updated_at:
             updated_at = None
 
-        card_sizes = sanitize_dashboard_size_map(surface_raw.get("cardSizes"), all_card_ids)
-        group_sizes = sanitize_dashboard_size_map(surface_raw.get("groupSizes"), top_level_group_ids)
-
-        surface_payload = {
-            "items": items,
-            "groups": groups,
-            "cardSizes": card_sizes,
-            "groupSizes": group_sizes,
-            "hiddenCardIds": hidden,
-        }
+        surface_payload = {"widgets": widgets}
+        if widgets_by_cols:
+            surface_payload["widgetsByCols"] = widgets_by_cols
         if updated_at:
             surface_payload["updatedAt"] = updated_at[:128]
         surfaces[surface_id] = surface_payload
 
-    return {"version": version, "surfaces": surfaces}
+    return {"version": 4, "surfaces": surfaces}
 
 
 def sanitize_settings(payload: Dict) -> Tuple[Dict, set]:

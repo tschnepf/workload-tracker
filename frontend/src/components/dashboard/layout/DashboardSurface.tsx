@@ -1,36 +1,25 @@
 import * as React from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  KeyboardSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { useContainerWidth } from '@/hooks/useContainerWidth';
+import ReactGridLayout, {
+  getCompactor,
+  noCompactor,
+  useContainerWidth,
+  type Layout,
+  type ResizeHandleAxis,
+} from 'react-grid-layout';
+import { GridBackground } from 'react-grid-layout/extras';
+import { getFlag } from '@/lib/flags';
 import DashboardCardShell from './DashboardCardShell';
 import DashboardToolbar from './DashboardToolbar';
-import DashboardGroupCard from './DashboardGroupCard';
 import {
-  DASHBOARD_MEDIUM_ITEM_SIZE,
   type DashboardCardDefinition,
-  type DashboardLayoutItem,
   type DashboardSurfaceId,
   type DashboardSurfaceLayout,
-  dashboardItemId,
-  parseDashboardItemId,
-  sizeStepToUnits,
 } from './dashboardLayoutTypes';
 import {
-  resolveColumnCount,
+  emitDashboardTelemetry,
+  resolveUnitColumnCount,
+  resolveUnitColumnCountWithHysteresis,
+  widgetsToActiveLayout,
   useDashboardLayoutState,
 } from './dashboardLayoutState';
 
@@ -43,82 +32,9 @@ type Props = {
   disableContentInteractionWhenUnlocked?: boolean;
 };
 
-type SortableItemProps = {
-  item: DashboardLayoutItem;
-  unlocked: boolean;
-  selected: boolean;
-  onToggleSelected: () => void;
-  renderContent: (item: DashboardLayoutItem) => React.ReactNode;
-  disableContentInteractionWhenUnlocked?: boolean;
-  gridStyle: React.CSSProperties;
-  itemSize: { w: 1 | 2 | 3 | 4; h: 1 | 2 | 3 | 4 };
-  resizeEnabled: boolean;
-  resizeStepWidthPx: number;
-  resizeStepHeightPx: number;
-  maxWidthUnits: number;
-  maxHeightUnits: number;
-  onSetItemSize: (size: { w: 1 | 2 | 3 | 4; h: 1 | 2 | 3 | 4 }) => void;
-  onResizeCommit: (size: { w: 1 | 2 | 3 | 4; h: 1 | 2 | 3 | 4 }) => void;
-};
-
-const SortableItem: React.FC<SortableItemProps> = ({
-  item,
-  unlocked,
-  selected,
-  onToggleSelected,
-  renderContent,
-  disableContentInteractionWhenUnlocked,
-  gridStyle,
-  itemSize,
-  resizeEnabled,
-  resizeStepWidthPx,
-  resizeStepHeightPx,
-  maxWidthUnits,
-  maxHeightUnits,
-  onSetItemSize,
-  onResizeCommit,
-}) => {
-  const itemKey = dashboardItemId(item);
-  const {
-    setNodeRef,
-    attributes,
-    listeners,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: itemKey, disabled: !unlocked });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div ref={setNodeRef} className="min-h-0" style={gridStyle}>
-      <DashboardCardShell
-        itemId={itemKey}
-        unlocked={unlocked}
-        selected={selected}
-        onToggleSelected={onToggleSelected}
-        dragAttributes={attributes}
-        dragListeners={listeners}
-        dragging={isDragging}
-        style={style}
-        disableContentInteractionWhenUnlocked={disableContentInteractionWhenUnlocked}
-        itemSize={itemSize}
-        resizeEnabled={resizeEnabled}
-        resizeStepWidthPx={resizeStepWidthPx}
-        resizeStepHeightPx={resizeStepHeightPx}
-        maxWidthUnits={maxWidthUnits}
-        maxHeightUnits={maxHeightUnits}
-        onSetItemSize={onSetItemSize}
-        onResizeCommit={onResizeCommit}
-      >
-        {renderContent(item)}
-      </DashboardCardShell>
-    </div>
-  );
-};
+const ROW_HEIGHT = 176;
+const MARGIN: [number, number] = [16, 16];
+const CONTAINER_PADDING: [number, number] = [0, 0];
 
 const DashboardSurface: React.FC<Props> = ({
   surfaceId,
@@ -133,255 +49,229 @@ const DashboardSurface: React.FC<Props> = ({
     () => new Map(cards.map((card) => [card.id, card])),
     [cards]
   );
+  const rglEnabled = getFlag('FF_DASHBOARD_RGL', true);
 
   const {
-    layout,
     unlocked,
     rearrangeEnabled,
-    selectedItemIds,
     setUnlocked,
-    toggleSelected,
-    clearSelection,
-    groupSelected,
-    splitSelected,
     resetLayout,
-    reorder,
-    setItemSize,
+    applyActiveLayout,
+    getWidgetsForCols,
   } = useDashboardLayoutState({
     surfaceId,
     cardIds,
     defaultLayout,
   });
 
-  const containerRef = React.useRef<HTMLDivElement | null>(null);
-  const { width } = useContainerWidth(containerRef);
-  const visualColumnCount = rearrangeEnabled ? resolveColumnCount(width) : 1;
-  const unitColumns = Math.max(1, visualColumnCount * 2);
-  const maxResizableWidthUnits = Math.max(1, Math.min(4, unitColumns));
+  const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1280 });
+  const [stableCols, setStableCols] = React.useState<2 | 4 | 6 | 8 | 10>(() => resolveUnitColumnCount(width));
+  React.useEffect(() => {
+    setStableCols((prev) => resolveUnitColumnCountWithHysteresis(width, prev));
+  }, [width]);
+  const activeCols = rearrangeEnabled ? stableCols : 2;
+  const forceFullWidth = !rearrangeEnabled;
 
-  const gridGapPx = 16;
-  const rootFontPx = React.useMemo(() => {
-    if (typeof window === 'undefined') return 16;
-    const parsed = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize || '16');
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 16;
-  }, []);
-  const rowHeightPx = 11 * rootFontPx;
-  const unitTrackWidthPx = React.useMemo(() => {
-    if (!width || unitColumns <= 0) return 1;
-    const available = width - (gridGapPx * Math.max(0, unitColumns - 1));
-    return Math.max(1, available / unitColumns);
-  }, [gridGapPx, unitColumns, width]);
+  const widgetsForCols = React.useMemo(
+    () => getWidgetsForCols(activeCols),
+    [activeCols, getWidgetsForCols]
+  );
+  const projectedLayout = React.useMemo(
+    () => widgetsToActiveLayout(widgetsForCols, activeCols, forceFullWidth),
+    [widgetsForCols, activeCols, forceFullWidth]
+  );
+  const cardIdByWidgetId = React.useMemo(
+    () => new Map(widgetsForCols.map((widget) => [widget.i, widget.cardId])),
+    [widgetsForCols]
+  );
 
-  const resizeStepWidthPx = unitTrackWidthPx + gridGapPx;
-  const resizeStepHeightPx = rowHeightPx + gridGapPx;
-
+  const [draftLayout, setDraftLayout] = React.useState<Layout>(projectedLayout);
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
   const [announcement, setAnnouncement] = React.useState('');
   const [announcementKey, setAnnouncementKey] = React.useState(0);
+
+  React.useEffect(() => {
+    setDraftLayout(projectedLayout);
+  }, [projectedLayout]);
 
   const announce = React.useCallback((message: string) => {
     setAnnouncement(message);
     setAnnouncementKey((prev) => prev + 1);
   }, []);
 
-  const itemKeys = React.useMemo(
-    () => layout.items.map((item) => dashboardItemId(item)),
-    [layout.items]
-  );
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const labelForItemId = React.useCallback((itemId: string): string => {
-    const parsed = parseDashboardItemId(itemId);
-    if (!parsed) return 'Item';
-    if (parsed.type === 'card') {
-      return cardById.get(parsed.cardId)?.title || parsed.cardId;
-    }
-    return layout.groups[parsed.groupId]?.title || parsed.groupId;
-  }, [cardById, layout.groups]);
-
-  const sizeForItemId = React.useCallback((itemId: string) => {
-    const parsed = parseDashboardItemId(itemId);
-    if (!parsed) return DASHBOARD_MEDIUM_ITEM_SIZE;
-    if (parsed.type === 'card') {
-      return layout.cardSizes[parsed.cardId] || DASHBOARD_MEDIUM_ITEM_SIZE;
-    }
-    return layout.groupSizes[parsed.groupId] || DASHBOARD_MEDIUM_ITEM_SIZE;
-  }, [layout.cardSizes, layout.groupSizes]);
-
-  const itemGridStyleForId = React.useCallback((itemId: string): React.CSSProperties => {
-    const itemSize = sizeForItemId(itemId);
-    const rowSpan = Math.max(1, Math.min(4, sizeStepToUnits(itemSize.h)));
-    const desiredColSpan = Math.max(1, Math.min(4, sizeStepToUnits(itemSize.w)));
-    const colSpan = rearrangeEnabled
-      ? Math.max(1, Math.min(unitColumns, desiredColSpan))
-      : unitColumns;
-
-    return {
-      gridColumn: `span ${colSpan} / span ${colSpan}`,
-      gridRow: `span ${rowSpan} / span ${rowSpan}`,
-    };
-  }, [rearrangeEnabled, sizeForItemId, unitColumns]);
-
-  const canSplitSelected = React.useMemo(
-    () => selectedItemIds.some((itemId) => {
-      const parsed = parseDashboardItemId(itemId);
-      return parsed?.type === 'group' && Boolean(layout.groups[parsed.groupId]);
-    }),
-    [layout.groups, selectedItemIds]
-  );
-
-  const handleDragEnd = React.useCallback((event: DragEndEvent) => {
-    const activeId = String(event.active?.id || '');
-    const overId = String(event.over?.id || '');
-    if (!activeId || !overId || activeId === overId) return;
-    const activeLabel = labelForItemId(activeId);
-    const overLabel = labelForItemId(overId);
-    reorder(activeId, overId);
-    announce(`${activeLabel} moved near ${overLabel}.`);
-  }, [announce, labelForItemId, reorder]);
-
   const handleToggleUnlock = React.useCallback(() => {
-    setUnlocked((prev) => {
-      const next = !prev;
-      if (!next) clearSelection();
-      return next;
-    });
-  }, [clearSelection, setUnlocked]);
+    setUnlocked((prev) => !prev);
+  }, [setUnlocked]);
 
-  const renderItemContent = React.useCallback((item: DashboardLayoutItem) => {
-    if (item.type === 'card') {
-      const card = cardById.get(item.cardId);
-      if (!card) {
-        return (
-          <div className="h-full rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
-            Missing card: {item.cardId}
-          </div>
-        );
-      }
-      return card.render({ inGroup: false });
-    }
+  const handleReset = React.useCallback(() => {
+    resetLayout();
+    announce('Dashboard layout was reset to default.');
+  }, [announce, resetLayout]);
 
-    const group = layout.groups[item.groupId];
-    if (!group) {
+  const editEnabled = rglEnabled && unlocked && rearrangeEnabled;
+  const previewDragCompactor = React.useMemo(() => getCompactor(null, true, false), []);
+  const settledCompactor = React.useMemo(() => noCompactor, []);
+  const activeCompactor = draggingId ? previewDragCompactor : settledCompactor;
+
+  const resizeHandle = React.useCallback((axis: ResizeHandleAxis, ref: React.Ref<HTMLElement>) => {
+    if (axis !== 'se') return null;
+    return (
+      <span
+        ref={ref}
+        className="dashboard-resize-handle absolute bottom-1.5 right-1.5 z-30 inline-flex h-6 w-6 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]"
+        data-no-drag="true"
+        aria-hidden="true"
+      >
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M6 14h8M9 11h5M12 8h2" />
+        </svg>
+      </span>
+    );
+  }, []);
+
+  const widgetRows = React.useMemo(
+    () => Math.max(6, ...draftLayout.map((item) => item.y + item.h)),
+    [draftLayout]
+  );
+  const controlledLayout = editEnabled ? draftLayout : projectedLayout;
+
+  const renderWidgetContent = React.useCallback((widgetId: string) => {
+    const card = cardById.get(widgetId);
+    if (!card) {
       return (
         <div className="h-full rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
-          Missing group: {item.groupId}
+          Missing card: {widgetId}
         </div>
       );
     }
+    return card.render({ inGroup: false });
+  }, [cardById]);
+  const labelForWidgetId = React.useCallback((widgetId: string) => {
+    const cardId = cardIdByWidgetId.get(widgetId) || widgetId;
+    return cardById.get(cardId)?.title || cardId;
+  }, [cardById, cardIdByWidgetId]);
 
-    return (
-      <DashboardGroupCard
-        title={group.title}
-        cardIds={group.cardIds}
-        cardTitleForId={(cardId) => cardById.get(cardId)?.title || cardId}
-        renderPreview={(cardId) => {
-          const card = cardById.get(cardId);
-          if (!card) return 'Unavailable';
-          return card.renderPreview ? card.renderPreview() : 'Preview unavailable';
-        }}
-      />
-    );
-  }, [cardById, layout.groups]);
-
-  const editGridBackgroundStyle: React.CSSProperties = unlocked && rearrangeEnabled
-    ? {
-      backgroundImage: 'repeating-linear-gradient(to right, rgba(148,163,184,0.25) 0, rgba(148,163,184,0.25) 1px, transparent 1px, transparent var(--dashboard-grid-unit-width)), repeating-linear-gradient(to bottom, rgba(148,163,184,0.25) 0, rgba(148,163,184,0.25) 1px, transparent 1px, transparent var(--dashboard-grid-unit-height))',
-      ['--dashboard-grid-unit-width' as never]: `${resizeStepWidthPx}px`,
-      ['--dashboard-grid-unit-height' as never]: `${resizeStepHeightPx}px`,
-      backgroundOrigin: 'content-box',
-    }
-    : {};
+  const isLegacyStaticPath = !rglEnabled;
 
   return (
     <div className={className}>
       <DashboardToolbar
         unlocked={unlocked}
-        canUnlock={rearrangeEnabled}
-        selectedCount={selectedItemIds.length}
-        canSplitSelected={canSplitSelected}
+        canUnlock={rearrangeEnabled && rglEnabled}
         onToggleUnlock={handleToggleUnlock}
-        onGroupSelected={() => {
-          groupSelected();
-          clearSelection();
-          announce('Selected items were grouped.');
-        }}
-        onSplitSelected={() => {
-          splitSelected();
-          clearSelection();
-          announce('Selected groups were split into cards.');
-        }}
-        onResetLayout={() => {
-          resetLayout();
-          clearSelection();
-          announce('Dashboard layout was reset to default.');
-        }}
+        onResetLayout={handleReset}
       />
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         <span key={announcementKey}>{announcement}</span>
       </div>
 
-      <div
-        ref={containerRef}
-        className="grid gap-4"
-        style={{
-          gridTemplateColumns: `repeat(${unitColumns}, minmax(0, 1fr))`,
-          gridAutoRows: 'var(--dashboard-grid-row-height)',
-          ['--dashboard-grid-row-height' as never]: '11rem',
-          ...editGridBackgroundStyle,
-        }}
-        aria-label={ariaLabel}
-      >
-        {unlocked && rearrangeEnabled ? (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={itemKeys} strategy={rectSortingStrategy}>
-              {layout.items.map((item) => {
-                const itemId = dashboardItemId(item);
-                const itemSize = sizeForItemId(itemId);
-                return (
-                  <SortableItem
-                    key={itemId}
-                    item={item}
-                    unlocked={unlocked}
-                    selected={selectedItemIds.includes(itemId)}
-                    onToggleSelected={() => toggleSelected(itemId)}
-                    renderContent={renderItemContent}
-                    disableContentInteractionWhenUnlocked={disableContentInteractionWhenUnlocked}
-                    gridStyle={itemGridStyleForId(itemId)}
-                    itemSize={itemSize}
-                    resizeEnabled={rearrangeEnabled}
-                    resizeStepWidthPx={resizeStepWidthPx}
-                    resizeStepHeightPx={resizeStepHeightPx}
-                    maxWidthUnits={maxResizableWidthUnits}
-                    maxHeightUnits={4}
-                    onSetItemSize={(size) => setItemSize(itemId, size)}
-                    onResizeCommit={(size) => {
-                      announce(`${labelForItemId(itemId)} resized to ${size.w}x${size.h}.`);
-                    }}
-                  />
-                );
-              })}
-            </SortableContext>
-          </DndContext>
-        ) : (
-          layout.items.map((item) => {
-            const itemId = dashboardItemId(item);
-            return (
-              <div key={itemId} className="min-h-0" style={itemGridStyleForId(itemId)}>
+      <div ref={containerRef} className="relative" aria-label={ariaLabel}>
+        {editEnabled && mounted ? (
+          <GridBackground
+            width={width}
+            cols={activeCols}
+            rowHeight={ROW_HEIGHT}
+            margin={MARGIN}
+            containerPadding={CONTAINER_PADDING}
+            rows={widgetRows}
+            color="rgba(148,163,184,0.12)"
+            borderRadius={2}
+          />
+        ) : null}
+
+        {isLegacyStaticPath ? (
+          <div
+            className="grid gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${activeCols}, minmax(0, 1fr))`,
+              gridAutoRows: `${ROW_HEIGHT}px`,
+            }}
+          >
+            {draftLayout.map((item) => (
+              <div
+                key={item.i}
+                style={{
+                  gridColumn: `span ${Math.max(1, Math.min(activeCols, item.w))} / span ${Math.max(1, Math.min(activeCols, item.w))}`,
+                  gridRow: `span ${Math.max(1, item.h)} / span ${Math.max(1, item.h)}`,
+                }}
+              >
                 <DashboardCardShell
-                  itemId={itemId}
+                  itemId={item.i}
                   unlocked={false}
-                  selected={false}
-                  onToggleSelected={() => {}}
+                  disableContentInteractionWhenUnlocked={disableContentInteractionWhenUnlocked}
                 >
-                  {renderItemContent(item)}
+                  {renderWidgetContent(cardIdByWidgetId.get(item.i) || item.i)}
                 </DashboardCardShell>
               </div>
-            );
-          })
+            ))}
+          </div>
+        ) : (
+          <ReactGridLayout
+            width={width}
+            layout={controlledLayout}
+            gridConfig={{
+              cols: activeCols,
+              rowHeight: ROW_HEIGHT,
+              margin: MARGIN,
+              containerPadding: CONTAINER_PADDING,
+            }}
+            dragConfig={{
+              enabled: editEnabled,
+              handle: '.dashboard-drag-handle',
+              cancel: '.dashboard-resize-handle,[data-no-drag=true]',
+              threshold: 4,
+              bounded: false,
+            }}
+            resizeConfig={{
+              enabled: editEnabled,
+              handles: ['se'],
+              handleComponent: resizeHandle,
+            }}
+            compactor={activeCompactor}
+            autoSize
+            className="dashboard-rgl"
+            onLayoutChange={(nextLayout) => {
+              if (editEnabled) {
+                setDraftLayout(nextLayout);
+              }
+            }}
+            onDragStart={(_nextLayout, oldItem) => {
+              emitDashboardTelemetry('drag_start');
+              setDraggingId(oldItem?.i || null);
+            }}
+            onDragStop={(nextLayout, oldItem, newItem) => {
+              setDraggingId(null);
+              setDraftLayout(nextLayout);
+              applyActiveLayout(nextLayout, activeCols);
+              emitDashboardTelemetry('drag_stop_success');
+              if (newItem) {
+                announce(`${labelForWidgetId(newItem.i)} moved.`);
+              } else if (oldItem) {
+                announce(`${labelForWidgetId(oldItem.i)} moved.`);
+              }
+            }}
+            onResizeStop={(nextLayout, _oldItem, newItem) => {
+              setDraftLayout(nextLayout);
+              applyActiveLayout(nextLayout, activeCols);
+              emitDashboardTelemetry('resize_stop_success');
+              if (newItem) {
+                announce(`${labelForWidgetId(newItem.i)} resized to ${newItem.w}x${newItem.h}.`);
+              }
+            }}
+          >
+            {widgetsForCols.map((widget) => (
+              <div key={widget.i} className="min-h-0">
+                <DashboardCardShell
+                  itemId={widget.i}
+                  unlocked={editEnabled}
+                  dragging={draggingId === widget.i}
+                  disableContentInteractionWhenUnlocked={disableContentInteractionWhenUnlocked}
+                >
+                  {renderWidgetContent(widget.cardId)}
+                </DashboardCardShell>
+              </div>
+            ))}
+          </ReactGridLayout>
         )}
       </div>
     </div>

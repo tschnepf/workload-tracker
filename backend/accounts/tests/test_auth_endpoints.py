@@ -75,29 +75,24 @@ class AuthEndpointsTests(TestCase):
                 'includeChildren': True,
                 'theme': 'dark',
                 'dashboardLayouts': {
-                    'version': 2,
+                    'version': 4,
                     'surfaces': {
                         'team-dashboard': {
-                            'items': [
-                                {'type': 'card', 'cardId': 'recent-assignments'},
-                                {'type': 'group', 'groupId': 'operations-snapshot'},
+                            'widgets': [
+                                {'i': 'recent-assignments', 'cardId': 'recent-assignments', 'x': 1, 'y': 0, 'w': 4, 'h': 1},
+                                {'i': 'avg-utilization', 'cardId': 'avg-utilization', 'x': 12, 'y': '2', 'w': 'bad-token', 'h': 'lg'},
+                                {'i': 'active-projects', 'cardId': 'active-projects', 'x': 3, 'y': 5, 'w': 9, 'h': 99},
+                                {'i': 'ghost-widget', 'cardId': 'ghost-card', 'x': 0, 'y': 0, 'w': 2, 'h': 2},
+                                {'i': 'recent-assignments', 'cardId': 'active-projects', 'x': 0, 'y': 1, 'w': 2, 'h': 2},
+                                {'i': 'bad-coord', 'cardId': 'availability-alerting', 'x': 'oops', 'y': 0, 'w': 2, 'h': 2},
                             ],
-                            'groups': {
-                                'operations-snapshot': {
-                                    'title': 'Ops',
-                                    'cardIds': ['avg-utilization', 'active-projects'],
-                                },
+                            'widgetsByCols': {
+                                '4': [
+                                    {'i': 'recent-assignments', 'cardId': 'recent-assignments', 'x': 0, 'y': 0, 'w': 4, 'h': 1},
+                                    {'i': 'avg-utilization', 'cardId': 'avg-utilization', 'x': 2, 'y': 0, 'w': 4, 'h': 2},
+                                    {'i': 'bad-coord', 'cardId': 'availability-alerting', 'x': 'oops', 'y': 0, 'w': 2, 'h': 2},
+                                ],
                             },
-                            'cardSizes': {
-                                'recent-assignments': {'w': 4, 'h': 1},
-                                'avg-utilization': {'w': 'bad-token', 'h': 'lg'},
-                                'ghost-card': {'w': 'sm', 'h': 'sm'},
-                            },
-                            'groupSizes': {
-                                'operations-snapshot': {'w': 'sm', 'h': 4},
-                                'ghost-group': {'w': 'lg', 'h': 'lg'},
-                            },
-                            'hiddenCardIds': [],
                         },
                     },
                 },
@@ -112,11 +107,15 @@ class AuthEndpointsTests(TestCase):
         self.assertIn('dashboardLayouts', s)
         self.assertIn('team-dashboard', ((s.get('dashboardLayouts') or {}).get('surfaces') or {}))
         team_layout = ((s.get('dashboardLayouts') or {}).get('surfaces') or {}).get('team-dashboard') or {}
-        self.assertEqual((team_layout.get('cardSizes') or {}).get('recent-assignments'), {'w': 4, 'h': 1})
-        self.assertEqual((team_layout.get('cardSizes') or {}).get('avg-utilization'), {'w': 2, 'h': 3})
-        self.assertNotIn('ghost-card', team_layout.get('cardSizes') or {})
-        self.assertEqual((team_layout.get('groupSizes') or {}).get('operations-snapshot'), {'w': 1, 'h': 4})
-        self.assertNotIn('ghost-group', team_layout.get('groupSizes') or {})
+        widgets = team_layout.get('widgets') or []
+        self.assertEqual(len(widgets), 3)
+        self.assertEqual(widgets[0], {'i': 'recent-assignments', 'cardId': 'recent-assignments', 'x': 1, 'y': 0, 'w': 4, 'h': 1})
+        self.assertEqual(widgets[1], {'i': 'avg-utilization', 'cardId': 'avg-utilization', 'x': 8, 'y': 2, 'w': 2, 'h': 3})
+        self.assertEqual(widgets[2], {'i': 'active-projects', 'cardId': 'active-projects', 'x': 1, 'y': 5, 'w': 9, 'h': 60})
+        widgets_by_cols = team_layout.get('widgetsByCols') or {}
+        self.assertIn('4', widgets_by_cols)
+        self.assertEqual(widgets_by_cols['4'][0], {'i': 'recent-assignments', 'cardId': 'recent-assignments', 'x': 0, 'y': 0, 'w': 4, 'h': 1})
+        self.assertEqual(widgets_by_cols['4'][1], {'i': 'avg-utilization', 'cardId': 'avg-utilization', 'x': 0, 'y': 0, 'w': 4, 'h': 2})
         self.assertNotIn('unknownKey', s)
 
     def test_link_person_email_match_and_unlink(self):

@@ -1,152 +1,123 @@
 import { describe, it, expect } from 'vitest';
+import type { Layout } from 'react-grid-layout';
 import {
   createDefaultSurfaceLayout,
-  groupSelectedItems,
   normalizeSurfaceLayout,
-  resolveColumnCount,
-  setLayoutItemSize,
-  splitSelectedGroups,
+  projectActiveToCanonicalWidgets,
+  projectCanonicalToActiveLayout,
+  resolveUnitColumnCount,
+  resolveUnitColumnCountWithHysteresis,
 } from './dashboardLayoutState';
-import { DASHBOARD_MEDIUM_ITEM_SIZE, dashboardItemId } from './dashboardLayoutTypes';
+import { CANONICAL_COLS, DASHBOARD_LAYOUT_VERSION, MAX_WIDGET_HEIGHT_UNITS } from './dashboardLayoutTypes';
 
-describe('dashboard layout state helpers', () => {
-  it('resolves responsive columns with hard cap of five', () => {
-    expect(resolveColumnCount(400)).toBe(1);
-    expect(resolveColumnCount(759)).toBe(1);
-    expect(resolveColumnCount(760)).toBe(2);
-    expect(resolveColumnCount(1199)).toBe(2);
-    expect(resolveColumnCount(1200)).toBe(3);
-    expect(resolveColumnCount(1699)).toBe(3);
-    expect(resolveColumnCount(1700)).toBe(4);
-    expect(resolveColumnCount(2199)).toBe(4);
-    expect(resolveColumnCount(2200)).toBe(5);
-    expect(resolveColumnCount(3000)).toBe(5);
+function overlaps(a: Pick<Layout[number], 'x' | 'y' | 'w' | 'h'>, b: Pick<Layout[number], 'x' | 'y' | 'w' | 'h'>): boolean {
+  return a.x < b.x + b.w
+    && a.x + a.w > b.x
+    && a.y < b.y + b.h
+    && a.y + a.h > b.y;
+}
+
+describe('dashboard layout state helpers (v4)', () => {
+  it('resolves responsive unit columns up to canonical 10', () => {
+    expect(resolveUnitColumnCount(400)).toBe(2);
+    expect(resolveUnitColumnCount(759)).toBe(2);
+    expect(resolveUnitColumnCount(760)).toBe(4);
+    expect(resolveUnitColumnCount(1199)).toBe(4);
+    expect(resolveUnitColumnCount(1200)).toBe(6);
+    expect(resolveUnitColumnCount(1699)).toBe(6);
+    expect(resolveUnitColumnCount(1700)).toBe(8);
+    expect(resolveUnitColumnCount(2199)).toBe(8);
+    expect(resolveUnitColumnCount(2200)).toBe(10);
+    expect(resolveUnitColumnCount(3000)).toBe(10);
   });
 
-  it('normalizes layout and migrates legacy payloads with 2x2 defaults', () => {
-    const allowed = ['a', 'b', 'c', 'd'];
-    const raw = {
-      items: [
-        { type: 'card', cardId: 'a' },
-        { type: 'card', cardId: 'a' },
-        { type: 'card', cardId: 'unknown' },
-        { type: 'group', groupId: 'g1' },
-      ],
-      groups: {
-        g1: {
-          id: 'g1',
-          title: 'Group 1',
-          cardIds: ['b', 'c', 'ghost'],
-        },
-      },
-      hiddenCardIds: ['ghost', 'd'],
-    };
-
-    const normalized = normalizeSurfaceLayout(raw, allowed);
-    expect(normalized.items.map(dashboardItemId)).toEqual(['card:a', 'group:g1', 'card:d']);
-    expect(normalized.groups.g1.cardIds).toEqual(['b', 'c']);
-    expect(normalized.hiddenCardIds).toEqual(['d']);
-    expect(normalized.cardSizes.a).toEqual(DASHBOARD_MEDIUM_ITEM_SIZE);
-    expect(normalized.cardSizes.b).toEqual(DASHBOARD_MEDIUM_ITEM_SIZE);
-    expect(normalized.groupSizes.g1).toEqual(DASHBOARD_MEDIUM_ITEM_SIZE);
+  it('uses hysteresis to avoid oscillating near breakpoints', () => {
+    expect(resolveUnitColumnCountWithHysteresis(1195, 4, 24)).toBe(4);
+    expect(resolveUnitColumnCountWithHysteresis(1195, 6, 24)).toBe(6);
+    expect(resolveUnitColumnCountWithHysteresis(1230, 4, 24)).toBe(6);
+    expect(resolveUnitColumnCountWithHysteresis(1170, 6, 24)).toBe(4);
   });
 
-  it('sanitizes provided card/group sizes and drops unknown ids', () => {
-    const allowed = ['a', 'b'];
-    const raw = {
-      items: [
-        { type: 'card', cardId: 'a' },
-        { type: 'group', groupId: 'g1' },
+  it('normalizes widgets and appends missing cards from defaults', () => {
+    const defaults = createDefaultSurfaceLayout({
+      widgets: [
+        { cardId: 'a', x: 0, y: 0, w: 2, h: 2 },
+        { cardId: 'b', x: 2, y: 0, w: 2, h: 2 },
+        { cardId: 'c', x: 4, y: 0, w: 2, h: 2 },
       ],
-      groups: {
-        g1: {
-          id: 'g1',
-          title: 'Group 1',
-          cardIds: ['b'],
-        },
-      },
-      cardSizes: {
-        a: { w: 4, h: 1 },
-        b: { w: 'bad', h: 'lg' },
-        ghost: { w: 1, h: 1 },
-      },
-      groupSizes: {
-        g1: { w: 1, h: 4 },
-        ghost: { w: 4, h: 4 },
-      },
-      hiddenCardIds: [],
-    };
-
-    const normalized = normalizeSurfaceLayout(raw, allowed);
-    expect(normalized.cardSizes.a).toEqual({ w: 4, h: 1 });
-    expect(normalized.cardSizes.b).toEqual({ w: 2, h: 3 });
-    expect((normalized.cardSizes as Record<string, unknown>).ghost).toBeUndefined();
-    expect(normalized.groupSizes.g1).toEqual({ w: 1, h: 4 });
-    expect((normalized.groupSizes as Record<string, unknown>).ghost).toBeUndefined();
-  });
-
-  it('updates item sizes for cards and groups', () => {
-    const base = createDefaultSurfaceLayout({
-      items: [
-        { type: 'card', cardId: 'a' },
-        { type: 'group', groupId: 'g1' },
-      ],
-      groups: {
-        g1: { title: 'Ops', cardIds: ['b'] },
-      },
     });
 
-    const cardResized = setLayoutItemSize(base, 'card:a', { w: 4, h: 1 });
-    expect(cardResized.cardSizes.a).toEqual({ w: 4, h: 1 });
+    const normalized = normalizeSurfaceLayout(
+      {
+        widgets: [
+          { i: 'a', cardId: 'a', x: 0, y: 0, w: 4, h: 1 },
+          { i: 'dup-a', cardId: 'a', x: 1, y: 1, w: 2, h: 2 },
+          { i: 'ghost', cardId: 'ghost', x: 0, y: 0, w: 2, h: 2 },
+        ],
+      },
+      ['a', 'b', 'c'],
+      defaults
+    );
 
-    const groupResized = setLayoutItemSize(cardResized, 'group:g1', { w: 1, h: 4 });
-    expect(groupResized.groupSizes.g1).toEqual({ w: 1, h: 4 });
+    expect(normalized.widgets.map((widget) => widget.cardId)).toEqual(['a', 'b', 'c']);
+    expect(normalized.widgets[0]).toMatchObject({ i: 'a', cardId: 'a', w: 4, h: 1 });
+    expect(normalized.widgets[1]).toMatchObject({ i: 'b', cardId: 'b', w: 2, h: 2 });
+    expect(normalized.widgets[2]).toMatchObject({ i: 'c', cardId: 'c', w: 2, h: 2 });
   });
 
-  it('groups selected cards and merges into selected group while preserving base group size', () => {
-    const base = createDefaultSurfaceLayout({
-      items: [
-        { type: 'card', cardId: 'a' },
-        { type: 'group', groupId: 'g1' },
-        { type: 'card', cardId: 'd' },
+  it('projects canonical layout to active cols and back', () => {
+    const canonical = createDefaultSurfaceLayout({
+      widgets: [
+        { cardId: 'a', x: 0, y: 0, w: 4, h: 3 },
+        { cardId: 'b', x: 6, y: 2, w: 2, h: 2 },
       ],
-      groups: {
-        g1: {
-          title: 'Ops',
-          cardIds: ['b', 'c'],
-        },
-      },
-      groupSizes: {
-        g1: { w: 4, h: 1 },
-      },
     });
 
-    const grouped = groupSelectedItems(base, ['group:g1', 'card:d']);
-    expect(grouped.items.map(dashboardItemId)).toEqual(['card:a', 'group:g1']);
-    expect(grouped.groups.g1.cardIds).toEqual(['b', 'c', 'd']);
-    expect(grouped.groupSizes.g1).toEqual({ w: 4, h: 1 });
+    const active = projectCanonicalToActiveLayout(canonical.widgets, 6, false);
+    expect(active[0]).toMatchObject({ i: 'a', x: 0, w: 2, h: 3 });
+    expect(active[1]).toMatchObject({ i: 'b', w: 1, h: 2 });
+
+    const movedActive: Layout = [
+      { ...active[0], x: 1, y: 1, w: 3, h: 4 },
+      { ...active[1], x: 4, y: 0, w: 2, h: 1 },
+    ];
+
+    const back = projectActiveToCanonicalWidgets(movedActive, canonical.widgets, 6);
+    expect(back[0]).toMatchObject({ i: 'b', cardId: 'b' });
+    expect(back[1]).toMatchObject({ i: 'a', cardId: 'a' });
+    expect(back.every((item) => item.w >= 1 && item.w <= CANONICAL_COLS)).toBe(true);
+    expect(back.every((item) => item.h >= 1 && item.h <= MAX_WIDGET_HEIGHT_UNITS)).toBe(true);
+    expect(back.every((item) => item.x >= 0 && item.x <= CANONICAL_COLS - item.w)).toBe(true);
   });
 
-  it('splits selected groups back into cards and removes split group size', () => {
-    const base = createDefaultSurfaceLayout({
-      items: [
-        { type: 'card', cardId: 'a' },
-        { type: 'group', groupId: 'g1' },
+  it('allows taller widget heights and clamps to max height units', () => {
+    const canonical = createDefaultSurfaceLayout({
+      widgets: [{ cardId: 'a', x: 0, y: 0, w: 2, h: 120 }],
+    });
+    expect(canonical.widgets[0].h).toBe(MAX_WIDGET_HEIGHT_UNITS);
+
+    const active = projectCanonicalToActiveLayout(canonical.widgets, 10, false);
+    expect(active[0].maxH).toBe(MAX_WIDGET_HEIGHT_UNITS);
+  });
+
+  it('prevents widget overlap when projecting to narrower columns', () => {
+    const canonical = createDefaultSurfaceLayout({
+      widgets: [
+        { cardId: 'a', x: 2, y: 0, w: 3, h: 2 },
+        { cardId: 'b', x: 5, y: 0, w: 3, h: 2 },
+        { cardId: 'c', x: 8, y: 0, w: 2, h: 2 },
       ],
-      groups: {
-        g1: {
-          title: 'Ops',
-          cardIds: ['b', 'c'],
-        },
-      },
-      groupSizes: {
-        g1: { w: 1, h: 4 },
-      },
     });
 
-    const split = splitSelectedGroups(base, ['group:g1']);
-    expect(split.items.map(dashboardItemId)).toEqual(['card:a', 'card:b', 'card:c']);
-    expect(split.groups.g1).toBeUndefined();
-    expect(split.groupSizes.g1).toBeUndefined();
+    const active = projectCanonicalToActiveLayout(canonical.widgets, 4, false);
+    const hasAnyOverlap = active.some((item, index) =>
+      active.slice(index + 1).some((other) => overlaps(item, other))
+    );
+
+    expect(hasAnyOverlap).toBe(false);
+  });
+
+  it('uses version 4 as canonical dashboard layout version', () => {
+    expect(DASHBOARD_LAYOUT_VERSION).toBe(4);
   });
 });
