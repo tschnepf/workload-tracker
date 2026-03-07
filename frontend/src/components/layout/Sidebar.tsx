@@ -222,6 +222,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const auth = useAuth();
   const isAdmin = isAdminUser(auth.user);
   const canUseForecast = isAdminOrManager(auth.user);
+  const canUseSkills = isAdminOrManager(auth.user);
   const [logoError, setLogoError] = React.useState(false);
 
   const primaryItems = [
@@ -279,12 +280,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'People',
       description: 'Team management'
     },
-    { 
-      path: '/skills', 
-      icon: 'skills', 
+    ...(canUseSkills ? [{
+      path: '/skills',
+      icon: 'skills',
       label: 'Skills',
-      description: 'Team skills analysis'
-    }
+      description: 'Skills assignment workspace'
+    }] : []),
   ];
 
   const settingsItems = [

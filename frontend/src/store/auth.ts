@@ -31,6 +31,10 @@ export type UserSettings = {
   theme?: 'light' | 'dark' | 'system';
   colorScheme?: string;
   schemaVersion?: number;
+  dashboardLayouts?: {
+    version?: number;
+    surfaces?: Record<string, unknown>;
+  };
 };
 
 export type AuthState = {

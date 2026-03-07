@@ -151,8 +151,8 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   }, [responsive, width, size]);
 
   return (
-    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
-      <div ref={rootRef} className="p-4">
+    <Card className={`bg-[var(--card)] border-[var(--border)] h-full min-h-0 ${className || ''}`}>
+      <div ref={rootRef} className="p-4 h-full min-h-0 flex flex-col">
         <div className="mb-2 flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-[var(--text)]">
@@ -190,67 +190,69 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
           ))}
         </div>
 
-        {loading ? (
-          <div className="text-[var(--muted)]">Calculating hours...</div>
-        ) : error ? (
-          <div className="text-red-400">Error: {error}</div>
-        ) : total <= 0 ? (
-          <div className="text-[var(--muted)]">No upcoming assigned hours</div>
-        ) : (
-          <div className="relative overflow-hidden">
-            <div
-              className="flex transition-transform duration-300"
-              style={{ transform: focusClient ? 'translateX(-100%)' : 'translateX(0%)' }}
-            >
-              {/* Panel 1: By Client */}
-              <div className="w-full flex-shrink-0 flex items-center gap-3">
-                <div className="shrink-0">
-                  <PieChart slices={slices} size={chartSize} onSliceClick={(s) => setFocusClient(s.label)} />
+        <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="text-[var(--muted)]">Calculating hours...</div>
+          ) : error ? (
+            <div className="text-red-400">Error: {error}</div>
+          ) : total <= 0 ? (
+            <div className="text-[var(--muted)]">No upcoming assigned hours</div>
+          ) : (
+            <div className="relative overflow-hidden">
+              <div
+                className="flex transition-transform duration-300"
+                style={{ transform: focusClient ? 'translateX(-100%)' : 'translateX(0%)' }}
+              >
+                {/* Panel 1: By Client */}
+                <div className="w-full flex-shrink-0 flex items-center gap-3">
+                  <div className="shrink-0">
+                    <PieChart slices={slices} size={chartSize} onSliceClick={(s) => setFocusClient(s.label)} />
+                  </div>
+
+                  <div className="flex flex-col gap-2 w-full">
+                    {slices.map((s) => (
+                      <button
+                        key={s.key}
+                        onClick={() => setFocusClient(s.label)}
+                        className="flex items-center gap-2 w-full text-left hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded"
+                      >
+                        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                        <div className="text-xs text-[var(--text)] flex items-center justify-between gap-2 w-full whitespace-nowrap">
+                          <span className="truncate" title={s.label}>{s.label}</span>
+                          <span className="text-[var(--muted)] flex-shrink-0">{Math.round(s.value)}h · {pct(s.value)}%</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-2 w-full">
-                  {slices.map((s) => (
-                    <button
-                      key={s.key}
-                      onClick={() => setFocusClient(s.label)}
-                      className="flex items-center gap-2 w-full text-left hover:bg-[var(--surfaceHover)] px-1 py-0.5 rounded"
-                    >
-                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                      <div className="text-xs text-[var(--text)] flex items-center justify-between gap-2 w-full whitespace-nowrap">
-                        <span className="truncate" title={s.label}>{s.label}</span>
-                        <span className="text-[var(--muted)] flex-shrink-0">{Math.round(s.value)}h · {pct(s.value)}%</span>
+                {/* Panel 2: By Project within selected Client */}
+                <div className="w-full flex-shrink-0 flex items-center gap-3">
+                  <div className="shrink-0">
+                    <PieChart slices={drilldown} size={size} />
+                  </div>
+                  <div className="flex flex-col gap-2 w-full">
+                    {drilldownLoading && (
+                      <div className="text-[var(--muted)] text-xs">Loading projects…</div>
+                    )}
+                    {drilldownError && (
+                      <div className="text-red-400 text-xs">{drilldownError}</div>
+                    )}
+                    {!drilldownLoading && !drilldownError && drilldown.map((s) => (
+                      <div key={s.key} className="flex items-center gap-2 w-full">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                        <div className="text-xs text-[var(--text)] flex items-center justify-between gap-2 w-full whitespace-nowrap">
+                          <span className="truncate" title={s.label}>{s.label}</span>
+                          <span className="text-[var(--muted)] flex-shrink-0">{Math.round(s.value)}h</span>
+                        </div>
                       </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Panel 2: By Project within selected Client */}
-              <div className="w-full flex-shrink-0 flex items-center gap-3">
-                <div className="shrink-0">
-                  <PieChart slices={drilldown} size={size} />
-                </div>
-                <div className="flex flex-col gap-2 w-full">
-                  {drilldownLoading && (
-                    <div className="text-[var(--muted)] text-xs">Loading projects…</div>
-                  )}
-                  {drilldownError && (
-                    <div className="text-red-400 text-xs">{drilldownError}</div>
-                  )}
-                  {!drilldownLoading && !drilldownError && drilldown.map((s) => (
-                    <div key={s.key} className="flex items-center gap-2 w-full">
-                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                      <div className="text-xs text-[var(--text)] flex items-center justify-between gap-2 w-full whitespace-nowrap">
-                        <span className="truncate" title={s.label}>{s.label}</span>
-                        <span className="text-[var(--muted)] flex-shrink-0">{Math.round(s.value)}h</span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </Card>
   );

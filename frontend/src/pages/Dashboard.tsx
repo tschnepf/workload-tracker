@@ -33,13 +33,33 @@ import AssignedHoursByClientCard from '@/components/analytics/AssignedHoursByCli
 import { useProjectDetailsDrawer } from '@/components/projects/detailsDrawer';
 import { getFlag } from '@/lib/flags';
 import PageState from '@/components/ui/PageState';
+import DashboardSurface from '@/components/dashboard/layout/DashboardSurface';
+import { createDefaultSurfaceLayout } from '@/components/dashboard/layout/dashboardLayoutState';
+import type { DashboardCardDefinition } from '@/components/dashboard/layout/dashboardLayoutTypes';
 
 const PRESET_WEEK_OPTIONS = [1, 2, 4, 8, 12] as const;
 type WeekSelectionMode = 'preset' | 'custom';
 const MIN_WEEKS = 1;
 const PRESET_MAX_WEEKS = 12;
 const CUSTOM_MAX_WEEKS = 52;
-const TOP_ROW_HEIGHT_FALLBACK_PX = 620;
+
+const TEAM_DEFAULT_LAYOUT = createDefaultSurfaceLayout({
+  items: [
+    { type: 'card', cardId: 'upcoming-deliverables' },
+    { type: 'group', groupId: 'operations-snapshot' },
+    { type: 'card', cardId: 'recent-assignments' },
+    { type: 'card', cardId: 'utilization-distribution' },
+    { type: 'card', cardId: 'overallocated-team-members' },
+    { type: 'card', cardId: 'role-capacity-summary' },
+    { type: 'card', cardId: 'availability-alerting' },
+  ],
+  groups: {
+    'operations-snapshot': {
+      title: 'Operations Snapshot',
+      cardIds: ['avg-utilization', 'active-projects', 'assigned-hours-client'],
+    },
+  },
+});
 
 const Dashboard: React.FC = () => {
   const auth = useAuth();
@@ -66,9 +86,7 @@ const Dashboard: React.FC = () => {
   const [projectsTotal, setProjectsTotal] = useState<number>(0);
   const [showClientMixCard, setShowClientMixCard] = useState(false);
   const deliverablesListRef = React.useRef<HTMLDivElement | null>(null);
-  const upcomingCardRef = React.useRef<HTMLDivElement | null>(null);
   const [showDeliverablesScrollHint, setShowDeliverablesScrollHint] = useState(false);
-  const [upcomingCardHeight, setUpcomingCardHeight] = useState<number | null>(null);
   // People metadata (hire date, active) for availability filtering
   const [peopleMeta, setPeopleMeta] = useState<Map<number, { isActive?: boolean; hireDate?: string; roleId?: number | null; roleName?: string | null }>>(new Map());
 
@@ -145,26 +163,6 @@ const Dashboard: React.FC = () => {
     observer.observe(node);
     return () => observer.disconnect();
   }, [updateDeliverablesScrollHint, upcomingDeliverables.length, upcomingDeliverablesQuery.isLoading]);
-
-  useLayoutEffect(() => {
-    const node = upcomingCardRef.current;
-    if (!node) return;
-
-    const updateHeight = () => {
-      const nextHeight = Math.round(node.getBoundingClientRect().height);
-      setUpcomingCardHeight((prev) => (prev === nextHeight ? prev : nextHeight));
-    };
-
-    updateHeight();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => updateHeight());
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [upcomingDeliverables.length, upcomingDeliverablesQuery.isLoading]);
-
-  const topRowHeightPx = useMemo(() => {
-    return upcomingCardHeight ?? TOP_ROW_HEIGHT_FALLBACK_PX;
-  }, [upcomingCardHeight]);
 
   const totalMembers = useMemo(() => {
     if (!data) return 0;
@@ -398,6 +396,203 @@ const Dashboard: React.FC = () => {
   };
 
   const customWeeksDisplayValue = weekSelectionMode === 'custom' ? customWeeksInput : '<custom>';
+  const distribution = data?.utilization_distribution;
+  const underCount = distribution?.underutilized ?? 0;
+  const optimalCount = distribution?.optimal ?? 0;
+  const highCount = distribution?.high ?? 0;
+  const overCount = distribution?.overallocated ?? 0;
+  const weekLabel = weeksPeriod === 1 ? 'this week' : `over the last ${weeksPeriod} weeks`;
+  const statusTone: 'danger' | 'warning' | 'info' = overCount > 0 ? 'danger' : underCount > 0 ? 'warning' : 'info';
+  const statusMessage =
+    overCount > 0 || underCount > 0
+      ? `${overCount} people are overallocated; ${underCount} are underutilized ${weekLabel}.`
+      : `All team members are within healthy utilization ${weekLabel}.`;
+  const avgUtil = data?.summary.avg_utilization ?? 0;
+  const avgAccent = avgUtil <= 70 ? 'blue' : avgUtil <= 85 ? 'green' : avgUtil <= 100 ? 'amber' : 'red';
+  const recentAssignments = React.useMemo(
+    () => data?.recent_assignments ?? [],
+    [data?.recent_assignments]
+  );
+  const distributionSegments = React.useMemo(
+    () => [
+      { key: 'under', label: 'Under', range: '<70%', value: underCount, color: 'var(--statusInfo)' },
+      { key: 'optimal', label: 'Optimal', range: '70-85%', value: optimalCount, color: 'var(--statusSuccess)' },
+      { key: 'high', label: 'High', range: '85-100%', value: highCount, color: 'var(--statusWarning)' },
+      { key: 'over', label: 'Over', range: '>100%', value: overCount, color: 'var(--statusDanger)' },
+    ],
+    [highCount, optimalCount, overCount, underCount]
+  );
+
+  const teamCards = React.useMemo<DashboardCardDefinition[]>(() => [
+    {
+      id: 'upcoming-deliverables',
+      title: 'Upcoming Deliverables',
+      render: () => (
+        <UpcomingDeliverablesCard
+          className="h-full"
+          deliverables={upcomingDeliverables}
+          isLoading={upcomingDeliverablesQuery.isLoading}
+          listRef={deliverablesListRef}
+          onScroll={updateDeliverablesScrollHint}
+          showScrollHint={showDeliverablesScrollHint}
+        />
+      ),
+      renderPreview: () => (
+        <span>{upcomingDeliverables.length} upcoming</span>
+      ),
+    },
+    {
+      id: 'avg-utilization',
+      title: 'Average Utilization',
+      render: () => (
+        <KpiCard
+          className="h-full"
+          label="Average Utilization"
+          value={`${avgUtil}%`}
+          accent={avgAccent}
+          subtext={weeksPeriod === 1 ? 'This week' : `${weeksPeriod} week average`}
+        />
+      ),
+      renderPreview: () => <span>{avgUtil}% average</span>,
+    },
+    {
+      id: 'active-projects',
+      title: 'Active Projects',
+      render: () => (
+        <KpiCard
+          className="h-full"
+          label="Active Projects"
+          value={activeProjects}
+          accent="green"
+          subtext={projectsTotal ? `Total: ${projectsTotal}` : 'Current period'}
+        />
+      ),
+      renderPreview: () => <span>{activeProjects} active projects</span>,
+    },
+    {
+      id: 'assigned-hours-client',
+      title: 'Assigned Hours by Client',
+      render: () => (
+        <div className="h-full min-h-0">
+          {showClientMixCard ? (
+            <AssignedHoursByClientCard className="w-full h-full" responsive />
+          ) : (
+            <Card className="ux-panel w-full h-full p-5">
+              <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                Load the client mix chart on demand for this view.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowClientMixCard(true)}
+                className="mt-4 rounded-lg border border-[var(--primary)] bg-[var(--primary)]/15 px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--primary)]/25"
+              >
+                Load Client Mix
+              </button>
+            </Card>
+          )}
+        </div>
+      ),
+      renderPreview: () => <span>Client mix chart</span>,
+    },
+    {
+      id: 'recent-assignments',
+      title: 'Recent Assignments',
+      render: () => (
+        <RecentAssignmentsCard
+          assignments={recentAssignments}
+          className="h-full min-h-0"
+        />
+      ),
+      renderPreview: () => <span>{recentAssignments.length} recent assignments</span>,
+    },
+    {
+      id: 'utilization-distribution',
+      title: 'Utilization Distribution',
+      render: () => (
+        <Card className="ux-panel h-full min-h-0 p-5">
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-semibold text-[var(--text)]">Utilization Distribution</h3>
+                <p className="text-xs text-[var(--muted)]">Buckets for the current period</p>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+                <span>
+                  Total Team Members: <span className="text-[var(--text)] font-semibold">{totalMembers}</span>
+                </span>
+              </div>
+            </div>
+            <div className="mt-5 min-h-0 flex-1">
+              <StackedDistributionBar
+                segments={distributionSegments}
+                total={totalMembers}
+                leftValue={underCount}
+                rightValue={overCount}
+              />
+            </div>
+          </div>
+        </Card>
+      ),
+      renderPreview: () => <span>{underCount} under, {overCount} over</span>,
+    },
+    {
+      id: 'overallocated-team-members',
+      title: 'Overallocated Team Members',
+      render: () => (
+        <PersonAlertList
+          className="h-full min-h-0"
+          title="Overallocated Team Members"
+          items={overallocatedItems}
+          maxItems={overallocatedItems.length}
+        />
+      ),
+      renderPreview: () => <span>{overallocatedItems.length} flagged</span>,
+    },
+    {
+      id: 'role-capacity-summary',
+      title: 'Role Capacity Summary',
+      render: () => (
+        <RoleCapacitySummary className="h-full min-h-0" />
+      ),
+      renderPreview: () => <span>Role capacity heatmap</span>,
+    },
+    {
+      id: 'availability-alerting',
+      title: 'Availability & Alerting',
+      render: () => (
+        <PersonAlertList
+          className="h-full min-h-0"
+          title="Availability & Alerting"
+          items={availabilityItems}
+          filters={availabilityFilters}
+          defaultFilterKey="under"
+          loading={heatLoading}
+        />
+      ),
+      renderPreview: () => <span>{availabilityItems.length} people in scope</span>,
+    },
+  ], [
+    upcomingDeliverables,
+    upcomingDeliverablesQuery.isLoading,
+    updateDeliverablesScrollHint,
+    showDeliverablesScrollHint,
+    avgUtil,
+    avgAccent,
+    weeksPeriod,
+    activeProjects,
+    projectsTotal,
+    showClientMixCard,
+    recentAssignments,
+    totalMembers,
+    distributionSegments,
+    underCount,
+    overCount,
+    overallocatedItems,
+    availabilityItems,
+    availabilityFilters,
+    heatLoading,
+  ]);
 
   if (loading || Boolean(error) || !data) {
     return (
@@ -417,26 +612,6 @@ const Dashboard: React.FC = () => {
       </Layout>
     );
   }
-
-  const distribution = data.utilization_distribution;
-  const underCount = distribution.underutilized;
-  const optimalCount = distribution.optimal;
-  const highCount = distribution.high;
-  const overCount = distribution.overallocated;
-  const weekLabel = weeksPeriod === 1 ? 'this week' : `over the last ${weeksPeriod} weeks`;
-  const statusTone: 'danger' | 'warning' | 'info' = overCount > 0 ? 'danger' : underCount > 0 ? 'warning' : 'info';
-  const statusMessage =
-    overCount > 0 || underCount > 0
-      ? `${overCount} people are overallocated; ${underCount} are underutilized ${weekLabel}.`
-      : `All team members are within healthy utilization ${weekLabel}.`;
-  const avgUtil = data.summary.avg_utilization;
-  const avgAccent = avgUtil <= 70 ? 'blue' : avgUtil <= 85 ? 'green' : avgUtil <= 100 ? 'amber' : 'red';
-  const distributionSegments = [
-    { key: 'under', label: 'Under', range: '<70%', value: underCount, color: 'var(--statusInfo)' },
-    { key: 'optimal', label: 'Optimal', range: '70-85%', value: optimalCount, color: 'var(--statusSuccess)' },
-    { key: 'high', label: 'High', range: '85-100%', value: highCount, color: 'var(--statusWarning)' },
-    { key: 'over', label: 'Over', range: '>100%', value: overCount, color: 'var(--statusDanger)' },
-  ];
 
   return (
     <Layout>
@@ -517,108 +692,12 @@ const Dashboard: React.FC = () => {
         </div>
 
         <StatusStrip tone={statusTone}>{statusMessage}</StatusStrip>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start">
-          <div className="col-span-12 lg:col-span-4 lg:self-start">
-            <UpcomingDeliverablesCard
-              deliverables={upcomingDeliverables}
-              isLoading={upcomingDeliverablesQuery.isLoading}
-              listRef={deliverablesListRef}
-              cardRef={upcomingCardRef}
-              onScroll={updateDeliverablesScrollHint}
-              showScrollHint={showDeliverablesScrollHint}
-            />
-          </div>
-          <div
-            className="col-span-12 lg:col-span-4 lg:col-start-5 flex flex-col gap-4 min-h-0"
-            style={{ height: `${topRowHeightPx}px`, minHeight: `${topRowHeightPx}px`, maxHeight: `${topRowHeightPx}px` }}
-          >
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <KpiCard
-                label="Average Utilization"
-                value={`${avgUtil}%`}
-                accent={avgAccent}
-                subtext={weeksPeriod === 1 ? 'This week' : `${weeksPeriod} week average`}
-              />
-              <KpiCard
-                label="Active Projects"
-                value={activeProjects}
-                accent="green"
-                subtext={projectsTotal ? `Total: ${projectsTotal}` : 'Current period'}
-              />
-            </div>
-            <div className="flex-1 min-h-0">
-              {showClientMixCard ? (
-                <AssignedHoursByClientCard className="w-full h-full" responsive />
-              ) : (
-                <Card className="ux-panel w-full h-full p-5">
-                  <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
-                  <p className="mt-2 text-xs text-[var(--muted)]">
-                    Load the client mix chart on demand for this view.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowClientMixCard(true)}
-                    className="mt-4 rounded-lg border border-[var(--primary)] bg-[var(--primary)]/15 px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--primary)]/25"
-                  >
-                    Load Client Mix
-                  </button>
-                </Card>
-              )}
-            </div>
-          </div>
-          <div
-            className="col-span-12 lg:col-span-4 lg:col-start-9 lg:self-start flex flex-col min-h-0 overflow-hidden"
-            style={{ height: `${topRowHeightPx}px`, minHeight: `${topRowHeightPx}px`, maxHeight: `${topRowHeightPx}px` }}
-          >
-            <RecentAssignmentsCard
-              assignments={data.recent_assignments ?? []}
-              className="h-full min-h-0"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <Card className="ux-panel col-span-12 p-5 lg:col-span-12">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-lg font-semibold text-[var(--text)]">Utilization Distribution</h3>
-                <p className="text-xs text-[var(--muted)]">Buckets for the current period</p>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
-                <span>
-                  Total Team Members: <span className="text-[var(--text)] font-semibold">{totalMembers}</span>
-                </span>
-              </div>
-            </div>
-            <div className="mt-5">
-              <StackedDistributionBar
-                segments={distributionSegments}
-                total={totalMembers}
-                leftValue={underCount}
-                rightValue={overCount}
-              />
-            </div>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <PersonAlertList
-            className="col-span-12 lg:col-span-4"
-            title="Overallocated Team Members"
-            items={overallocatedItems}
-            maxItems={overallocatedItems.length}
-          />
-          <RoleCapacitySummary className="col-span-12 lg:col-span-4" />
-          <PersonAlertList
-            className="col-span-12 lg:col-span-4"
-            title="Availability & Alerting"
-            items={availabilityItems}
-            filters={availabilityFilters}
-            defaultFilterKey="under"
-            loading={heatLoading}
-          />
-        </div>
+        <DashboardSurface
+          surfaceId="team-dashboard"
+          cards={teamCards}
+          defaultLayout={TEAM_DEFAULT_LAYOUT}
+          ariaLabel="Team dashboard cards"
+        />
       </div>
     </Layout>
   );
@@ -629,25 +708,24 @@ export default Dashboard;
 type UpcomingDeliverablesCardProps = {
   deliverables: DeliverableCalendarUnion[];
   isLoading: boolean;
-  listRef: React.RefObject<HTMLDivElement>;
-  cardRef?: React.RefObject<HTMLDivElement | null>;
+  listRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
   showScrollHint: boolean;
+  className?: string;
 };
 
 const UpcomingDeliverablesCard: React.FC<UpcomingDeliverablesCardProps> = ({
   deliverables,
   isLoading,
   listRef,
-  cardRef,
   onScroll,
   showScrollHint,
+  className,
 }) => {
   const { open: openProjectDetails } = useProjectDetailsDrawer();
   return (
     <Card
-      ref={cardRef}
-      className="ux-panel flex min-h-0 flex-col overflow-hidden p-4"
+      className={`ux-panel flex h-full min-h-0 flex-col overflow-hidden p-4 ${className || ''}`}
     >
       <div className="flex items-center justify-between">
         <div>
@@ -662,7 +740,7 @@ const UpcomingDeliverablesCard: React.FC<UpcomingDeliverablesCardProps> = ({
         <div>Deliverable</div>
         <div className="text-right">Date</div>
       </div>
-      <div ref={listRef} onScroll={onScroll} className="mt-3 space-y-3 pr-2">
+      <div ref={listRef} onScroll={onScroll} className="mt-3 flex-1 min-h-0 overflow-y-auto space-y-3 pr-2">
         {isLoading ? (
           <div className="text-sm text-[var(--muted)]">Loading deliverables…</div>
         ) : deliverables.length === 0 ? (

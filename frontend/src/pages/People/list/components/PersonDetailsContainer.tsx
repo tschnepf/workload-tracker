@@ -206,9 +206,71 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
   const onSkillsEdit = () => setEditingSkills(true);
 
   const onSkillsSave = async () => {
+    if (!person?.id) return;
     try {
       setError(null);
-      // No-op: skill persistence may be handled in specific endpoints elsewhere
+      const desiredSkills: PersonSkill[] = [
+        ...skillsData.strengths.map((row) => ({ ...row, skillType: 'strength' as const })),
+        ...skillsData.development.map((row) => ({ ...row, skillType: 'development' as const })),
+        ...skillsData.learning.map((row) => ({ ...row, skillType: 'learning' as const })),
+      ].filter((row) => !!row.skillTagId);
+
+      const existingByKey = new Map<string, PersonSkill>();
+      personSkills.forEach((row) => {
+        if (!row.skillTagId) return;
+        existingByKey.set(`${row.skillTagId}:${row.skillType}`, row);
+      });
+
+      const desiredByKey = new Map<string, PersonSkill>();
+      desiredSkills.forEach((row) => {
+        if (!row.skillTagId) return;
+        desiredByKey.set(`${row.skillTagId}:${row.skillType}`, row);
+      });
+
+      const toCreate: PersonSkill[] = [];
+      const toUpdate: Array<{ id: number; data: Partial<PersonSkill> }> = [];
+      const toDelete: number[] = [];
+
+      desiredByKey.forEach((desired, key) => {
+        const existing = existingByKey.get(key);
+        if (!existing) {
+          toCreate.push(desired);
+          return;
+        }
+        if (existing.id && (
+          existing.proficiencyLevel !== desired.proficiencyLevel ||
+          (existing.notes || '') !== (desired.notes || '')
+        )) {
+          toUpdate.push({
+            id: existing.id,
+            data: {
+              proficiencyLevel: desired.proficiencyLevel,
+              notes: desired.notes || '',
+            },
+          });
+        }
+      });
+
+      existingByKey.forEach((existing, key) => {
+        if (!desiredByKey.has(key) && existing.id) {
+          toDelete.push(existing.id);
+        }
+      });
+
+      await Promise.all([
+        ...toCreate.map((row) => personSkillsApi.create({
+          person: person.id!,
+          skillTagId: row.skillTagId!,
+          skillType: row.skillType,
+          proficiencyLevel: row.proficiencyLevel || 'beginner',
+          notes: row.notes || '',
+          lastUsed: row.lastUsed ?? null,
+        })),
+        ...toUpdate.map((row) => personSkillsApi.update(row.id, row.data)),
+        ...toDelete.map((id) => personSkillsApi.delete(id)),
+      ]);
+
+      await loadPersonSkills(person.id);
       showToast('Updated skills', 'success');
       setEditingSkills(false);
     } catch (err: any) {

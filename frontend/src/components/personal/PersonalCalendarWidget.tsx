@@ -108,44 +108,48 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
   );
 
   return (
-    <Card className={className}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3 sticky top-0 bg-[var(--card)] z-10">
-        <div>
-          <div className="text-[var(--text)] font-semibold">My Calendar</div>
-          <p className="text-[var(--muted)] text-sm">Milestones and pre-deliverables synced to your assignments</p>
+    <Card className={`h-full min-h-0 ${className || ''}`}>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-[var(--text)] font-semibold">My Calendar</div>
+            <p className="text-[var(--muted)] text-sm">Milestones and pre-deliverables synced to your assignments</p>
+          </div>
+          <label className="text-sm text-[#cbd5e1] inline-flex items-center gap-2">
+            <input type="checkbox" checked={showPre} onChange={(e) => setShowPre(e.currentTarget.checked)} />
+            Show Pre-Deliverables
+          </label>
         </div>
-        <label className="text-sm text-[#cbd5e1] inline-flex items-center gap-2">
-          <input type="checkbox" checked={showPre} onChange={(e) => setShowPre(e.currentTarget.checked)} />
-          Show Pre-Deliverables
-        </label>
-      </div>
 
-      {!personId ? (
-        <div className="text-sm text-[#94a3b8]">Link your account to a Person to view your calendar.</div>
-      ) : (
-        <FullCalendarWrapper
-          className="min-h-[320px]"
-          events={events}
-          loading={isLoading}
-          emptyState={
-            error ? (
-              <div className="text-sm text-[#fca5a5]">{(error as Error)?.message || 'Failed to load calendar'}</div>
-            ) : (
-              <div className="text-sm text-[var(--muted)]">No deliverables scheduled for this window.</div>
-            )
-          }
-          initialDate={range.start}
-          initialView="personalMultiWeek"
-          responsiveViews={{ mobile: 'listWeek', desktop: 'personalMultiWeek' }}
-          views={personalViews}
-          validRange={{ start: range.start }}
-          eventContent={renderEventContent}
-          onEventClick={handleEventClick}
-          onDatesSet={handleDatesSet}
-          dayMaxEvents={false}
-          eventOrder={['extendedProps.sortPriority', 'start']}
-        />
-      )}
+        {!personId ? (
+          <div className="text-sm text-[#94a3b8]">Link your account to a Person to view your calendar.</div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <FullCalendarWrapper
+              className="h-full min-h-0"
+              events={events}
+              loading={isLoading}
+              emptyState={
+                error ? (
+                  <div className="text-sm text-[#fca5a5]">{(error as Error)?.message || 'Failed to load calendar'}</div>
+                ) : (
+                  <div className="text-sm text-[var(--muted)]">No deliverables scheduled for this window.</div>
+                )
+              }
+              initialDate={range.start}
+              initialView="personalMultiWeek"
+              responsiveViews={{ mobile: 'listWeek', desktop: 'personalMultiWeek' }}
+              views={personalViews}
+              validRange={{ start: range.start }}
+              eventContent={renderEventContent}
+              onEventClick={handleEventClick}
+              onDatesSet={handleDatesSet}
+              dayMaxEvents={false}
+              eventOrder={['extendedProps.sortPriority', 'start']}
+            />
+          </div>
+        )}
+      </div>
     </Card>
   );
 };

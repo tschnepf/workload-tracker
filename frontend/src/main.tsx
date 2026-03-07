@@ -127,7 +127,7 @@ const router = createBrowserRouter([
       { path: 'projects/new', element: <RequireAuth><LegacyProjectCreateRedirect /></RequireAuth> },
       { path: 'projects/:id/dashboard', element: <RequireAuth><ProjectDashboard /></RequireAuth> },
       { path: 'projects/:id/edit', element: <RequireAuth><LegacyProjectEditRedirect /></RequireAuth> },
-      { path: 'skills', element: <RequireAuth><SkillsDashboard /></RequireAuth> },
+      { path: 'skills', element: <RequireAdminOrManager><SkillsDashboard /></RequireAdminOrManager> },
       { path: 'performance', element: <RequireAuth><PerformanceDashboard /></RequireAuth> },
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },

@@ -614,8 +614,8 @@ const MyLeadProjectsGridCard: React.FC<Props> = ({
   const hasVisibleProjects = visibleProjects.length > 0;
 
   return (
-    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
-      <div className="space-y-3">
+    <Card className={`bg-[var(--card)] border-[var(--border)] h-full min-h-0 ${className || ''}`}>
+      <div className="space-y-3 h-full min-h-0 flex flex-col">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[var(--text)]">Lead Project Assignments</h3>
@@ -698,7 +698,7 @@ const MyLeadProjectsGridCard: React.FC<Props> = ({
         ) : null}
 
         {hasVisibleProjects ? (
-          <div className="overflow-x-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             <div style={{ minWidth }}>
               <div className="grid gap-px px-2 py-1 border-b border-[var(--border)]" style={{ gridTemplateColumns: gridTemplate }}>
                 <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Client / Person</div>

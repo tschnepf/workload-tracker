@@ -11,6 +11,21 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePersonalWork } from '@/hooks/usePersonalWork';
 import { usePersonalLeadProjectGrid } from '@/hooks/usePersonalLeadProjectGrid';
 import { emitGridRefresh } from '@/lib/gridRefreshBus';
+import Card from '@/components/ui/Card';
+import DashboardSurface from '@/components/dashboard/layout/DashboardSurface';
+import { createDefaultSurfaceLayout } from '@/components/dashboard/layout/dashboardLayoutState';
+import type { DashboardCardDefinition } from '@/components/dashboard/layout/dashboardLayoutTypes';
+
+const MY_WORK_DEFAULT_LAYOUT = createDefaultSurfaceLayout({
+  items: [
+    { type: 'card', cardId: 'my-projects' },
+    { type: 'card', cardId: 'my-deliverables' },
+    { type: 'card', cardId: 'upcoming-pre-deliverables' },
+    { type: 'card', cardId: 'lead-project-assignments' },
+    { type: 'card', cardId: 'my-calendar' },
+    { type: 'card', cardId: 'my-schedule' },
+  ],
+});
 
 const PersonalDashboard: React.FC = () => {
   const auth = useAuth();
@@ -72,6 +87,79 @@ const PersonalDashboard: React.FC = () => {
     emitGridRefresh({ reason: 'personal-calendar-refresh' });
   }, [refresh, leadProjectGrid.refresh]);
 
+  const personalCards = React.useMemo<DashboardCardDefinition[]>(() => [
+    {
+      id: 'my-projects',
+      title: 'My Projects',
+      render: () => <MyProjectsCard className="h-full min-h-0" projects={projects} />,
+      renderPreview: () => <span>{projects.length} projects</span>,
+    },
+    {
+      id: 'my-deliverables',
+      title: 'My Deliverables',
+      render: () => <MyDeliverablesCard className="h-full min-h-0" deliverables={deliverables} />,
+      renderPreview: () => <span>{deliverables.length} deliverables</span>,
+    },
+    {
+      id: 'upcoming-pre-deliverables',
+      title: 'Upcoming Pre-Deliverables',
+      render: () => <UpcomingPreDeliverablesWidget className="h-full min-h-0" />,
+      renderPreview: () => <span>Pre-deliverable queue</span>,
+    },
+    {
+      id: 'lead-project-assignments',
+      title: 'Lead Project Assignments',
+      render: () => (
+        <MyLeadProjectsGridCard
+          className="h-full min-h-0"
+          payload={leadProjectGrid.data}
+          loading={leadProjectGrid.loading}
+          error={leadProjectGrid.error}
+          weeks={leadWeeks}
+          onWeeksChange={setLeadWeeks}
+          onRetry={() => { void leadProjectGrid.refresh({ force: true }); }}
+        />
+      ),
+      renderPreview: () => <span>Lead projects and weekly hours</span>,
+    },
+    {
+      id: 'my-calendar',
+      title: 'My Calendar',
+      render: () => <PersonalCalendarWidget className="h-full min-h-0" />,
+      renderPreview: () => <span>Deliverables calendar</span>,
+    },
+    {
+      id: 'my-schedule',
+      title: 'My Schedule',
+      render: () => (
+        schedule ? (
+          <MyScheduleStrip
+            className="h-full min-h-0"
+            weekKeys={schedule.weekKeys}
+            weeklyCapacity={schedule.weeklyCapacity}
+            weekTotals={schedule.weekTotals}
+          />
+        ) : (
+          <Card className="h-full min-h-0 p-4">
+            <div className="text-sm text-[var(--muted)]">Schedule data is unavailable.</div>
+          </Card>
+        )
+      ),
+      renderPreview: () => (
+        <span>{schedule ? `${schedule.weekKeys.length} weeks loaded` : 'No schedule data'}</span>
+      ),
+    },
+  ], [
+    projects,
+    deliverables,
+    leadProjectGrid.data,
+    leadProjectGrid.error,
+    leadProjectGrid.loading,
+    leadProjectGrid.refresh,
+    leadWeeks,
+    schedule,
+  ]);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -127,79 +215,12 @@ const PersonalDashboard: React.FC = () => {
           <div className="text-sm text-[var(--muted)]">Loading assignments…</div>
         ) : null}
 
-        {/* Mobile stack */}
-        <div className="md:hidden space-y-4" aria-label="My work widgets">
-          <div>
-            <MyProjectsCard className="min-h-[220px]" projects={projects} />
-          </div>
-          <div>
-            <MyLeadProjectsGridCard
-              className="min-h-[220px]"
-              payload={leadProjectGrid.data}
-              loading={leadProjectGrid.loading}
-              error={leadProjectGrid.error}
-              weeks={leadWeeks}
-              onWeeksChange={setLeadWeeks}
-              onRetry={() => { void leadProjectGrid.refresh({ force: true }); }}
-            />
-          </div>
-          <div>
-            <MyDeliverablesCard className="min-h-[220px]" deliverables={deliverables} />
-          </div>
-          {schedule ? (
-            <div>
-              <MyScheduleStrip
-                className="min-h-[220px]"
-                weekKeys={schedule.weekKeys}
-                weeklyCapacity={schedule.weeklyCapacity}
-                weekTotals={schedule.weekTotals}
-              />
-            </div>
-          ) : null}
-          <div>
-            <PersonalCalendarWidget className="min-h-[220px]" />
-          </div>
-          <div>
-            <UpcomingPreDeliverablesWidget className="min-h-[220px]" />
-          </div>
-        </div>
-
-        {/* Desktop grid */}
-        <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-[minmax(240px,auto)]">
-          <div className="xl:col-span-1">
-            <MyProjectsCard className="h-full" projects={projects} />
-          </div>
-          <div className="xl:col-span-1">
-            <MyDeliverablesCard className="h-full" deliverables={deliverables} />
-          </div>
-          <div className="xl:col-span-1">
-            <UpcomingPreDeliverablesWidget className="h-full" />
-          </div>
-          <div className="md:col-span-2 xl:col-span-3">
-            <MyLeadProjectsGridCard
-              className="h-full"
-              payload={leadProjectGrid.data}
-              loading={leadProjectGrid.loading}
-              error={leadProjectGrid.error}
-              weeks={leadWeeks}
-              onWeeksChange={setLeadWeeks}
-              onRetry={() => { void leadProjectGrid.refresh({ force: true }); }}
-            />
-          </div>
-          <div className="md:col-span-2 xl:col-span-2">
-            <PersonalCalendarWidget className="h-full" />
-          </div>
-          {schedule ? (
-            <div className="md:col-span-2 xl:col-span-3">
-              <MyScheduleStrip
-                className="h-full"
-                weekKeys={schedule.weekKeys}
-                weeklyCapacity={schedule.weeklyCapacity}
-                weekTotals={schedule.weekTotals}
-              />
-            </div>
-          ) : null}
-        </div>
+        <DashboardSurface
+          surfaceId="my-work-dashboard"
+          cards={personalCards}
+          defaultLayout={MY_WORK_DEFAULT_LAYOUT}
+          ariaLabel="My work widgets"
+        />
       </div>
     </Layout>
   );

@@ -62,6 +62,7 @@ from .webpush import (
     generate_vapid_keypair,
 )
 from .cache_keys import build_aggregate_cache_key
+from .cache_scopes import request_scope_version
 from accounts.permissions import IsAdminOrManager, is_admin_user, is_manager_user
 from deliverables.models import PreDeliverableType
 from accounts.models import AdminAuditLog  # type: ignore
@@ -72,6 +73,7 @@ from people.models import Person
 from people.serializers import PersonSerializer
 from departments.models import Department
 from departments.serializers import DepartmentSerializer
+from core.departments import get_descendant_department_ids
 from roles.models import Role
 from roles.serializers import RoleSerializer
 from verticals.models import Vertical
@@ -697,7 +699,7 @@ class PeoplePageSnapshotView(APIView):
 
 
 class SkillsPageSnapshotView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
     throttle_classes = [UiPageSnapshotThrottle]
     _INCLUDE_ALLOWED = {'departments', 'people', 'skill_tags', 'person_skills'}
     _DEFAULT_INCLUDE = ['departments', 'people', 'skill_tags', 'person_skills']
@@ -733,6 +735,27 @@ class SkillsPageSnapshotView(APIView):
             'previous': prev_url,
             'results': page_obj.object_list,
         }
+
+    def _parse_int_list(self, raw):
+        if raw in (None, ''):
+            return []
+        values = raw
+        if isinstance(values, str):
+            values = [part.strip() for part in values.split(',')]
+        if not isinstance(values, (list, tuple)):
+            return []
+        parsed: list[int] = []
+        seen: set[int] = set()
+        for value in values:
+            try:
+                num = int(value)
+            except Exception:
+                continue
+            if num <= 0 or num in seen:
+                continue
+            seen.add(num)
+            parsed.append(num)
+        return parsed
 
     def _apply_payload_guardrails(self, payload: dict):
         try:
@@ -777,6 +800,14 @@ class SkillsPageSnapshotView(APIView):
             OpenApiParameter(name='include', type=str, required=False, description='CSV include: departments,people,skill_tags,person_skills'),
             OpenApiParameter(name='vertical', type=int, required=False),
             OpenApiParameter(name='include_inactive', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='department', type=int, required=False),
+            OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
+            OpenApiParameter(name='include_global', type=int, required=False, description='0|1 (when department set)'),
+            OpenApiParameter(name='scope', type=str, required=False, description='global|department'),
+            OpenApiParameter(name='people_search', type=str, required=False),
+            OpenApiParameter(name='skill_search', type=str, required=False),
+            OpenApiParameter(name='people_ids', type=str, required=False, description='CSV person ids'),
+            OpenApiParameter(name='skill_tag_ids', type=str, required=False, description='CSV skill tag ids'),
             OpenApiParameter(name='people_page', type=int, required=False),
             OpenApiParameter(name='people_page_size', type=int, required=False),
             OpenApiParameter(name='skill_tags_page', type=int, required=False),
@@ -794,6 +825,13 @@ class SkillsPageSnapshotView(APIView):
             return Response({'error': include_err}, status=status.HTTP_400_BAD_REQUEST)
 
         include_inactive = _parse_bool(request.query_params.get('include_inactive'))
+        include_children = _parse_bool(request.query_params.get('include_children'))
+        include_global = _parse_bool(request.query_params.get('include_global'), default=True)
+        scope = (request.query_params.get('scope') or '').strip().lower()
+        people_search = (request.query_params.get('people_search') or '').strip()
+        skill_search = (request.query_params.get('skill_search') or '').strip()
+        people_ids = self._parse_int_list(request.query_params.get('people_ids'))
+        skill_tag_ids = self._parse_int_list(request.query_params.get('skill_tag_ids'))
         vertical_param = request.query_params.get('vertical')
         vertical_filter = None
         if vertical_param not in (None, ''):
@@ -801,9 +839,20 @@ class SkillsPageSnapshotView(APIView):
                 vertical_filter = int(vertical_param)
             except Exception:
                 vertical_filter = None
+        department_param = request.query_params.get('department')
+        department_scope_ids = None
+        if department_param not in (None, ''):
+            try:
+                department_id = int(department_param)
+                department_scope_ids = (
+                    get_descendant_department_ids(department_id) if include_children else [department_id]
+                )
+            except Exception:
+                department_scope_ids = None
 
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
         cache_key = None
+        scope_version = request_scope_version(request)
         if use_cache:
             try:
                 cache_key = build_aggregate_cache_key(
@@ -813,12 +862,21 @@ class SkillsPageSnapshotView(APIView):
                         'include': include_tokens or [],
                         'vertical': vertical_filter if vertical_filter is not None else 'all',
                         'include_inactive': 1 if include_inactive else 0,
+                        'department': request.query_params.get('department') or 'all',
+                        'include_children': 1 if include_children else 0,
+                        'include_global': 1 if include_global else 0,
+                        'scope': scope or 'all',
+                        'people_search': people_search,
+                        'skill_search': skill_search,
+                        'people_ids': ','.join(str(v) for v in people_ids),
+                        'skill_tag_ids': ','.join(str(v) for v in skill_tag_ids),
                         'people_page': request.query_params.get('people_page') or '1',
                         'people_page_size': request.query_params.get('people_page_size') or '100',
                         'skill_tags_page': request.query_params.get('skill_tags_page') or '1',
                         'skill_tags_page_size': request.query_params.get('skill_tags_page_size') or '100',
                         'person_skills_page': request.query_params.get('person_skills_page') or '1',
                         'person_skills_page_size': request.query_params.get('person_skills_page_size') or '100',
+                        'scope_version': scope_version,
                     },
                 )
                 cached = cache.get(cache_key)
@@ -839,6 +897,8 @@ class SkillsPageSnapshotView(APIView):
                 departments_qs = departments_qs.filter(is_active=True)
             if vertical_filter is not None:
                 departments_qs = departments_qs.filter(vertical_id=vertical_filter)
+            if department_scope_ids is not None:
+                departments_qs = departments_qs.filter(id__in=department_scope_ids)
             payload['departments'] = DepartmentSerializer(departments_qs, many=True).data
 
         if 'people' in include_set:
@@ -856,6 +916,17 @@ class SkillsPageSnapshotView(APIView):
                 people_qs = people_qs.filter(is_active=True)
             if vertical_filter is not None:
                 people_qs = people_qs.filter(department__vertical_id=vertical_filter)
+            if department_scope_ids is not None:
+                people_qs = people_qs.filter(department_id__in=department_scope_ids)
+            if people_ids:
+                people_qs = people_qs.filter(id__in=people_ids)
+            if people_search:
+                people_qs = people_qs.filter(
+                    Q(name__icontains=people_search)
+                    | Q(location__icontains=people_search)
+                    | Q(role__name__icontains=people_search)
+                    | Q(department__name__icontains=people_search)
+                )
             people_page = self._paginate(
                 people_qs,
                 request=request,
@@ -870,7 +941,28 @@ class SkillsPageSnapshotView(APIView):
             }
 
         if 'skill_tags' in include_set:
-            skill_tags_qs = SkillTag.objects.filter(is_active=True).order_by('name')
+            skill_tags_qs = SkillTag.objects.filter(is_active=True).select_related('department').order_by('name')
+            if vertical_filter is not None and scope != 'global':
+                skill_tags_qs = skill_tags_qs.filter(
+                    Q(department__vertical_id=vertical_filter) | Q(department__isnull=True)
+                )
+            if scope == 'global':
+                skill_tags_qs = skill_tags_qs.filter(department__isnull=True)
+            elif scope == 'department':
+                skill_tags_qs = skill_tags_qs.filter(department__isnull=False)
+            if department_scope_ids is not None and scope != 'global':
+                scope_q = Q(department_id__in=department_scope_ids)
+                if include_global and scope != 'department':
+                    scope_q |= Q(department__isnull=True)
+                skill_tags_qs = skill_tags_qs.filter(scope_q)
+            elif scope not in ('global', 'department') and not include_global:
+                skill_tags_qs = skill_tags_qs.filter(department__isnull=False)
+            if skill_tag_ids:
+                skill_tags_qs = skill_tags_qs.filter(id__in=skill_tag_ids)
+            if skill_search:
+                skill_tags_qs = skill_tags_qs.filter(
+                    Q(name__icontains=skill_search) | Q(category__icontains=skill_search)
+                )
             skill_tags_page = self._paginate(
                 skill_tags_qs,
                 request=request,
@@ -888,6 +980,16 @@ class SkillsPageSnapshotView(APIView):
             person_skills_qs = PersonSkill.objects.select_related('person', 'skill_tag').order_by('skill_type', 'skill_tag__name', 'id')
             if vertical_filter is not None:
                 person_skills_qs = person_skills_qs.filter(person__department__vertical_id=vertical_filter)
+            if department_scope_ids is not None:
+                person_skills_qs = person_skills_qs.filter(person__department_id__in=department_scope_ids)
+            if people_ids:
+                person_skills_qs = person_skills_qs.filter(person_id__in=people_ids)
+            if skill_tag_ids:
+                person_skills_qs = person_skills_qs.filter(skill_tag_id__in=skill_tag_ids)
+            if people_search:
+                person_skills_qs = person_skills_qs.filter(person__name__icontains=people_search)
+            if skill_search:
+                person_skills_qs = person_skills_qs.filter(skill_tag__name__icontains=skill_search)
             person_skills_page = self._paginate(
                 person_skills_qs,
                 request=request,

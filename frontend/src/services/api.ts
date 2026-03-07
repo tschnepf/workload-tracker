@@ -2118,11 +2118,26 @@ export const reportsApi = {
 // Skills API
 export const skillTagsApi = {
   // List skill tags
-  list: (params?: { search?: string }) => {
-    const queryParams = params ? new URLSearchParams(
-      Object.entries(params).filter(([_, value]) => value !== undefined && value !== '')
-        .map(([key, value]) => [key, String(value)])
-    ).toString() : '';
+  list: (params?: {
+    search?: string;
+    department?: number;
+    include_children?: 0 | 1;
+    include_global?: 0 | 1;
+    vertical?: number;
+    scope?: 'global' | 'department';
+    page?: number;
+    page_size?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.search) sp.set('search', params.search);
+    if (params?.department != null) sp.set('department', String(params.department));
+    if (params?.include_children != null) sp.set('include_children', String(params.include_children));
+    if (params?.include_global != null) sp.set('include_global', String(params.include_global));
+    if (params?.vertical != null) sp.set('vertical', String(params.vertical));
+    if (params?.scope) sp.set('scope', params.scope);
+    if (params?.page != null) sp.set('page', String(params.page));
+    if (params?.page_size != null) sp.set('page_size', String(params.page_size));
+    const queryParams = sp.toString();
     const url = queryParams ? `/skills/skill-tags/?${queryParams}` : '/skills/skill-tags/';
     return fetchApi<PaginatedResponse<SkillTag>>(url);
   },
@@ -2169,11 +2184,36 @@ export const personSkillsApi = {
   },
 
   // List person skills
-  list: (params?: { person?: number; skill_type?: string; search?: string; page_size?: number }) => {
-    const queryParams = params ? new URLSearchParams(
-      Object.entries(params).filter(([_, value]) => value !== undefined && value !== '')
-        .map(([key, value]) => [key, String(value)])
-    ).toString() : '';
+  list: (params?: {
+    person?: number;
+    person_ids?: number[] | string;
+    skill_tag_ids?: number[] | string;
+    department?: number;
+    include_children?: 0 | 1;
+    vertical?: number;
+    skill_type?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.person != null) sp.set('person', String(params.person));
+    if (params?.person_ids) {
+      const raw = Array.isArray(params.person_ids) ? params.person_ids.join(',') : params.person_ids;
+      if (raw) sp.set('person_ids', raw);
+    }
+    if (params?.skill_tag_ids) {
+      const raw = Array.isArray(params.skill_tag_ids) ? params.skill_tag_ids.join(',') : params.skill_tag_ids;
+      if (raw) sp.set('skill_tag_ids', raw);
+    }
+    if (params?.department != null) sp.set('department', String(params.department));
+    if (params?.include_children != null) sp.set('include_children', String(params.include_children));
+    if (params?.vertical != null) sp.set('vertical', String(params.vertical));
+    if (params?.skill_type) sp.set('skill_type', params.skill_type);
+    if (params?.search) sp.set('search', params.search);
+    if (params?.page != null) sp.set('page', String(params.page));
+    if (params?.page_size != null) sp.set('page_size', String(params.page_size));
+    const queryParams = sp.toString();
     const url = queryParams ? `/skills/person-skills/?${queryParams}` : '/skills/person-skills/';
     return fetchApiCached<PaginatedResponse<PersonSkill>>(url);
   },
@@ -2222,6 +2262,32 @@ export const personSkillsApi = {
       development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
       learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
     }>(`/skills/person-skills/summary/?person=${personId}`),
+
+  bulkAssign: async (payload: {
+    operation: 'assign' | 'unassign';
+    personIds: number[];
+    skillTagIds: number[];
+    skillType?: 'strength' | 'development' | 'learning';
+    proficiencyLevel?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  }) => {
+    const res = await apiClient.POST('/skills/person-skills/bulk_assign/' as any, {
+      body: payload as any,
+      headers: authHeaders(),
+    });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    personSkillsApi.invalidateCache();
+    return res.data as unknown as {
+      processedPairs: number;
+      created: number;
+      deleted: number;
+      skippedExisting: number;
+      skippedMissing: number;
+      errors?: string[];
+    };
+  },
 };
 
 // Roles API - for role management and dropdowns
@@ -2549,6 +2615,14 @@ export const uiApi = {
     include?: UiSkillsPageInclude[];
     vertical?: number;
     include_inactive?: 0 | 1;
+    department?: number;
+    include_children?: 0 | 1;
+    include_global?: 0 | 1;
+    scope?: 'global' | 'department';
+    people_search?: string;
+    skill_search?: string;
+    people_ids?: number[] | string;
+    skill_tag_ids?: number[] | string;
     people_page?: number;
     people_page_size?: number;
     skill_tags_page?: number;
@@ -2560,6 +2634,20 @@ export const uiApi = {
     if (opts?.include?.length) sp.set('include', Array.from(new Set(opts.include)).sort().join(','));
     if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
     if (opts?.include_inactive != null) sp.set('include_inactive', String(opts.include_inactive));
+    if (opts?.department != null) sp.set('department', String(opts.department));
+    if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
+    if (opts?.include_global != null) sp.set('include_global', String(opts.include_global));
+    if (opts?.scope) sp.set('scope', opts.scope);
+    if (opts?.people_search) sp.set('people_search', opts.people_search);
+    if (opts?.skill_search) sp.set('skill_search', opts.skill_search);
+    if (opts?.people_ids) {
+      const raw = Array.isArray(opts.people_ids) ? opts.people_ids.join(',') : opts.people_ids;
+      if (raw) sp.set('people_ids', raw);
+    }
+    if (opts?.skill_tag_ids) {
+      const raw = Array.isArray(opts.skill_tag_ids) ? opts.skill_tag_ids.join(',') : opts.skill_tag_ids;
+      if (raw) sp.set('skill_tag_ids', raw);
+    }
     if (opts?.people_page != null) sp.set('people_page', String(opts.people_page));
     if (opts?.people_page_size != null) sp.set('people_page_size', String(opts.people_page_size));
     if (opts?.skill_tags_page != null) sp.set('skill_tags_page', String(opts.skill_tags_page));

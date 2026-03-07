@@ -276,6 +276,9 @@ export interface ProjectRiskEdit {
 export interface SkillTag {
   id?: number;
   name: string;
+  department?: number | null;
+  departmentName?: string | null;
+  scopeType?: 'global' | 'department';
   category?: string;
   description?: string;
   isActive?: boolean;

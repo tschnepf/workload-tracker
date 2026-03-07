@@ -182,12 +182,12 @@ beforeEach(() => {
 });
 
 describe('FullCalendar integration points', () => {
-  it('wires My Work calendars for both desktop and mobile stacks', () => {
+  it('wires My Work calendar widget through the shared dashboard surface', () => {
     renderWithProviders(<PersonalDashboard />, {
       route: '/personal',
       routes: [{ path: '/personal', element: <PersonalDashboard /> }],
     });
-    expect(recordedCalendarProps.length).toBeGreaterThanOrEqual(2);
+    expect(recordedCalendarProps.length).toBeGreaterThanOrEqual(1);
     recordedCalendarProps.forEach((props) => {
       expect(props.initialView).toBe('personalMultiWeek');
       expect(props.responsiveViews?.mobile).toBe('listWeek');

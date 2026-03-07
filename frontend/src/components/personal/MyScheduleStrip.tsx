@@ -18,8 +18,8 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
     return `${month}/${day}`;
   });
   return (
-    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
-      <div className="p-4 space-y-4">
+    <Card className={`bg-[var(--card)] border-[var(--border)] h-full min-h-0 ${className || ''}`}>
+      <div className="p-4 h-full min-h-0 flex flex-col space-y-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
           <div>
             <h3 className="text-lg font-semibold text-[var(--text)]">My Schedule</h3>
@@ -27,7 +27,7 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
           </div>
           <div className="text-xs text-[#94a3b8]">Capacity {weeklyCapacity}h</div>
         </div>
-        <div className="relative">
+        <div className="relative min-h-0 flex-1">
           <div className="sticky left-0 top-0 h-full flex items-center pr-3 bg-gradient-to-r from-[var(--card)] to-transparent text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">
             Weeks
           </div>

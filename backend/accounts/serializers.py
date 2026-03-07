@@ -24,7 +24,105 @@ ALLOWED_SETTING_KEYS = {
     "theme",
     "colorScheme",
     "schemaVersion",
+    "dashboardLayouts",
 }
+
+ALLOWED_DASHBOARD_SURFACES = {"team-dashboard", "my-work-dashboard"}
+MAX_DASHBOARD_ITEMS = 40
+MAX_DASHBOARD_GROUPS = 20
+MAX_DASHBOARD_GROUP_CARDS = 20
+
+
+def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
+    if not isinstance(payload, dict):
+        return None
+
+    version_raw = payload.get("version", 1)
+    try:
+        version = int(version_raw)
+    except (TypeError, ValueError):
+        version = 1
+    if version < 1:
+        version = 1
+
+    surfaces_raw = payload.get("surfaces")
+    if not isinstance(surfaces_raw, dict):
+        return {"version": version, "surfaces": {}}
+
+    surfaces: Dict = {}
+    for surface_id in ALLOWED_DASHBOARD_SURFACES:
+        surface_raw = surfaces_raw.get(surface_id)
+        if not isinstance(surface_raw, dict):
+            continue
+
+        items_raw = surface_raw.get("items")
+        items = []
+        if isinstance(items_raw, list):
+            for item in items_raw[:MAX_DASHBOARD_ITEMS]:
+                if not isinstance(item, dict):
+                    continue
+                item_type = str(item.get("type") or "").strip()
+                if item_type == "card":
+                    card_id = str(item.get("cardId") or "").strip()
+                    if card_id:
+                        items.append({"type": "card", "cardId": card_id[:120]})
+                elif item_type == "group":
+                    group_id = str(item.get("groupId") or "").strip()
+                    if group_id:
+                        items.append({"type": "group", "groupId": group_id[:120]})
+
+        groups_raw = surface_raw.get("groups")
+        groups = {}
+        if isinstance(groups_raw, dict):
+            for raw_group_id, raw_group in list(groups_raw.items())[:MAX_DASHBOARD_GROUPS]:
+                group_id = str(raw_group_id or "").strip()
+                if not group_id or not isinstance(raw_group, dict):
+                    continue
+                title = str(raw_group.get("title") or "").strip() or "Group"
+                card_ids_raw = raw_group.get("cardIds")
+                if not isinstance(card_ids_raw, list):
+                    continue
+                seen = set()
+                card_ids = []
+                for card_id_raw in card_ids_raw[:MAX_DASHBOARD_GROUP_CARDS]:
+                    card_id = str(card_id_raw or "").strip()
+                    if not card_id or card_id in seen:
+                        continue
+                    seen.add(card_id)
+                    card_ids.append(card_id[:120])
+                if not card_ids:
+                    continue
+                groups[group_id[:120]] = {
+                    "id": group_id[:120],
+                    "title": title[:120],
+                    "cardIds": card_ids,
+                }
+
+        hidden_raw = surface_raw.get("hiddenCardIds")
+        hidden = []
+        if isinstance(hidden_raw, list):
+            seen_hidden = set()
+            for raw in hidden_raw[:MAX_DASHBOARD_ITEMS]:
+                value = str(raw or "").strip()
+                if not value or value in seen_hidden:
+                    continue
+                seen_hidden.add(value)
+                hidden.append(value[:120])
+
+        updated_at = str(surface_raw.get("updatedAt") or "").strip()
+        if not updated_at:
+            updated_at = None
+
+        surface_payload = {
+            "items": items,
+            "groups": groups,
+            "hiddenCardIds": hidden,
+        }
+        if updated_at:
+            surface_payload["updatedAt"] = updated_at[:128]
+        surfaces[surface_id] = surface_payload
+
+    return {"version": version, "surfaces": surfaces}
 
 
 def sanitize_settings(payload: Dict) -> Tuple[Dict, set]:
@@ -78,6 +176,12 @@ def sanitize_settings(payload: Dict) -> Tuple[Dict, set]:
             cleaned["schemaVersion"] = int(payload.get("schemaVersion"))
         except (TypeError, ValueError):  # nosec B110
             pass
+
+    # dashboardLayouts: validated object for per-surface card layout preferences
+    if "dashboardLayouts" in payload:
+        dashboard_layouts = sanitize_dashboard_layouts(payload.get("dashboardLayouts"))
+        if dashboard_layouts is not None:
+            cleaned["dashboardLayouts"] = dashboard_layouts
 
     return cleaned, unknown
 

@@ -44,8 +44,8 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
   const prefetchTimerRef = React.useRef<number | null>(null);
 
   return (
-    <Card className={`bg-[var(--card)] border-[var(--border)] ${className || ''}`}>
-      <div className="p-4">
+    <Card className={`bg-[var(--card)] border-[var(--border)] h-full min-h-0 ${className || ''}`}>
+      <div className="p-4 h-full min-h-0 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-[var(--text)]">My Projects</h3>
           <div className="text-xs text-[#94a3b8]">{filtered.length}</div>
@@ -73,54 +73,56 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
             </button>
           ))}
         </div>
-        {filtered.length === 0 ? (
-          <div className="text-[var(--muted)] text-sm">No projects match the selected status</div>
-        ) : (
-          <ul className="space-y-4 text-sm">
-            {Array.from(groupedByClient.entries()).map(([clientName, clientProjects]) => (
-              <li key={clientName} className="space-y-2">
-                <div className="text-xs font-semibold uppercase text-[#94a3b8] tracking-wide">{clientName}</div>
-                <ul className="space-y-1">
-                  {clientProjects.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-3 pl-4">
-                      <div className="text-[var(--text)] min-w-0 flex-1">
-                        {p.id ? (
-                          <button
-                            type="button"
-                            className="hover:underline truncate"
-                            onClick={(e) => { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
-                            onMouseEnter={() => {
-                              if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
-                              prefetchTimerRef.current = window.setTimeout(() => {
-                                queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
-                              }, 150);
-                            }}
-                            onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
-                            onFocus={() => {
-                              if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
-                              prefetchTimerRef.current = window.setTimeout(() => {
-                                queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
-                              }, 150);
-                            }}
-                            onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
-                          >
-                            {p.name || `Project ${p.id}`}
-                          </button>
-                        ) : (
-                          <span className="truncate">{p.name || `Project ${p.id}`}</span>
-                        )}
-                      </div>
-                      <div className="text-xs whitespace-nowrap" style={{ color: getStatusColor(p.status || '', definitionMap) }}>
-                        {formatStatus(p.status || '', definitionMap)}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          {filtered.length === 0 ? (
+            <div className="text-[var(--muted)] text-sm">No projects match the selected status</div>
+          ) : (
+            <ul className="space-y-4 text-sm">
+              {Array.from(groupedByClient.entries()).map(([clientName, clientProjects]) => (
+                <li key={clientName} className="space-y-2">
+                  <div className="text-xs font-semibold uppercase text-[#94a3b8] tracking-wide">{clientName}</div>
+                  <ul className="space-y-1">
+                    {clientProjects.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between gap-3 pl-4">
+                        <div className="text-[var(--text)] min-w-0 flex-1">
+                          {p.id ? (
+                            <button
+                              type="button"
+                              className="hover:underline truncate"
+                              onClick={(e) => { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(p.id!, e.currentTarget as HTMLElement, { placement: 'center' }); } }}
+                              onMouseEnter={() => {
+                                if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                                prefetchTimerRef.current = window.setTimeout(() => {
+                                  queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                                }, 150);
+                              }}
+                              onMouseLeave={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                              onFocus={() => {
+                                if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current);
+                                prefetchTimerRef.current = window.setTimeout(() => {
+                                  queryClient.ensureQueryData({ queryKey: ['projects', p.id!], queryFn: () => projectsApi.get(p.id!) });
+                                }, 150);
+                              }}
+                              onBlur={() => { if (prefetchTimerRef.current) window.clearTimeout(prefetchTimerRef.current); }}
+                            >
+                              {p.name || `Project ${p.id}`}
+                            </button>
+                          ) : (
+                            <span className="truncate">{p.name || `Project ${p.id}`}</span>
+                          )}
+                        </div>
+                        <div className="text-xs whitespace-nowrap" style={{ color: getStatusColor(p.status || '', definitionMap) }}>
+                          {formatStatus(p.status || '', definitionMap)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </Card>
   );

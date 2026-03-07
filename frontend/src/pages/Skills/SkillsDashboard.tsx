@@ -1,617 +1,1453 @@
-/**
- * Skills Dashboard - Team skills analysis and gap reporting
- * Provides comprehensive overview of team skills coverage and gaps
- */
-
-import React, { useEffect, useState } from 'react';
-import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import PageState from '@/components/ui/PageState';
-import { Person, Department, SkillTag, PersonSkill } from '@/types/models';
-import { peopleApi, skillTagsApi, personSkillsApi } from '@/services/api';
+import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
-import { useDepartments } from '@/hooks/useDepartments';
-import { getFlag } from '@/lib/flags';
-import { useUiSkillsPageSnapshot } from '@/hooks/useUiPageSnapshots';
+import { Department, Person, PersonSkill, SkillTag } from '@/types/models';
+import { departmentsApi, peopleApi, personSkillsApi, skillTagsApi } from '@/services/api';
+import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
 
-interface SkillCoverage {
-  skillName: string;
-  totalPeople: number;
-  strengths: number;
-  development: number;
-  learning: number;
-  expertCount: number;
-  advancedCount: number;
-  intermediateCount: number;
-  beginnerCount: number;
-  coverage: 'excellent' | 'good' | 'limited' | 'gap';
+type AssignmentMode = 'skill_to_people' | 'people_to_skills';
+
+function nextPageFromUrl(url?: string | null): number | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const pageRaw = parsed.searchParams.get('page');
+    if (!pageRaw) return null;
+    const page = Number(pageRaw);
+    return Number.isFinite(page) ? page : null;
+  } catch {
+    return null;
+  }
 }
 
-interface DepartmentSkills {
-  departmentId: number;
-  departmentName: string;
-  peopleCount: number;
-  skillsCoverage: SkillCoverage[];
-  topSkills: string[];
-  skillGaps: string[];
+function buildDepartmentTree(departments: Department[]) {
+  const byParent = new Map<number | null, Department[]>();
+  departments.forEach((dept) => {
+    const parentId = dept.parentDepartment ?? null;
+    const list = byParent.get(parentId) || [];
+    list.push(dept);
+    byParent.set(parentId, list);
+  });
+  byParent.forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
+  return byParent;
 }
+
+const SkillsAddDrawer: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}> = ({ open, onClose, children }) => {
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1150] bg-black/60 flex justify-end"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md h-full bg-[var(--surface)] text-[var(--text)] shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold truncate">Add Skill</div>
+          <button
+            type="button"
+            className="text-xl text-[var(--muted)]"
+            onClick={onClose}
+            aria-label="Close add skill panel"
+          >
+            x
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const SkillsDashboard: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
-  const snapshotsEnabled = getFlag('FF_PEOPLE_SKILLS_SETTINGS_SNAPSHOTS', true);
-  const [snapshotFallbackEnabled, setSnapshotFallbackEnabled] = useState(false);
-  const skillsSnapshot = useUiSkillsPageSnapshot({
-    enabled: snapshotsEnabled && !snapshotFallbackEnabled,
-    include: ['departments', 'people', 'skill_tags', 'person_skills'],
-    vertical: verticalState.selectedVerticalId ?? undefined,
-  });
-  const useLegacyData = !snapshotsEnabled || snapshotFallbackEnabled;
-  const { departments: legacyDepartments } = useDepartments({
-    enabled: useLegacyData,
-    vertical: verticalState.selectedVerticalId ?? undefined,
-  });
-  const [people, setPeople] = useState<Person[]>([]);
-  const [snapshotDepartments, setSnapshotDepartments] = useState<Department[]>([]);
-  const [skillTags, setSkillTags] = useState<SkillTag[]>([]);
-  // Manage Skill Tags (add/remove)
-  const [newSkillName, setNewSkillName] = useState<string>("");
-  const [newSkillCategory, setNewSkillCategory] = useState<string>("");
-  const [savingSkill, setSavingSkill] = useState<boolean>(false);
-  const [peopleSkills, setPeopleSkills] = useState<PersonSkill[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const departments = snapshotDepartments.length ? snapshotDepartments : legacyDepartments;
+  const [busy, setBusy] = useState(false);
 
-  const [selectedDepartment, setSelectedDepartment] = useState<string>(''); // Empty = all departments
-  const [viewMode, setViewMode] = useState<'coverage' | 'gaps' | 'departments'>('coverage');
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
+  const [departmentSearch, setDepartmentSearch] = useState('');
 
-  useAuthenticatedEffect(() => {
-    if (!useLegacyData) return;
-    loadAllData();
-  }, [verticalState.selectedVerticalId, useLegacyData]);
+  const [skills, setSkills] = useState<SkillTag[]>([]);
+  const [skillsPage, setSkillsPage] = useState(1);
+  const [skillsHasNext, setSkillsHasNext] = useState(false);
+  const [skillSearch, setSkillSearch] = useState('');
 
-  useEffect(() => {
-    if (!snapshotsEnabled) return;
-    if (!skillsSnapshot.isError) return;
-    setSnapshotFallbackEnabled(true);
-  }, [skillsSnapshot.isError, snapshotsEnabled]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [peoplePage, setPeoplePage] = useState(1);
+  const [peopleHasNext, setPeopleHasNext] = useState(false);
+  const [peopleSearch, setPeopleSearch] = useState('');
 
-  useEffect(() => {
-    if (!snapshotsEnabled || snapshotFallbackEnabled) return;
-    if (!skillsSnapshot.data) return;
-    setPeople(skillsSnapshot.data.people?.results || []);
-    setSkillTags(skillsSnapshot.data.skillTags?.results || []);
-    setPeopleSkills(skillsSnapshot.data.personSkills?.results || []);
-    setSnapshotDepartments(skillsSnapshot.data.departments || []);
+  const [mode, setMode] = useState<AssignmentMode>('skill_to_people');
+  const [expandedSkillIds, setExpandedSkillIds] = useState<Set<number>>(new Set());
+  const [isAddSkillOpen, setIsAddSkillOpen] = useState(false);
+  const [scopePickerSkillId, setScopePickerSkillId] = useState<number | null>(null);
+  const [scopeTargetDepartmentId, setScopeTargetDepartmentId] = useState<number | ''>('');
+  const [addPeopleSkillId, setAddPeopleSkillId] = useState<number | null>(null);
+  const [addPeopleQuery, setAddPeopleQuery] = useState('');
+  const [addPeopleResults, setAddPeopleResults] = useState<Person[]>([]);
+  const [addPeopleLoading, setAddPeopleLoading] = useState(false);
+  const [addPeopleSelectedIndex, setAddPeopleSelectedIndex] = useState(-1);
+  const [addPeopleSelectedPerson, setAddPeopleSelectedPerson] = useState<Person | null>(null);
+  const [addPeopleSelectionLocked, setAddPeopleSelectionLocked] = useState(false);
+  const [addPeopleSrAnnouncement, setAddPeopleSrAnnouncement] = useState('');
+  const [addPeopleDropdownAbove, setAddPeopleDropdownAbove] = useState(false);
+  const addPeopleInputRef = useRef<HTMLInputElement | null>(null);
+  const [addSkillsPersonId, setAddSkillsPersonId] = useState<number | null>(null);
+  const [addSkillsQuery, setAddSkillsQuery] = useState('');
+  const [addSkillsResults, setAddSkillsResults] = useState<SkillTag[]>([]);
+  const [addSkillsLoading, setAddSkillsLoading] = useState(false);
+  const [addSkillsSelectedIndex, setAddSkillsSelectedIndex] = useState(-1);
+  const [addSkillsSrAnnouncement, setAddSkillsSrAnnouncement] = useState('');
+  const [addSkillsDropdownAbove, setAddSkillsDropdownAbove] = useState(false);
+  const addSkillsInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillCategory, setNewSkillCategory] = useState('');
+  const [newSkillScope, setNewSkillScope] = useState<'global' | 'department'>('global');
+
+  const [strengthAssignments, setStrengthAssignments] = useState<PersonSkill[]>([]);
+
+  const deptById = useMemo(() => {
+    const map = new Map<number, Department>();
+    departments.forEach((dept) => {
+      if (dept.id != null) map.set(dept.id, dept);
+    });
+    return map;
+  }, [departments]);
+
+  const tree = useMemo(() => buildDepartmentTree(departments), [departments]);
+  const departmentOptions = useMemo(
+    () =>
+      departments
+        .filter((dept) => dept.id != null)
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [departments]
+  );
+
+  const loadDepartments = useCallback(async () => {
+    const rows = await departmentsApi.listAll({
+      vertical: verticalState.selectedVerticalId ?? undefined,
+    });
+    setDepartments((rows || []).filter((dept) => !!dept.id));
+  }, [verticalState.selectedVerticalId]);
+
+  const loadSkills = useCallback(
+    async (page: number, append: boolean) => {
+      const res = await skillTagsApi.list({
+        search: skillSearch || undefined,
+        page,
+        page_size: 100,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+        department: selectedDepartmentId ?? undefined,
+        scope: selectedDepartmentId == null ? 'global' : undefined,
+        include_children: selectedDepartmentId != null ? 1 : undefined,
+        include_global: selectedDepartmentId != null ? 1 : undefined,
+      });
+      setSkills((prev) => (append ? [...prev, ...(res.results || [])] : (res.results || [])));
+      setSkillsPage(page);
+      setSkillsHasNext(Boolean(res.next));
+    },
+    [selectedDepartmentId, skillSearch, verticalState.selectedVerticalId]
+  );
+
+  const loadPeople = useCallback(
+    async (page: number, append: boolean) => {
+      const payload: Parameters<typeof peopleApi.searchList>[0] = {
+        page,
+        page_size: 100,
+        vertical: verticalState.selectedVerticalId ?? undefined,
+        include_inactive: 0,
+        ordering: 'department,name',
+      };
+      if (peopleSearch.trim()) {
+        payload.search_tokens = [{ term: peopleSearch.trim(), op: 'and' }];
+      }
+      if (selectedDepartmentId != null) {
+        payload.department = selectedDepartmentId;
+        payload.include_children = 1;
+      }
+
+      const res = await peopleApi.searchList(payload);
+      const incoming = (res.results || []).filter((row) => row.department != null);
+      setPeople((prev) => (append ? [...prev, ...incoming] : incoming));
+      setPeoplePage(page);
+      setPeopleHasNext(Boolean(res.next));
+    },
+    [peopleSearch, selectedDepartmentId, verticalState.selectedVerticalId]
+  );
+
+  const loadStrengthAssignments = useCallback(async () => {
+    const personIds = people.map((person) => person.id).filter((id): id is number => typeof id === 'number');
+    const skillIds = skills.map((skill) => skill.id).filter((id): id is number => typeof id === 'number');
+    if (!personIds.length || !skillIds.length) {
+      setStrengthAssignments([]);
+      return;
+    }
+
+    const allRows: PersonSkill[] = [];
+    let page = 1;
+    while (true) {
+      const res = await personSkillsApi.list({
+        person_ids: personIds,
+        skill_tag_ids: skillIds,
+        skill_type: 'strength',
+        page,
+        page_size: 200,
+      });
+      allRows.push(...(res.results || []));
+      const nextPage = nextPageFromUrl(res.next);
+      if (!nextPage) break;
+      page = nextPage;
+    }
+    setStrengthAssignments(allRows);
+  }, [people, skills]);
+
+  const refreshData = useCallback(async () => {
     setError(null);
-    setLoading(false);
-  }, [skillsSnapshot.data, snapshotsEnabled, snapshotFallbackEnabled]);
-
-  const loadAllData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      
-      const [peopleResponse, skillTagsResponse, peopleSkillsResponse] = await Promise.all([
-        peopleApi.list({ vertical: verticalState.selectedVerticalId ?? undefined }),
-        skillTagsApi.list(),
-        personSkillsApi.list()
-      ]);
-      
-      setPeople(peopleResponse.results || []);
-      setSkillTags(skillTagsResponse.results || []);
-      setPeopleSkills(peopleSkillsResponse.results || []);
-      
+      await Promise.all([loadDepartments(), loadSkills(1, false), loadPeople(1, false)]);
     } catch (err: any) {
-      setError(err.message || 'Failed to load skills data');
+      setError(err?.message || 'Failed to load skills workspace');
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadDepartments, loadPeople, loadSkills]);
 
-  const effectiveLoading = useLegacyData
-    ? loading
-    : (skillsSnapshot.isLoading && !skillsSnapshot.data);
-  const effectiveError = useLegacyData
-    ? error
-    : (skillsSnapshot.error ? (skillsSnapshot.error as any).message || 'Failed to load skills data' : null);
+  useAuthenticatedEffect(() => {
+    void refreshData();
+  }, [refreshData]);
 
-  // Calculate skills coverage across the team
-  const calculateSkillsCoverage = (): SkillCoverage[] => {
-    const coverageMap = new Map<string, SkillCoverage>();
-    
-    // Initialize all skill tags
-    skillTags.forEach(skill => {
-      coverageMap.set(skill.name, {
-        skillName: skill.name,
-        totalPeople: 0,
-        strengths: 0,
-        development: 0,
-        learning: 0,
-        expertCount: 0,
-        advancedCount: 0,
-        intermediateCount: 0,
-        beginnerCount: 0,
-        coverage: 'gap'
+  useEffect(() => {
+    void loadSkills(1, false);
+    void loadPeople(1, false);
+  }, [selectedDepartmentId, skillSearch, peopleSearch, verticalState.selectedVerticalId, loadSkills, loadPeople]);
+
+  useEffect(() => {
+    void loadStrengthAssignments();
+  }, [loadStrengthAssignments]);
+
+  useEffect(() => {
+    if (!isAddSkillOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsAddSkillOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isAddSkillOpen]);
+
+  useEffect(() => {
+    setScopePickerSkillId(null);
+    setScopeTargetDepartmentId('');
+    setAddPeopleSkillId(null);
+    setAddPeopleQuery('');
+    setAddPeopleResults([]);
+    setAddPeopleSelectedIndex(-1);
+    setAddPeopleSelectedPerson(null);
+    setAddPeopleSelectionLocked(false);
+    setAddPeopleSrAnnouncement('');
+    setAddSkillsPersonId(null);
+    setAddSkillsQuery('');
+    setAddSkillsResults([]);
+    setAddSkillsLoading(false);
+    setAddSkillsSelectedIndex(-1);
+    setAddSkillsSrAnnouncement('');
+  }, [selectedDepartmentId, mode]);
+
+  useEffect(() => {
+    setExpandedSkillIds((prev) => {
+      const liveIds = new Set(skills.map((skill) => skill.id).filter((id): id is number => id != null));
+      const next = new Set<number>();
+      prev.forEach((id) => {
+        if (liveIds.has(id)) next.add(id);
       });
+      return next;
     });
-    
-    // Filter people by selected department
-    const filteredPeople = selectedDepartment 
-      ? people.filter(person => person.department?.toString() === selectedDepartment)
-      : people;
-    
-    // Count skills across filtered people
-    peopleSkills.forEach(personSkill => {
-      const person = people.find(p => p.id === personSkill.person);
+    setAddPeopleSkillId((prev) => {
+      if (prev == null || skills.find((skill) => skill.id === prev)) return prev;
+      setAddPeopleQuery('');
+      setAddPeopleResults([]);
+      setAddPeopleSelectedIndex(-1);
+      setAddPeopleSelectedPerson(null);
+      setAddPeopleSelectionLocked(false);
+      setAddPeopleSrAnnouncement('');
+      return null;
+    });
+  }, [skills]);
+
+  useEffect(() => {
+    setAddSkillsPersonId((prev) => {
+      if (prev == null || people.some((person) => person.id === prev)) return prev;
+      setAddSkillsQuery('');
+      setAddSkillsResults([]);
+      setAddSkillsLoading(false);
+      setAddSkillsSelectedIndex(-1);
+      setAddSkillsSrAnnouncement('');
+      return null;
+    });
+  }, [people]);
+
+  useEffect(() => {
+    if (mode !== 'skill_to_people' || addPeopleSkillId == null) {
+      setAddPeopleResults([]);
+      setAddPeopleLoading(false);
+      setAddPeopleSelectedIndex(-1);
+      setAddPeopleSrAnnouncement('');
+      return;
+    }
+    if (addPeopleSelectionLocked) {
+      setAddPeopleResults([]);
+      setAddPeopleLoading(false);
+      setAddPeopleSelectedIndex(-1);
+      return;
+    }
+    if (!addPeopleQuery.trim()) {
+      setAddPeopleResults([]);
+      setAddPeopleLoading(false);
+      setAddPeopleSelectedIndex(-1);
+      setAddPeopleSrAnnouncement('');
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setAddPeopleLoading(true);
+      try {
+        const payload: Parameters<typeof peopleApi.searchList>[0] = {
+          page: 1,
+          page_size: 20,
+          include_inactive: 0,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+          ordering: 'name',
+        };
+        if (selectedDepartmentId != null) {
+          payload.department = selectedDepartmentId;
+          payload.include_children = 1;
+        }
+        if (addPeopleQuery.trim()) {
+          payload.search_tokens = [{ term: addPeopleQuery.trim(), op: 'and' }];
+        }
+
+        const res = await peopleApi.searchList(payload);
+        if (cancelled) return;
+        const nextResults = (res.results || []).filter((person) => person.department != null);
+        setAddPeopleResults(nextResults);
+        setAddPeopleSelectedIndex(nextResults.length > 0 ? 0 : -1);
+        setAddPeopleSrAnnouncement(`Found ${nextResults.length} people matching your search.`);
+      } catch {
+        if (!cancelled) {
+          setAddPeopleResults([]);
+          setAddPeopleSelectedIndex(-1);
+          setAddPeopleSrAnnouncement('');
+        }
+      } finally {
+        if (!cancelled) setAddPeopleLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [mode, addPeopleSkillId, addPeopleQuery, addPeopleSelectionLocked, selectedDepartmentId, verticalState.selectedVerticalId]);
+
+  useEffect(() => {
+    if (mode !== 'people_to_skills' || addSkillsPersonId == null) {
+      setAddSkillsResults([]);
+      setAddSkillsLoading(false);
+      setAddSkillsSelectedIndex(-1);
+      setAddSkillsSrAnnouncement('');
+      return;
+    }
+    if (!addSkillsQuery.trim()) {
+      setAddSkillsResults([]);
+      setAddSkillsLoading(false);
+      setAddSkillsSelectedIndex(-1);
+      setAddSkillsSrAnnouncement('');
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setAddSkillsLoading(true);
+      try {
+        const res = await skillTagsApi.list({
+          search: addSkillsQuery.trim(),
+          page: 1,
+          page_size: 20,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+          department: selectedDepartmentId ?? undefined,
+          scope: selectedDepartmentId == null ? 'global' : undefined,
+          include_children: selectedDepartmentId != null ? 1 : undefined,
+          include_global: selectedDepartmentId != null ? 1 : undefined,
+        });
+        if (cancelled) return;
+        const dedup = new Map<number, SkillTag>();
+        (res.results || []).forEach((skill) => {
+          if (skill.id != null) dedup.set(skill.id, skill);
+        });
+        const rows = Array.from(dedup.values());
+        setAddSkillsResults(rows);
+        setAddSkillsSelectedIndex(rows.length > 0 ? 0 : -1);
+        setAddSkillsSrAnnouncement(`Found ${rows.length} skills matching your search.`);
+      } catch {
+        if (!cancelled) {
+          setAddSkillsResults([]);
+          setAddSkillsSelectedIndex(-1);
+          setAddSkillsSrAnnouncement('');
+        }
+      } finally {
+        if (!cancelled) setAddSkillsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [mode, addSkillsPersonId, addSkillsQuery, selectedDepartmentId, verticalState.selectedVerticalId]);
+
+  const isAddPeopleSearchOpen = useMemo(
+    () =>
+      mode === 'skill_to_people'
+      && addPeopleSkillId != null
+      && !addPeopleSelectionLocked
+      && addPeopleQuery.trim().length > 0
+      && addPeopleResults.length > 0,
+    [mode, addPeopleSkillId, addPeopleSelectionLocked, addPeopleQuery, addPeopleResults.length]
+  );
+
+  const isAddSkillsSearchOpen = useMemo(
+    () =>
+      mode === 'people_to_skills'
+      && addSkillsPersonId != null
+      && addSkillsQuery.trim().length > 0
+      && addSkillsResults.length > 0,
+    [mode, addSkillsPersonId, addSkillsQuery, addSkillsResults.length]
+  );
+
+  useEffect(() => {
+    if (!isAddPeopleSearchOpen) return;
+    const updatePlacement = () => {
+      const el = addPeopleInputRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dropdownHeight = 240;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setAddPeopleDropdownAbove(spaceBelow < dropdownHeight && spaceAbove > spaceBelow);
+    };
+
+    updatePlacement();
+    window.addEventListener('resize', updatePlacement);
+    window.addEventListener('scroll', updatePlacement, true);
+    return () => {
+      window.removeEventListener('resize', updatePlacement);
+      window.removeEventListener('scroll', updatePlacement, true);
+    };
+  }, [isAddPeopleSearchOpen, addPeopleResults.length]);
+
+  useEffect(() => {
+    if (!isAddSkillsSearchOpen) return;
+    const updatePlacement = () => {
+      const el = addSkillsInputRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dropdownHeight = 240;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setAddSkillsDropdownAbove(spaceBelow < dropdownHeight && spaceAbove > spaceBelow);
+    };
+
+    updatePlacement();
+    window.addEventListener('resize', updatePlacement);
+    window.addEventListener('scroll', updatePlacement, true);
+    return () => {
+      window.removeEventListener('resize', updatePlacement);
+      window.removeEventListener('scroll', updatePlacement, true);
+    };
+  }, [isAddSkillsSearchOpen, addSkillsResults.length]);
+
+  const peopleById = useMemo(() => {
+    const map = new Map<number, Person>();
+    people.forEach((person) => {
+      if (person.id != null) map.set(person.id, person);
+    });
+    return map;
+  }, [people]);
+
+  const skillById = useMemo(() => {
+    const map = new Map<number, SkillTag>();
+    skills.forEach((skill) => {
+      if (skill.id != null) map.set(skill.id, skill);
+    });
+    return map;
+  }, [skills]);
+
+  const peopleForSkill = useMemo(() => {
+    const map = new Map<number, Person[]>();
+    strengthAssignments.forEach((row) => {
+      const skillId = row.skillTagId;
+      const personId = row.person;
+      if (!skillId || !personId) return;
+      const person = peopleById.get(personId);
       if (!person) return;
-      
-      // Skip if department filter doesn't match
-      if (selectedDepartment && person.department?.toString() !== selectedDepartment) return;
-      
-      const skillName = personSkill.skillTagName || 'Unknown';
-      const coverage = coverageMap.get(skillName);
-      
-      if (coverage) {
-        coverage.totalPeople++;
-        
-        // Count by skill type
-        if (personSkill.skillType === 'strength') coverage.strengths++;
-        else if (personSkill.skillType === 'development') coverage.development++;
-        else if (personSkill.skillType === 'learning') coverage.learning++;
-        
-        // Count by proficiency level
-        if (personSkill.proficiencyLevel === 'expert') coverage.expertCount++;
-        else if (personSkill.proficiencyLevel === 'advanced') coverage.advancedCount++;
-        else if (personSkill.proficiencyLevel === 'intermediate') coverage.intermediateCount++;
-        else if (personSkill.proficiencyLevel === 'beginner') coverage.beginnerCount++;
+      const existing = map.get(skillId) || [];
+      existing.push(person);
+      map.set(skillId, existing);
+    });
+
+    map.forEach((list, skillId) => {
+      const dedup = new Map<number, Person>();
+      list.forEach((person) => {
+        if (person.id != null) dedup.set(person.id, person);
+      });
+      map.set(skillId, Array.from(dedup.values()).sort((a, b) => a.name.localeCompare(b.name)));
+    });
+
+    return map;
+  }, [peopleById, strengthAssignments]);
+
+  const assignmentSet = useMemo(() => {
+    const set = new Set<string>();
+    strengthAssignments.forEach((row) => {
+      if (row.person && row.skillTagId) {
+        set.add(`${row.person}:${row.skillTagId}`);
       }
     });
-    
-    // Determine coverage level for each skill
-    const totalPeopleCount = filteredPeople.length;
-    
-    coverageMap.forEach(coverage => {
-      const strengthsRatio = totalPeopleCount > 0 ? coverage.strengths / totalPeopleCount : 0;
-      const expertsAndAdvanced = coverage.expertCount + coverage.advancedCount;
-      
-      if (expertsAndAdvanced >= 3 && strengthsRatio >= 0.3) {
-        coverage.coverage = 'excellent';
-      } else if (expertsAndAdvanced >= 2 && strengthsRatio >= 0.2) {
-        coverage.coverage = 'good';
-      } else if (coverage.totalPeople > 0) {
-        coverage.coverage = 'limited';
+    return set;
+  }, [strengthAssignments]);
+
+  const skillsForPerson = useMemo(() => {
+    const map = new Map<number, SkillTag[]>();
+    strengthAssignments.forEach((row) => {
+      const personId = row.person;
+      const skillId = row.skillTagId;
+      if (!personId || !skillId) return;
+      const skill = skillById.get(skillId);
+      if (!skill) return;
+      const existing = map.get(personId) || [];
+      existing.push(skill);
+      map.set(personId, existing);
+    });
+
+    map.forEach((list, personId) => {
+      const dedup = new Map<number, SkillTag>();
+      list.forEach((skill) => {
+        if (skill.id != null) dedup.set(skill.id, skill);
+      });
+      map.set(personId, Array.from(dedup.values()).sort((a, b) => a.name.localeCompare(b.name)));
+    });
+
+    return map;
+  }, [skillById, strengthAssignments]);
+
+  const toggleExpandedSkill = (skillId?: number) => {
+    if (!skillId) return;
+    setExpandedSkillIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(skillId)) next.delete(skillId);
+      else next.add(skillId);
+      return next;
+    });
+  };
+
+  const toggleAddPeoplePanel = (skillId?: number) => {
+    if (!skillId) return;
+    setScopePickerSkillId(null);
+    setScopeTargetDepartmentId('');
+    setAddPeopleSkillId((prev) => {
+      if (prev === skillId) {
+        setAddPeopleQuery('');
+        setAddPeopleResults([]);
+        setAddPeopleSelectedIndex(-1);
+        setAddPeopleSelectedPerson(null);
+        setAddPeopleSelectionLocked(false);
+        setAddPeopleSrAnnouncement('');
+        return null;
+      }
+      setAddPeopleQuery('');
+      setAddPeopleResults([]);
+      setAddPeopleSelectedIndex(-1);
+      setAddPeopleSelectedPerson(null);
+      setAddPeopleSelectionLocked(false);
+      setAddPeopleSrAnnouncement('');
+      return skillId;
+    });
+  };
+
+  const closeAddPeoplePanel = () => {
+    setAddPeopleSkillId(null);
+    setAddPeopleQuery('');
+    setAddPeopleResults([]);
+    setAddPeopleSelectedIndex(-1);
+    setAddPeopleSelectedPerson(null);
+    setAddPeopleSelectionLocked(false);
+    setAddPeopleSrAnnouncement('');
+  };
+
+  const toggleAddSkillsPanel = (personId?: number) => {
+    if (!personId) return;
+    setAddSkillsPersonId((prev) => {
+      if (prev === personId) {
+        setAddSkillsQuery('');
+        setAddSkillsResults([]);
+        setAddSkillsLoading(false);
+        setAddSkillsSelectedIndex(-1);
+        setAddSkillsSrAnnouncement('');
+        return null;
+      }
+      setAddSkillsQuery('');
+      setAddSkillsResults([]);
+      setAddSkillsLoading(false);
+      setAddSkillsSelectedIndex(-1);
+      setAddSkillsSrAnnouncement('');
+      return personId;
+    });
+  };
+
+  const onAddPeopleQueryChange = (value: string) => {
+    setAddPeopleQuery(value);
+    setAddPeopleSelectionLocked(false);
+    setAddPeopleSelectedPerson(null);
+    setAddPeopleSelectedIndex(-1);
+  };
+
+  const onAddSkillsQueryChange = (value: string) => {
+    setAddSkillsQuery(value);
+    setAddSkillsSelectedIndex(-1);
+  };
+
+  const selectAddPeoplePerson = (person: Person) => {
+    setAddPeopleSelectedPerson(person);
+    setAddPeopleSelectionLocked(true);
+    setAddPeopleQuery(person.name);
+    setAddPeopleResults([]);
+    setAddPeopleSelectedIndex(-1);
+  };
+
+  const onAddPeopleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isAddPeopleSearchOpen) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setAddPeopleSelectedIndex((prev) =>
+        addPeopleResults.length > 0 ? Math.min(prev + 1, addPeopleResults.length - 1) : -1
+      );
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setAddPeopleSelectedIndex((prev) => (addPeopleResults.length > 0 ? Math.max(prev - 1, 0) : -1));
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (addPeopleSelectedIndex >= 0 && addPeopleSelectedIndex < addPeopleResults.length) {
+        selectAddPeoplePerson(addPeopleResults[addPeopleSelectedIndex]);
+      }
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setAddPeopleResults([]);
+      setAddPeopleSelectedIndex(-1);
+    }
+  };
+
+  const onAddSkillsSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, person: Person) => {
+    if (!isAddSkillsSearchOpen) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setAddSkillsSelectedIndex((prev) =>
+        addSkillsResults.length > 0 ? Math.min(prev + 1, addSkillsResults.length - 1) : -1
+      );
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setAddSkillsSelectedIndex((prev) => (addSkillsResults.length > 0 ? Math.max(prev - 1, 0) : -1));
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (addSkillsSelectedIndex >= 0 && addSkillsSelectedIndex < addSkillsResults.length) {
+        void addSkillToPerson(person, addSkillsResults[addSkillsSelectedIndex]);
+      }
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setAddSkillsResults([]);
+      setAddSkillsSelectedIndex(-1);
+    }
+  };
+
+  const addPersonToSkill = async (skill: SkillTag, person: Person) => {
+    if (!skill.id || !person.id) return;
+    setBusy(true);
+    try {
+      const result = await personSkillsApi.bulkAssign({
+        operation: 'assign',
+        personIds: [person.id],
+        skillTagIds: [skill.id],
+        skillType: 'strength',
+        proficiencyLevel: 'beginner',
+      });
+      await loadStrengthAssignments();
+      if (result.created > 0) {
+        showToast(`Added ${person.name} to ${skill.name}`, 'success');
       } else {
-        coverage.coverage = 'gap';
+        showToast(`${person.name} already has ${skill.name}`, 'info');
       }
-    });
-    
-    return Array.from(coverageMap.values())
-      .filter(coverage => coverage.totalPeople > 0 || coverage.coverage === 'gap')
-      .sort((a, b) => {
-        // Sort by coverage quality, then by total people
-        const coverageOrder = { excellent: 0, good: 1, limited: 2, gap: 3 };
-        const aOrder = coverageOrder[a.coverage];
-        const bOrder = coverageOrder[b.coverage];
-        
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return b.totalPeople - a.totalPeople;
-      });
+      setAddPeopleQuery('');
+      setAddPeopleResults([]);
+      setAddPeopleSelectedIndex(-1);
+      setAddPeopleSelectedPerson(null);
+      setAddPeopleSelectionLocked(false);
+      setAddPeopleSrAnnouncement('');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to add person to skill', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // Calculate department-specific skills analysis
-  const calculateDepartmentSkills = (): DepartmentSkills[] => {
-    return departments.map(dept => {
-      const deptPeople = people.filter(person => person.department === dept.id);
-      const deptPeopleIds = deptPeople.map(p => p.id);
-      const deptSkills = peopleSkills.filter(skill => deptPeopleIds.includes(skill.person));
-      
-      // Calculate top skills for this department
-      const skillCounts = new Map<string, number>();
-      deptSkills.forEach(skill => {
-        if (skill.skillType === 'strength') {
-          const count = skillCounts.get(skill.skillTagName || '') || 0;
-          skillCounts.set(skill.skillTagName || '', count + 1);
-        }
+  const addSkillToPerson = async (person: Person, skill: SkillTag) => {
+    if (!person.id || !skill.id) return;
+    if (assignmentSet.has(`${person.id}:${skill.id}`)) return;
+    setBusy(true);
+    try {
+      await personSkillsApi.bulkAssign({
+        operation: 'assign',
+        personIds: [person.id],
+        skillTagIds: [skill.id],
+        skillType: 'strength',
+        proficiencyLevel: 'beginner',
       });
-      
-      const topSkills = Array.from(skillCounts.entries())
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
-        .map(([skill]) => skill);
-      
-      // Find skills gaps (skills present in other departments but not here)
-      const allOtherSkills = new Set<string>();
-      peopleSkills.forEach(skill => {
-        if (!deptPeopleIds.includes(skill.person) && skill.skillType === 'strength') {
-          allOtherSkills.add(skill.skillTagName || '');
-        }
-      });
-      
-      const deptSkillNames = new Set(deptSkills.map(s => s.skillTagName || ''));
-      const skillGaps = Array.from(allOtherSkills)
-        .filter(skill => !deptSkillNames.has(skill))
-        .slice(0, 3);
-      
-      return {
-        departmentId: dept.id!,
-        departmentName: dept.name,
-        peopleCount: deptPeople.length,
-        skillsCoverage: [], // Can be calculated if needed
-        topSkills,
-        skillGaps
-      };
-    }).filter(dept => dept.peopleCount > 0);
+      await loadStrengthAssignments();
+      showToast(`Added ${skill.name} to ${person.name}`, 'success');
+      setAddSkillsQuery('');
+      setAddSkillsResults([]);
+      setAddSkillsSelectedIndex(-1);
+      setAddSkillsSrAnnouncement('');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to add skill to person', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // Get coverage statistics
-  const getCoverageStats = () => {
-    const coverage = calculateSkillsCoverage();
-    const total = coverage.length;
-    const excellent = coverage.filter(c => c.coverage === 'excellent').length;
-    const good = coverage.filter(c => c.coverage === 'good').length;
-    const limited = coverage.filter(c => c.coverage === 'limited').length;
-    const gaps = coverage.filter(c => c.coverage === 'gap').length;
-    
-    return { total, excellent, good, limited, gaps };
-  };
-
-  if (effectiveLoading) {
-    return (
-      <Layout>
-        <PageState
-          isLoading
-          loadingState={(
-            <div className="flex items-center justify-center h-64">
-              <div className="text-[var(--muted)]">Loading skills analysis...</div>
-            </div>
-          )}
-        />
-      </Layout>
-    );
-  }
-
-  if (effectiveError) {
-    return (
-      <Layout>
-        <PageState
-          error={effectiveError}
-          onRetry={() => {
-            if (useLegacyData) {
-              void loadAllData();
-            } else {
-              void skillsSnapshot.refetch();
-            }
-          }}
-        />
-      </Layout>
-    );
-  }
-
-  const skillsCoverage = calculateSkillsCoverage();
-  const departmentSkills = calculateDepartmentSkills();
-  
-  async function handleAddSkillTag() {
+  const createSkill = async () => {
     const name = newSkillName.trim();
     if (!name) return;
+    setBusy(true);
     try {
-      setSavingSkill(true);
-      const created = await skillTagsApi.create({ name, category: newSkillCategory.trim() || undefined } as any);
-      setSkillTags(prev => {
-        const next = [...prev, created];
-        // keep list sorted by name to match API ordering
-        return next.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
-      });
-      setNewSkillName("");
-      setNewSkillCategory("");
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create skill');
+      await skillTagsApi.create({
+        name,
+        category: newSkillCategory.trim() || undefined,
+        department:
+          newSkillScope === 'department' && selectedDepartmentId != null ? selectedDepartmentId : null,
+      } as any);
+      setNewSkillName('');
+      setNewSkillCategory('');
+      setNewSkillScope(selectedDepartmentId != null ? 'department' : 'global');
+      setIsAddSkillOpen(false);
+      await loadSkills(1, false);
+      showToast('Skill created', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to create skill', 'error');
     } finally {
-      setSavingSkill(false);
+      setBusy(false);
     }
+  };
+
+  const setSkillDepartmentScope = async (skill: SkillTag, departmentId: number | null) => {
+    if (!skill.id) return;
+    setBusy(true);
+    try {
+      await skillTagsApi.update(skill.id, {
+        department: departmentId,
+      });
+      setScopePickerSkillId(null);
+      setScopeTargetDepartmentId('');
+      await loadSkills(1, false);
+      await loadStrengthAssignments();
+      showToast(departmentId == null ? 'Skill moved to global' : 'Skill scoped to department', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update skill scope', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSkillScope = async (skill: SkillTag) => {
+    if (!skill.id) return;
+    if (skill.scopeType === 'global') {
+      if (selectedDepartmentId == null) {
+        if (!departmentOptions.length) {
+          showToast('No departments available for scoping', 'info');
+          return;
+        }
+        setScopePickerSkillId(skill.id);
+        setScopeTargetDepartmentId(departmentOptions[0].id!);
+        return;
+      }
+      await setSkillDepartmentScope(skill, selectedDepartmentId);
+      return;
+    }
+    await setSkillDepartmentScope(skill, null);
+  };
+
+  const applyScopedDepartment = async (skill: SkillTag) => {
+    if (!skill.id) return;
+    if (scopeTargetDepartmentId === '') {
+      showToast('Select a department', 'info');
+      return;
+    }
+    await setSkillDepartmentScope(skill, Number(scopeTargetDepartmentId));
+  };
+
+  const deleteSkill = async (skill: SkillTag) => {
+    if (!skill.id) return;
+    const assignedCount = strengthAssignments.filter((row) => row.skillTagId === skill.id).length;
+    const confirmed = await confirmAction({
+      title: 'Delete Skill',
+      message: assignedCount > 0
+        ? `Delete "${skill.name}"? This will remove ${assignedCount} visible strength assignment(s) and cannot be undone.`
+        : `Delete "${skill.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete Skill',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await skillTagsApi.delete(skill.id);
+      setExpandedSkillIds((prev) => {
+        const next = new Set(prev);
+        next.delete(skill.id!);
+        return next;
+      });
+      setScopePickerSkillId((prev) => (prev === skill.id ? null : prev));
+      setAddPeopleSkillId((prev) => (prev === skill.id ? null : prev));
+      await loadSkills(1, false);
+      await loadStrengthAssignments();
+      showToast('Skill deleted', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete skill', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selectedDepartmentName = selectedDepartmentId != null ? (deptById.get(selectedDepartmentId)?.name || '') : 'All Departments';
+  const openAddSkillPanel = () => {
+    setNewSkillScope(selectedDepartmentId != null ? 'department' : 'global');
+    setIsAddSkillOpen(true);
+  };
+
+  const filteredTreeRoots = useMemo(() => {
+    const roots = tree.get(null) || [];
+    if (!departmentSearch.trim()) return roots;
+    const query = departmentSearch.trim().toLowerCase();
+    return departments
+      .filter((dept) => dept.name.toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [departments, departmentSearch, tree]);
+
+  const renderTree = (parentId: number | null, depth = 0): React.ReactNode => {
+    const children = tree.get(parentId) || [];
+    return children.map((dept) => {
+      const isSelected = selectedDepartmentId === dept.id;
+      return (
+        <React.Fragment key={dept.id}>
+          <button
+            type="button"
+            onClick={() => setSelectedDepartmentId(dept.id ?? null)}
+            className={`w-full text-left rounded px-2 py-1 text-sm transition-colors ${
+              isSelected
+                ? 'bg-[var(--surfaceHover)] text-[var(--text)] border border-[var(--focus)]'
+                : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] border border-transparent'
+            }`}
+            style={{ paddingLeft: `${8 + depth * 14}px` }}
+          >
+            {dept.name}
+          </button>
+          {renderTree(dept.id ?? null, depth + 1)}
+        </React.Fragment>
+      );
+    });
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <PageState isLoading />
+      </Layout>
+    );
   }
 
-  async function handleDeleteSkillTag(id: number) {
-    try {
-      const confirmed = await confirmAction({
-        title: 'Delete Skill',
-        message: 'Delete this skill? This cannot be undone.',
-        confirmLabel: 'Delete',
-        tone: 'danger',
-      });
-      if (!confirmed) return;
-      await skillTagsApi.delete(id);
-      setSkillTags(prev => prev.filter(s => s.id !== id));
-    } catch (e: any) {
-      setError(e?.message || 'Failed to delete skill');
-    }
+  if (error) {
+    return (
+      <Layout>
+        <PageState error={error} onRetry={() => void refreshData()} />
+      </Layout>
+    );
   }
-  const stats = getCoverageStats();
 
   return (
     <Layout>
-      <div className="ux-page-shell space-y-6">
-        
-        {/* Header */}
-        <div className="ux-page-hero flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="ux-page-shell space-y-4">
+        <div className="ux-page-hero flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--text)]">Skills Dashboard</h1>
-            <p className="text-[var(--muted)] mt-2">
-              Team skills analysis, coverage, and gap identification
-              {selectedDepartment && (
-                <span className="block mt-1">
-                  Filtered by: {departments.find(d => d.id?.toString() === selectedDepartment)?.name}
-                </span>
-              )}
+            <h1 className="text-2xl font-bold text-[var(--text)]">Skills Workspace</h1>
+            <p className="text-sm text-[var(--muted)]">
+              Browse strength skills by department, or browse people with their current skills.
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              {mode === 'skill_to_people'
+                ? 'Mode 1: expand a skill to see people who have it.'
+                : 'Mode 2: each person row shows their skill pills.'}
             </p>
           </div>
-          
-          {/* Department Filter */}
-          <div className="flex items-center gap-4 mt-4 sm:mt-0">
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`rounded px-3 py-1.5 text-sm border ${
+                mode === 'skill_to_people'
+                  ? 'border-[var(--focus)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                  : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+              }`}
+              onClick={() => setMode('skill_to_people')}
             >
-              <option value="">All Departments</option>
-              {departments.map(dept => (
-                <option key={dept.id} value={dept.id}>
-                  {dept.name}
-                </option>
-              ))}
-            </select>
+              Skill {'->'} People
+            </button>
+            <button
+              type="button"
+              className={`rounded px-3 py-1.5 text-sm border ${
+                mode === 'people_to_skills'
+                  ? 'border-[var(--focus)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                  : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+              }`}
+              onClick={() => setMode('people_to_skills')}
+            >
+              People {'->'} Skills
+            </button>
+            <button
+              type="button"
+              className={`rounded px-3 py-1.5 text-sm border ${
+                isAddSkillOpen
+                  ? 'border-[var(--focus)] bg-[var(--surfaceHover)] text-[var(--text)]'
+                  : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+              }`}
+              onClick={openAddSkillPanel}
+              disabled={busy}
+            >
+              Add Skill
+            </button>
           </div>
         </div>
 
-        {/* Manage Skill Tags */}
-        <Card className="ux-panel p-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-              <div className="flex-1">
-                <label className="block text-xs text-[var(--muted)] mb-1">New Skill Name</label>
-                <input
-                  type="text"
-                  value={newSkillName}
-                  onChange={(e) => setNewSkillName(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                  placeholder="e.g., Revit Families"
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <Card className="ux-panel p-3">
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-[var(--text)]">Departments</h2>
+              <Input
+                value={departmentSearch}
+                onChange={(e) => setDepartmentSearch(e.target.value)}
+                placeholder="Search departments..."
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedDepartmentId(null)}
+                className={`w-full rounded px-2 py-1 text-left text-sm border ${
+                  selectedDepartmentId == null
+                    ? 'bg-[var(--surfaceHover)] text-[var(--text)] border-[var(--focus)]'
+                    : 'text-[var(--muted)] border-[var(--border)] hover:text-[var(--text)] hover:bg-[var(--surface)]'
+                }`}
+              >
+                All Departments
+              </button>
+              <div className="max-h-[480px] overflow-auto space-y-1">
+                {departmentSearch.trim()
+                  ? filteredTreeRoots.map((dept) => (
+                      <button
+                        key={dept.id}
+                        type="button"
+                        onClick={() => setSelectedDepartmentId(dept.id ?? null)}
+                        className={`w-full rounded px-2 py-1 text-left text-sm border ${
+                          selectedDepartmentId === dept.id
+                            ? 'bg-[var(--surfaceHover)] text-[var(--text)] border-[var(--focus)]'
+                            : 'text-[var(--muted)] border-[var(--border)] hover:text-[var(--text)] hover:bg-[var(--surface)]'
+                        }`}
+                      >
+                        {dept.name}
+                      </button>
+                    ))
+                  : renderTree(null)}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="ux-panel p-3">
+            {mode === 'skill_to_people' ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[var(--text)]">
+                    Skills ({selectedDepartmentName})
+                  </h2>
+                  <div className="text-xs text-[var(--muted)]">{skills.length} loaded</div>
+                </div>
+                <Input
+                  value={skillSearch}
+                  onChange={(e) => setSkillSearch(e.target.value)}
+                  placeholder="Search skills..."
                 />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs text-[var(--muted)] mb-1">Category (optional)</label>
-                <input
-                  type="text"
-                  value={newSkillCategory}
-                  onChange={(e) => setNewSkillCategory(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                  placeholder="e.g., BIM"
-                />
-              </div>
-              <div>
-                <Button onClick={handleAddSkillTag} disabled={!newSkillName.trim() || savingSkill}>
-                  {savingSkill ? 'Adding…' : 'Add Skill'}
-                </Button>
-              </div>
-            </div>
 
-            {/* Existing skills list (compact) */}
-            <div className="max-h-40 overflow-auto border border-[var(--border)] rounded">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[var(--border)]">
-                {skillTags.map(tag => (
-                  <div key={tag.id} className="flex items-center justify-between bg-[var(--card)] px-3 py-1.5">
-                    <div className="text-sm text-[var(--text)] truncate">
-                      <span className="font-medium">{tag.name}</span>
-                      {tag.category ? <span className="text-[var(--muted)] ml-2">({tag.category})</span> : null}
-                    </div>
-                    <button
-                      className="text-xs px-2 py-0.5 border border-[var(--border)] rounded text-[var(--muted)] hover:text-red-400 hover:border-red-500/50"
-                      onClick={() => tag.id && handleDeleteSkillTag(tag.id)}
-                      aria-label={`Delete skill ${tag.name}`}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-                {skillTags.length === 0 && (
-                  <div className="col-span-full text-center text-[var(--muted)] py-2 bg-[var(--card)]">No skills defined yet</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
+                <div className="max-h-[620px] overflow-auto rounded border border-[var(--border)]">
+                  {skills.map((skill) => {
+                    const skillId = skill.id;
+                    const expanded = !!skillId && expandedSkillIds.has(skillId);
+                    const assignedPeople = skillId ? (peopleForSkill.get(skillId) || []) : [];
+                    const assignedCount = assignedPeople.length;
 
-        {/* View Mode Tabs */}
-        <div className="flex gap-2">
-          {[
-            { key: 'coverage', label: 'Skills Coverage' },
-            { key: 'gaps', label: 'Skills Gaps' },
-            { key: 'departments', label: 'By Department' }
-          ].map(({ key, label }) => (
-            <Button
-              key={key}
-              onClick={() => setViewMode(key as any)}
-              variant={viewMode === key ? 'primary' : 'ghost'}
-              size="sm"
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card className="ux-panel p-4">
-            <div className="text-[var(--muted)] text-sm">Total Skills</div>
-            <div className="text-2xl font-bold text-[var(--text)]">{stats.total}</div>
-          </Card>
-          
-          <Card className="ux-panel p-4">
-            <div className="text-[var(--muted)] text-sm">Excellent Coverage</div>
-            <div className="text-2xl font-bold text-emerald-400">{stats.excellent}</div>
-          </Card>
-          
-          <Card className="ux-panel p-4">
-            <div className="text-[var(--muted)] text-sm">Good Coverage</div>
-            <div className="text-2xl font-bold text-blue-400">{stats.good}</div>
-          </Card>
-          
-          <Card className="ux-panel p-4">
-            <div className="text-[var(--muted)] text-sm">Limited Coverage</div>
-            <div className="text-2xl font-bold text-amber-400">{stats.limited}</div>
-          </Card>
-          
-          <Card className="ux-panel p-4">
-            <div className="text-[var(--muted)] text-sm">Skills Gaps</div>
-            <div className="text-2xl font-bold text-red-400">{stats.gaps}</div>
-          </Card>
-        </div>
-
-        {/* Content based on view mode */}
-        {viewMode === 'coverage' && (
-          <Card className="ux-panel p-6">
-            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Skills Coverage Analysis</h3>
-            <div className="space-y-4">
-              {skillsCoverage.map((skill) => (
-                <div key={skill.skillName} className="border-b border-[var(--border)] pb-4 last:border-b-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium text-[var(--text)]">{skill.skillName}</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        skill.coverage === 'excellent' ? 'bg-emerald-500/20 text-emerald-400' :
-                        skill.coverage === 'good' ? 'bg-blue-500/20 text-blue-400' :
-                        skill.coverage === 'limited' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>
-                        {skill.coverage}
-                      </span>
-                    </div>
-                    <div className="text-sm text-[var(--muted)]">
-                      {skill.totalPeople} people
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-[var(--muted)]">Strengths</div>
-                      <div className="text-emerald-400 font-medium">{skill.strengths}</div>
-                    </div>
-                    <div>
-                      <div className="text-[var(--muted)]">Learning</div>
-                      <div className="text-blue-400 font-medium">{skill.learning}</div>
-                    </div>
-                    <div>
-                      <div className="text-[var(--muted)]">Expert/Advanced</div>
-                      <div className="text-purple-400 font-medium">{skill.expertCount + skill.advancedCount}</div>
-                    </div>
-                    <div>
-                      <div className="text-[var(--muted)]">Intermediate/Beginner</div>
-                      <div className="text-[var(--text)] font-medium">{skill.intermediateCount + skill.beginnerCount}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {skillsCoverage.length === 0 && (
-                <div className="text-center py-8 text-[var(--muted)]">
-                  No skills data available for the selected filters
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {viewMode === 'gaps' && (
-          <Card className="ux-panel p-6">
-            <h3 className="text-lg font-semibold text-[var(--text)] mb-4">Skills Gaps & Recommendations</h3>
-            <div className="space-y-4">
-              {skillsCoverage
-                .filter(skill => skill.coverage === 'gap' || skill.coverage === 'limited')
-                .map((skill) => (
-                  <div key={skill.skillName} className="p-4 bg-amber-500/10 border border-amber-500/30 rounded">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-amber-400">{skill.skillName}</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        skill.coverage === 'gap' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        {skill.coverage === 'gap' ? 'No Coverage' : 'Limited Coverage'}
-                      </span>
-                    </div>
-                    
-                    <div className="text-sm text-amber-300 mb-2">
-                      {skill.coverage === 'gap' 
-                        ? 'No team members have this skill as a strength. Consider hiring or training.'
-                        : `Only ${skill.strengths} team member(s) have this as a strength. Consider expanding coverage.`
-                      }
-                    </div>
-                    
-                    {skill.development > 0 && (
-                      <div className="text-xs text-blue-400">
-                        💡 {skill.development} team member(s) are currently developing this skill
+                    return (
+                      <div key={skill.id} className="border-b border-[var(--border)] last:border-b-0">
+                        <div className="grid grid-cols-[minmax(0,1fr)_32px_auto] items-center gap-2 px-2 py-2 sm:grid-cols-[340px_32px_auto]">
+                          <button
+                            type="button"
+                            className="flex min-w-0 items-center gap-2 text-left"
+                            onClick={() => toggleExpandedSkill(skillId)}
+                          >
+                            <span className="text-xs text-[var(--muted)]">{expanded ? 'v' : '>'}</span>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm text-[var(--text)]">{skill.name}</div>
+                              <div className="text-xs text-[var(--muted)]">
+                                {skill.scopeType === 'global'
+                                  ? 'Global'
+                                  : (skill.departmentName || 'Department')} | {assignedCount} people
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                            onClick={() => toggleAddPeoplePanel(skillId)}
+                            disabled={busy}
+                            aria-label={`Add people to ${skill.name}`}
+                          >
+                            {addPeopleSkillId === skillId ? '-' : '+'}
+                          </button>
+                          <div className="flex w-[250px] sm:w-[380px] items-center justify-end gap-1">
+                            {skill.scopeType === 'global' && selectedDepartmentId == null && scopePickerSkillId === skillId ? (
+                              <>
+                                <select
+                                  className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+                                  value={scopeTargetDepartmentId}
+                                  onChange={(e) =>
+                                    setScopeTargetDepartmentId(
+                                      e.target.value ? Number(e.target.value) : ''
+                                    )
+                                  }
+                                  disabled={busy}
+                                >
+                                  {departmentOptions.map((dept) => (
+                                    <option key={dept.id} value={dept.id}>
+                                      {dept.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                                  onClick={() => void applyScopedDepartment(skill)}
+                                  disabled={busy || scopeTargetDepartmentId === ''}
+                                >
+                                  Apply
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                                  onClick={() => {
+                                    setScopePickerSkillId(null);
+                                    setScopeTargetDepartmentId('');
+                                  }}
+                                  disabled={busy}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                                onClick={() => void toggleSkillScope(skill)}
+                                disabled={busy}
+                              >
+                                {skill.scopeType === 'global' ? 'Scope to Dept' : 'Make Global'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="rounded border border-red-400/50 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                              onClick={() => void deleteSkill(skill)}
+                              disabled={busy}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                        {addPeopleSkillId === skillId && (
+                          <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                            <div className="rounded border border-[var(--border)] bg-[var(--card)] p-2">
+                              <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                                <div className="text-[10px] font-medium uppercase text-[var(--muted)]">Person</div>
+                                <div className="text-[10px] font-medium uppercase text-[var(--muted)]">Actions</div>
+                              </div>
+                              <div className="relative">
+                                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={addPeopleQuery}
+                                    onChange={(e) => onAddPeopleQueryChange(e.target.value)}
+                                    onKeyDown={onAddPeopleSearchKeyDown}
+                                    placeholder="Start typing name..."
+                                    role="combobox"
+                                    aria-expanded={isAddPeopleSearchOpen}
+                                    aria-haspopup="listbox"
+                                    aria-owns={skillId ? `skill-person-search-results-${skillId}` : undefined}
+                                    aria-describedby={skillId ? `skill-person-search-help-${skillId}` : undefined}
+                                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                    ref={addPeopleInputRef}
+                                    autoFocus
+                                  />
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                      onClick={() => {
+                                        if (!addPeopleSelectedPerson) return;
+                                        void addPersonToSkill(skill, addPeopleSelectedPerson);
+                                      }}
+                                      disabled={
+                                        busy
+                                        || !addPeopleSelectedPerson
+                                        || (
+                                          addPeopleSelectedPerson.id != null
+                                          && skillId != null
+                                          && assignmentSet.has(`${addPeopleSelectedPerson.id}:${skillId}`)
+                                        )
+                                      }
+                                    >
+                                      Add Selected
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
+                                      onClick={closeAddPeoplePanel}
+                                      disabled={busy}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                                <div id={skillId ? `skill-person-search-help-${skillId}` : undefined} className="sr-only">
+                                  Search for people to add to this skill. Use arrow keys to navigate results.
+                                </div>
+                                <div aria-live="polite" aria-atomic="true" className="sr-only">
+                                  {addPeopleSrAnnouncement}
+                                </div>
+                                {isAddPeopleSearchOpen && (
+                                  <div className={`absolute left-0 right-0 z-50 ${addPeopleDropdownAbove ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                                    <div
+                                      id={skillId ? `skill-person-search-results-${skillId}` : undefined}
+                                      role="listbox"
+                                      className="bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg max-h-56 overflow-y-auto"
+                                    >
+                                      <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                                        People
+                                      </div>
+                                      {addPeopleResults.map((person, index) => {
+                                        const alreadyAssigned =
+                                          person.id != null && skillId != null
+                                            ? assignmentSet.has(`${person.id}:${skillId}`)
+                                            : false;
+                                        return (
+                                          <button
+                                            key={person.id}
+                                            type="button"
+                                            onClick={() => selectAddPeoplePerson(person)}
+                                            className={`w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
+                                              addPeopleSelectedIndex === index ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <div className="font-medium truncate">{person.name}</div>
+                                              {alreadyAssigned && (
+                                                <span className="text-[10px] px-1 py-0.5 rounded border border-[var(--border)] text-[var(--muted)]">
+                                                  Added
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="truncate text-[var(--muted)]">
+                                              {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-2 min-h-[16px] text-xs text-[var(--muted)]">
+                                {addPeopleLoading
+                                  ? 'Searching people...'
+                                  : addPeopleSelectedPerson
+                                    ? `Selected: ${addPeopleSelectedPerson.name}`
+                                    : addPeopleQuery.trim()
+                                      ? 'Select a person from the results.'
+                                      : 'Type a name to search.'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {expanded && (
+                          <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                            {assignedPeople.length === 0 ? (
+                              <div className="text-xs text-[var(--muted)]">
+                                No people currently have this skill as a strength.
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                {assignedPeople.map((person) => (
+                                  <div key={person.id} className="flex items-center justify-between gap-2 text-sm">
+                                    <span className="truncate text-[var(--text)]">{person.name}</span>
+                                    <span className="text-xs text-[var(--muted)]">
+                                      {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))
-              }
-              
-              {skillsCoverage.filter(s => s.coverage === 'gap' || s.coverage === 'limited').length === 0 && (
-                <div className="text-center py-8 text-emerald-400">
-                  🎉 Great job! No critical skills gaps detected in your team.
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {viewMode === 'departments' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {departmentSkills.map((dept) => (
-              <Card key={dept.departmentId} className="ux-panel p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-[var(--text)]">{dept.departmentName}</h3>
-                  <span className="text-sm text-[var(--muted)]">{dept.peopleCount} people</span>
-                </div>
-                
-                <div className="space-y-4">
-                  {/* Top Skills */}
-                  <div>
-                    <div className="text-sm font-medium text-[var(--text)] mb-2">🌟 Top Skills</div>
-                    <div className="flex flex-wrap gap-1">
-                      {dept.topSkills.slice(0, 5).map(skill => (
-                        <span key={skill} className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                          {skill}
-                        </span>
-                      ))}
-                      {dept.topSkills.length === 0 && (
-                        <span className="text-xs text-[var(--muted)]">No skills data available</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Skills Gaps */}
-                  {dept.skillGaps.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-[var(--text)] mb-2">⚠️ Potential Gaps</div>
-                      <div className="flex flex-wrap gap-1">
-                        {dept.skillGaps.map(skill => (
-                          <span key={skill} className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-xs text-[var(--muted)] mt-1">
-                        Skills present in other departments but not here
-                      </div>
+                    );
+                  })}
+                  {skills.length === 0 && (
+                    <div className="px-3 py-6 text-center text-sm text-[var(--muted)]">
+                      No skills found for this scope.
                     </div>
                   )}
                 </div>
-              </Card>
-            ))}
+
+                {skillsHasNext && (
+                  <Button variant="ghost" onClick={() => void loadSkills(skillsPage + 1, true)}>
+                    Load More Skills
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[var(--text)]">People ({selectedDepartmentName})</h2>
+                  <div className="text-xs text-[var(--muted)]">{people.length} loaded</div>
+                </div>
+                <Input
+                  value={peopleSearch}
+                  onChange={(e) => setPeopleSearch(e.target.value)}
+                  placeholder="Search people..."
+                />
+
+                <div className="max-h-[620px] overflow-auto rounded border border-[var(--border)]">
+                  {people.map((person) => {
+                    const personSkills = person.id ? (skillsForPerson.get(person.id) || []) : [];
+                    return (
+                      <div key={person.id} className="border-b border-[var(--border)] px-2 py-2 last:border-b-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm text-[var(--text)]">{person.name}</div>
+                            <div className="text-xs text-[var(--muted)]">
+                              {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                              onClick={() => toggleAddSkillsPanel(person.id)}
+                              disabled={busy}
+                              aria-label={`Add skill to ${person.name}`}
+                            >
+                              {addSkillsPersonId === person.id ? '-' : '+'}
+                            </button>
+                          </div>
+                        </div>
+                        {addSkillsPersonId === person.id && (
+                          <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)] p-2">
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={addSkillsQuery}
+                                onChange={(e) => onAddSkillsQueryChange(e.target.value)}
+                                onKeyDown={(e) => onAddSkillsSearchKeyDown(e, person)}
+                                placeholder="Search skills to add..."
+                                role="combobox"
+                                aria-expanded={isAddSkillsSearchOpen}
+                                aria-haspopup="listbox"
+                                aria-owns={person.id ? `person-skill-search-results-${person.id}` : undefined}
+                                className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                ref={addSkillsInputRef}
+                                autoFocus
+                              />
+                              <div aria-live="polite" aria-atomic="true" className="sr-only">
+                                {addSkillsSrAnnouncement}
+                              </div>
+                              {isAddSkillsSearchOpen && (
+                                <div className={`absolute left-0 right-0 z-50 ${addSkillsDropdownAbove ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                                  <div
+                                    id={person.id ? `person-skill-search-results-${person.id}` : undefined}
+                                    role="listbox"
+                                    className="bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg max-h-56 overflow-y-auto"
+                                  >
+                                    <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                                      Skills
+                                    </div>
+                                    {addSkillsResults.map((skill, index) => {
+                                      const alreadyAssigned =
+                                        person.id != null && skill.id != null
+                                          ? assignmentSet.has(`${person.id}:${skill.id}`)
+                                          : false;
+                                      return (
+                                        <button
+                                          key={skill.id}
+                                          type="button"
+                                          onClick={() => {
+                                            if (alreadyAssigned || busy) return;
+                                            void addSkillToPerson(person, skill);
+                                          }}
+                                          className={`w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
+                                            addSkillsSelectedIndex === index ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
+                                          } ${alreadyAssigned ? 'opacity-70' : ''}`}
+                                          disabled={alreadyAssigned || busy}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <div className="truncate font-medium">{skill.name}</div>
+                                            {alreadyAssigned && (
+                                              <span className="text-[10px] px-1 py-0.5 rounded border border-[var(--border)] text-[var(--muted)]">
+                                                Added
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="truncate text-[var(--muted)]">
+                                            {skill.scopeType === 'global'
+                                              ? 'Global'
+                                              : (skill.departmentName || 'Department')}
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-2 min-h-[16px] text-xs text-[var(--muted)]">
+                              {addSkillsLoading
+                                ? 'Searching skills...'
+                                : addSkillsQuery.trim()
+                                  ? 'Click a skill to add it.'
+                                  : 'Type a skill name to search.'}
+                            </div>
+                          </div>
+                        )}
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {personSkills.length === 0 ? (
+                            <span className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                              No skills
+                            </span>
+                          ) : (
+                            personSkills.map((skill) => (
+                              <span
+                                key={skill.id}
+                                className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-xs text-[var(--text)]"
+                              >
+                                {skill.name}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {people.length === 0 && (
+                    <div className="px-3 py-6 text-center text-sm text-[var(--muted)]">
+                      No people found for this scope.
+                    </div>
+                  )}
+                </div>
+
+                {peopleHasNext && (
+                  <Button variant="ghost" onClick={() => void loadPeople(peoplePage + 1, true)}>
+                    Load More People
+                  </Button>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <SkillsAddDrawer open={isAddSkillOpen} onClose={() => setIsAddSkillOpen(false)}>
+          <div className="space-y-3">
+            <Input
+              value={newSkillName}
+              onChange={(e) => setNewSkillName(e.target.value)}
+              placeholder="New skill name"
+            />
+            <Input
+              value={newSkillCategory}
+              onChange={(e) => setNewSkillCategory(e.target.value)}
+              placeholder="Category (optional)"
+            />
+            <select
+              className="w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-sm text-[var(--text)]"
+              value={newSkillScope}
+              onChange={(e) => setNewSkillScope(e.target.value as 'global' | 'department')}
+            >
+              <option value="global">Global</option>
+              <option value="department" disabled={selectedDepartmentId == null}>
+                Selected Department
+              </option>
+            </select>
+            <div className="text-xs text-[var(--muted)]">
+              Scope target: {newSkillScope === 'department' ? (selectedDepartmentName || 'Selected Department') : 'Global'}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={createSkill} disabled={!newSkillName.trim() || busy}>
+                Add Skill
+              </Button>
+              <Button variant="ghost" onClick={() => setIsAddSkillOpen(false)} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
           </div>
-        )}
-        
+        </SkillsAddDrawer>
       </div>
     </Layout>
   );

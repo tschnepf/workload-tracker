@@ -74,6 +74,16 @@ class AuthEndpointsTests(TestCase):
                 'defaultDepartmentId': None,
                 'includeChildren': True,
                 'theme': 'dark',
+                'dashboardLayouts': {
+                    'version': 1,
+                    'surfaces': {
+                        'team-dashboard': {
+                            'items': [{'type': 'card', 'cardId': 'recent-assignments'}],
+                            'groups': {},
+                            'hiddenCardIds': [],
+                        },
+                    },
+                },
                 'unknownKey': 'ignored',
             }
         }
@@ -82,6 +92,8 @@ class AuthEndpointsTests(TestCase):
         s = resp2.data.get('settings') or {}
         self.assertIn('includeChildren', s)
         self.assertIn('theme', s)
+        self.assertIn('dashboardLayouts', s)
+        self.assertIn('team-dashboard', ((s.get('dashboardLayouts') or {}).get('surfaces') or {}))
         self.assertNotIn('unknownKey', s)
 
     def test_link_person_email_match_and_unlink(self):

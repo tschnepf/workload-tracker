@@ -58,6 +58,14 @@ export function useUiSkillsPageSnapshot(options?: {
   include?: UiSkillsPageInclude[];
   vertical?: number;
   include_inactive?: 0 | 1;
+  department?: number;
+  include_children?: 0 | 1;
+  include_global?: 0 | 1;
+  scope?: 'global' | 'department';
+  people_search?: string;
+  skill_search?: string;
+  people_ids?: number[] | string;
+  skill_tag_ids?: number[] | string;
   people_page?: number;
   people_page_size?: number;
   skill_tags_page?: number;
@@ -76,6 +84,14 @@ export function useUiSkillsPageSnapshot(options?: {
       include.join(','),
       options?.vertical ?? 'all',
       options?.include_inactive ?? 0,
+      options?.department ?? 'all',
+      options?.include_children ?? 0,
+      options?.include_global ?? 1,
+      options?.scope ?? 'all',
+      options?.people_search ?? '',
+      options?.skill_search ?? '',
+      JSON.stringify(options?.people_ids ?? []),
+      JSON.stringify(options?.skill_tag_ids ?? []),
       options?.people_page ?? 1,
       options?.people_page_size ?? 100,
       options?.skill_tags_page ?? 1,

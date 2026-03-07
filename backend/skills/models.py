@@ -8,6 +8,13 @@ from django.db import models
 class SkillTag(models.Model):
     """Skill tags - reusable skills that can be assigned to people"""
     name = models.CharField(max_length=100, unique=True)  # "Heat Calcs", "Lighting Design"
+    department = models.ForeignKey(
+        'departments.Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='skill_tags',
+    )
     category = models.CharField(max_length=50, blank=True)  # "Technical", "Design", "Management"
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
