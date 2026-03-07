@@ -75,11 +75,28 @@ class AuthEndpointsTests(TestCase):
                 'includeChildren': True,
                 'theme': 'dark',
                 'dashboardLayouts': {
-                    'version': 1,
+                    'version': 2,
                     'surfaces': {
                         'team-dashboard': {
-                            'items': [{'type': 'card', 'cardId': 'recent-assignments'}],
-                            'groups': {},
+                            'items': [
+                                {'type': 'card', 'cardId': 'recent-assignments'},
+                                {'type': 'group', 'groupId': 'operations-snapshot'},
+                            ],
+                            'groups': {
+                                'operations-snapshot': {
+                                    'title': 'Ops',
+                                    'cardIds': ['avg-utilization', 'active-projects'],
+                                },
+                            },
+                            'cardSizes': {
+                                'recent-assignments': {'w': 4, 'h': 1},
+                                'avg-utilization': {'w': 'bad-token', 'h': 'lg'},
+                                'ghost-card': {'w': 'sm', 'h': 'sm'},
+                            },
+                            'groupSizes': {
+                                'operations-snapshot': {'w': 'sm', 'h': 4},
+                                'ghost-group': {'w': 'lg', 'h': 'lg'},
+                            },
                             'hiddenCardIds': [],
                         },
                     },
@@ -94,6 +111,12 @@ class AuthEndpointsTests(TestCase):
         self.assertIn('theme', s)
         self.assertIn('dashboardLayouts', s)
         self.assertIn('team-dashboard', ((s.get('dashboardLayouts') or {}).get('surfaces') or {}))
+        team_layout = ((s.get('dashboardLayouts') or {}).get('surfaces') or {}).get('team-dashboard') or {}
+        self.assertEqual((team_layout.get('cardSizes') or {}).get('recent-assignments'), {'w': 4, 'h': 1})
+        self.assertEqual((team_layout.get('cardSizes') or {}).get('avg-utilization'), {'w': 2, 'h': 3})
+        self.assertNotIn('ghost-card', team_layout.get('cardSizes') or {})
+        self.assertEqual((team_layout.get('groupSizes') or {}).get('operations-snapshot'), {'w': 1, 'h': 4})
+        self.assertNotIn('ghost-group', team_layout.get('groupSizes') or {})
         self.assertNotIn('unknownKey', s)
 
     def test_link_person_email_match_and_unlink(self):

@@ -5,12 +5,18 @@ import { showToast } from '@/lib/toastBus';
 import {
   DASHBOARD_LAYOUT_VERSION,
   DASHBOARD_LOCAL_STORAGE_PREFIX,
+  DASHBOARD_LOCAL_STORAGE_PREFIX_V1,
+  DASHBOARD_MEDIUM_ITEM_SIZE,
+  type DashboardItemSize,
   type DashboardLayoutSettings,
   type DashboardLayoutItem,
+  type DashboardSizeStep,
   type DashboardSurfaceId,
   type DashboardSurfaceLayout,
   dashboardItemId,
   nowIso,
+  parseDashboardItemId,
+  isDashboardSizeStep,
 } from './dashboardLayoutTypes';
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -44,6 +50,71 @@ function normalizeItems(rawItems: unknown[]): DashboardLayoutItem[] {
   return out;
 }
 
+function normalizeSizeStep(value: unknown, fallback: DashboardSizeStep): DashboardSizeStep {
+  if (isDashboardSizeStep(value)) return value;
+
+  if (typeof value === 'number') {
+    const rounded = Math.round(value);
+    if (rounded >= 1 && rounded <= 4) return rounded as DashboardSizeStep;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'sm' || normalized === 'small') return 1;
+    if (normalized === 'md' || normalized === 'medium') return 2;
+    if (normalized === 'lg' || normalized === 'large') return 3;
+    if (normalized === 'xl' || normalized === 'xlarge') return 4;
+    if (normalized === '1' || normalized === '2' || normalized === '3' || normalized === '4') {
+      return Number(normalized) as DashboardSizeStep;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeItemSize(raw: unknown, fallback: DashboardItemSize = DASHBOARD_MEDIUM_ITEM_SIZE): DashboardItemSize {
+  const obj = asRecord(raw);
+  return {
+    w: normalizeSizeStep(obj.w, fallback.w),
+    h: normalizeSizeStep(obj.h, fallback.h),
+  };
+}
+
+function normalizeCardSizes(
+  rawCardSizes: unknown,
+  cardIds: string[]
+): Record<string, DashboardItemSize> {
+  const out: Record<string, DashboardItemSize> = {};
+  const raw = asRecord(rawCardSizes);
+
+  cardIds.forEach((cardId) => {
+    out[cardId] = normalizeItemSize(raw[cardId], DASHBOARD_MEDIUM_ITEM_SIZE);
+  });
+
+  return out;
+}
+
+function normalizeGroupSizes(
+  rawGroupSizes: unknown,
+  groupIds: string[]
+): Record<string, DashboardItemSize> {
+  const out: Record<string, DashboardItemSize> = {};
+  const raw = asRecord(rawGroupSizes);
+
+  groupIds.forEach((groupId) => {
+    out[groupId] = normalizeItemSize(raw[groupId], DASHBOARD_MEDIUM_ITEM_SIZE);
+  });
+
+  return out;
+}
+
+function cloneLayoutSizeMaps(layout: DashboardSurfaceLayout): Pick<DashboardSurfaceLayout, 'cardSizes' | 'groupSizes'> {
+  return {
+    cardSizes: { ...layout.cardSizes },
+    groupSizes: { ...layout.groupSizes },
+  };
+}
+
 export function resolveColumnCount(width?: number): number {
   if (!width || !Number.isFinite(width)) return 1;
   if (width >= 2200) return 5;
@@ -56,6 +127,8 @@ export function resolveColumnCount(width?: number): number {
 export function createDefaultSurfaceLayout(args: {
   items: DashboardLayoutItem[];
   groups?: Record<string, { title: string; cardIds: string[] }>;
+  cardSizes?: Record<string, DashboardItemSize>;
+  groupSizes?: Record<string, DashboardItemSize>;
 }): DashboardSurfaceLayout {
   const groups: Record<string, { id: string; title: string; cardIds: string[] }> = {};
   Object.entries(args.groups || {}).forEach(([id, group]) => {
@@ -65,9 +138,19 @@ export function createDefaultSurfaceLayout(args: {
       cardIds: uniqueStrings(group.cardIds || []),
     };
   });
+
+  const cardIds = uniqueStrings([
+    ...args.items.filter((item): item is { type: 'card'; cardId: string } => item.type === 'card').map((item) => item.cardId),
+    ...Object.values(groups).flatMap((group) => group.cardIds),
+  ]);
+
+  const groupIds = Object.keys(groups);
+
   return {
     items: args.items,
     groups,
+    cardSizes: normalizeCardSizes(args.cardSizes || {}, cardIds),
+    groupSizes: normalizeGroupSizes(args.groupSizes || {}, groupIds),
     hiddenCardIds: [],
     updatedAt: nowIso(),
   };
@@ -144,6 +227,8 @@ export function normalizeSurfaceLayout(
   return {
     items,
     groups,
+    cardSizes: normalizeCardSizes(layoutObj.cardSizes, allowedCardIds),
+    groupSizes: normalizeGroupSizes(layoutObj.groupSizes, Object.keys(groups)),
     hiddenCardIds,
     updatedAt,
   };
@@ -166,17 +251,21 @@ function parseLayoutSettings(raw: unknown): DashboardLayoutSettings {
   };
 }
 
-function localStorageKey(userId: number | null, surfaceId: DashboardSurfaceId): string {
+function localStorageKey(prefix: string, userId: number | null, surfaceId: DashboardSurfaceId): string {
   const userSegment = userId != null ? String(userId) : 'anon';
-  return `${DASHBOARD_LOCAL_STORAGE_PREFIX}:${userSegment}:${surfaceId}`;
+  return `${prefix}:${userSegment}:${surfaceId}`;
 }
 
 function readLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId): unknown {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(localStorageKey(userId, surfaceId));
-    if (!raw) return null;
-    return JSON.parse(raw);
+    const v2Raw = window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId));
+    if (v2Raw) return JSON.parse(v2Raw);
+
+    const v1Raw = window.localStorage.getItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V1, userId, surfaceId));
+    if (v1Raw) return JSON.parse(v1Raw);
+
+    return null;
   } catch {
     return null;
   }
@@ -185,7 +274,7 @@ function readLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId): 
 function writeLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId, layout: DashboardSurfaceLayout) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(localStorageKey(userId, surfaceId), JSON.stringify(layout));
+    window.localStorage.setItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId), JSON.stringify(layout));
   } catch {
     // Ignore storage failures.
   }
@@ -194,7 +283,8 @@ function writeLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId, 
 function clearLocalLayout(userId: number | null, surfaceId: DashboardSurfaceId) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(localStorageKey(userId, surfaceId));
+    window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX, userId, surfaceId));
+    window.localStorage.removeItem(localStorageKey(DASHBOARD_LOCAL_STORAGE_PREFIX_V1, userId, surfaceId));
   } catch {
     // Ignore storage failures.
   }
@@ -229,6 +319,45 @@ export function reorderLayoutItems(
   };
 }
 
+export function setLayoutItemSize(
+  layout: DashboardSurfaceLayout,
+  itemId: string,
+  nextSize: DashboardItemSize
+): DashboardSurfaceLayout {
+  const parsed = parseDashboardItemId(itemId);
+  if (!parsed) return layout;
+
+  const normalizedNext = normalizeItemSize(nextSize, DASHBOARD_MEDIUM_ITEM_SIZE);
+
+  if (parsed.type === 'card') {
+    if (!layout.cardSizes[parsed.cardId]) return layout;
+    const current = layout.cardSizes[parsed.cardId];
+    if (current.w === normalizedNext.w && current.h === normalizedNext.h) return layout;
+
+    return {
+      ...layout,
+      cardSizes: {
+        ...layout.cardSizes,
+        [parsed.cardId]: normalizedNext,
+      },
+      updatedAt: nowIso(),
+    };
+  }
+
+  if (!layout.groups[parsed.groupId]) return layout;
+  const current = layout.groupSizes[parsed.groupId] || DASHBOARD_MEDIUM_ITEM_SIZE;
+  if (current.w === normalizedNext.w && current.h === normalizedNext.h) return layout;
+
+  return {
+    ...layout,
+    groupSizes: {
+      ...layout.groupSizes,
+      [parsed.groupId]: normalizedNext,
+    },
+    updatedAt: nowIso(),
+  };
+}
+
 export function groupSelectedItems(
   layout: DashboardSurfaceLayout,
   selectedItemIds: string[]
@@ -243,6 +372,7 @@ export function groupSelectedItems(
   if (indexedSelected.length < 2) return layout;
 
   const groups = { ...layout.groups };
+  const { cardSizes, groupSizes } = cloneLayoutSizeMaps(layout);
   const selectedIndices = new Set(indexedSelected.map((entry) => entry.index));
   const mergedCardIds: string[] = [];
   let baseGroupId: string | null = null;
@@ -270,6 +400,7 @@ export function groupSelectedItems(
   if (!baseGroupId) {
     baseGroupId = nextGroupId(groups);
     baseGroupTitle = `Group ${Object.keys(groups).length + 1}`;
+    groupSizes[baseGroupId] = DASHBOARD_MEDIUM_ITEM_SIZE;
   }
 
   groups[baseGroupId] = {
@@ -278,9 +409,14 @@ export function groupSelectedItems(
     cardIds: mergedCardIds,
   };
 
+  if (!groupSizes[baseGroupId]) {
+    groupSizes[baseGroupId] = DASHBOARD_MEDIUM_ITEM_SIZE;
+  }
+
   indexedSelected.forEach(({ item }) => {
     if (item.type === 'group' && item.groupId !== baseGroupId) {
       delete groups[item.groupId];
+      delete groupSizes[item.groupId];
     }
   });
 
@@ -292,6 +428,8 @@ export function groupSelectedItems(
     ...layout,
     items: nextItems,
     groups,
+    cardSizes,
+    groupSizes,
     updatedAt: nowIso(),
   };
 }
@@ -304,6 +442,7 @@ export function splitSelectedGroups(
   if (!selectedSet.size) return layout;
 
   const groups = { ...layout.groups };
+  const { cardSizes, groupSizes } = cloneLayoutSizeMaps(layout);
   const nextItems: DashboardLayoutItem[] = [];
   let didSplit = false;
 
@@ -316,6 +455,7 @@ export function splitSelectedGroups(
         nextItems.push({ type: 'card', cardId });
       });
       delete groups[item.groupId];
+      delete groupSizes[item.groupId];
       didSplit = true;
       return;
     }
@@ -328,6 +468,8 @@ export function splitSelectedGroups(
     ...layout,
     items: nextItems,
     groups,
+    cardSizes,
+    groupSizes,
     updatedAt: nowIso(),
   };
 }
@@ -364,7 +506,7 @@ export function useDashboardLayoutState(args: {
   const userId = auth.user?.id ?? null;
   const normalizedDefault = React.useMemo(
     () => normalizeSurfaceLayout(defaultLayout, cardIds),
-    [defaultLayout, cardIds.join('|')]
+    [defaultLayout, cardIds]
   );
 
   const [layout, setLayout] = React.useState<DashboardSurfaceLayout>(normalizedDefault);
@@ -409,7 +551,7 @@ export function useDashboardLayoutState(args: {
     auth.settings,
     userId,
     surfaceId,
-    cardIds.join('|'),
+    cardIds,
     normalizedDefault,
   ]);
 
@@ -490,6 +632,10 @@ export function useDashboardLayoutState(args: {
     updateLayout((prev) => reorderLayoutItems(prev, activeId, overId));
   }, [updateLayout]);
 
+  const setItemSize = React.useCallback((itemId: string, nextSize: DashboardItemSize) => {
+    updateLayout((prev) => setLayoutItemSize(prev, itemId, nextSize));
+  }, [updateLayout]);
+
   return {
     layout,
     selectedItemIds,
@@ -502,5 +648,6 @@ export function useDashboardLayoutState(args: {
     splitSelected,
     resetLayout,
     reorder,
+    setItemSize,
   };
 }

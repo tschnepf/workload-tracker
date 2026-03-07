@@ -33,7 +33,14 @@ export type UserSettings = {
   schemaVersion?: number;
   dashboardLayouts?: {
     version?: number;
-    surfaces?: Record<string, unknown>;
+    surfaces?: Record<string, {
+      items?: Array<{ type?: 'card' | 'group'; cardId?: string; groupId?: string }>;
+      groups?: Record<string, { id?: string; title?: string; cardIds?: string[] }>;
+      cardSizes?: Record<string, { w?: 1 | 2 | 3 | 4; h?: 1 | 2 | 3 | 4 }>;
+      groupSizes?: Record<string, { w?: 1 | 2 | 3 | 4; h?: 1 | 2 | 3 | 4 }>;
+      hiddenCardIds?: string[];
+      updatedAt?: string;
+    }>;
   };
 };
 

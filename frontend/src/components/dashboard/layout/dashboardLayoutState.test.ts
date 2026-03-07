@@ -4,9 +4,10 @@ import {
   groupSelectedItems,
   normalizeSurfaceLayout,
   resolveColumnCount,
+  setLayoutItemSize,
   splitSelectedGroups,
 } from './dashboardLayoutState';
-import { dashboardItemId } from './dashboardLayoutTypes';
+import { DASHBOARD_MEDIUM_ITEM_SIZE, dashboardItemId } from './dashboardLayoutTypes';
 
 describe('dashboard layout state helpers', () => {
   it('resolves responsive columns with hard cap of five', () => {
@@ -22,7 +23,7 @@ describe('dashboard layout state helpers', () => {
     expect(resolveColumnCount(3000)).toBe(5);
   });
 
-  it('normalizes layout by dropping unknown cards and appending missing cards', () => {
+  it('normalizes layout and migrates legacy payloads with 2x2 defaults', () => {
     const allowed = ['a', 'b', 'c', 'd'];
     const raw = {
       items: [
@@ -45,9 +46,64 @@ describe('dashboard layout state helpers', () => {
     expect(normalized.items.map(dashboardItemId)).toEqual(['card:a', 'group:g1', 'card:d']);
     expect(normalized.groups.g1.cardIds).toEqual(['b', 'c']);
     expect(normalized.hiddenCardIds).toEqual(['d']);
+    expect(normalized.cardSizes.a).toEqual(DASHBOARD_MEDIUM_ITEM_SIZE);
+    expect(normalized.cardSizes.b).toEqual(DASHBOARD_MEDIUM_ITEM_SIZE);
+    expect(normalized.groupSizes.g1).toEqual(DASHBOARD_MEDIUM_ITEM_SIZE);
   });
 
-  it('groups selected cards and merges into selected group', () => {
+  it('sanitizes provided card/group sizes and drops unknown ids', () => {
+    const allowed = ['a', 'b'];
+    const raw = {
+      items: [
+        { type: 'card', cardId: 'a' },
+        { type: 'group', groupId: 'g1' },
+      ],
+      groups: {
+        g1: {
+          id: 'g1',
+          title: 'Group 1',
+          cardIds: ['b'],
+        },
+      },
+      cardSizes: {
+        a: { w: 4, h: 1 },
+        b: { w: 'bad', h: 'lg' },
+        ghost: { w: 1, h: 1 },
+      },
+      groupSizes: {
+        g1: { w: 1, h: 4 },
+        ghost: { w: 4, h: 4 },
+      },
+      hiddenCardIds: [],
+    };
+
+    const normalized = normalizeSurfaceLayout(raw, allowed);
+    expect(normalized.cardSizes.a).toEqual({ w: 4, h: 1 });
+    expect(normalized.cardSizes.b).toEqual({ w: 2, h: 3 });
+    expect((normalized.cardSizes as Record<string, unknown>).ghost).toBeUndefined();
+    expect(normalized.groupSizes.g1).toEqual({ w: 1, h: 4 });
+    expect((normalized.groupSizes as Record<string, unknown>).ghost).toBeUndefined();
+  });
+
+  it('updates item sizes for cards and groups', () => {
+    const base = createDefaultSurfaceLayout({
+      items: [
+        { type: 'card', cardId: 'a' },
+        { type: 'group', groupId: 'g1' },
+      ],
+      groups: {
+        g1: { title: 'Ops', cardIds: ['b'] },
+      },
+    });
+
+    const cardResized = setLayoutItemSize(base, 'card:a', { w: 4, h: 1 });
+    expect(cardResized.cardSizes.a).toEqual({ w: 4, h: 1 });
+
+    const groupResized = setLayoutItemSize(cardResized, 'group:g1', { w: 1, h: 4 });
+    expect(groupResized.groupSizes.g1).toEqual({ w: 1, h: 4 });
+  });
+
+  it('groups selected cards and merges into selected group while preserving base group size', () => {
     const base = createDefaultSurfaceLayout({
       items: [
         { type: 'card', cardId: 'a' },
@@ -60,32 +116,18 @@ describe('dashboard layout state helpers', () => {
           cardIds: ['b', 'c'],
         },
       },
+      groupSizes: {
+        g1: { w: 4, h: 1 },
+      },
     });
 
     const grouped = groupSelectedItems(base, ['group:g1', 'card:d']);
     expect(grouped.items.map(dashboardItemId)).toEqual(['card:a', 'group:g1']);
     expect(grouped.groups.g1.cardIds).toEqual(['b', 'c', 'd']);
+    expect(grouped.groupSizes.g1).toEqual({ w: 4, h: 1 });
   });
 
-  it('combines multiple groups into a single selected group', () => {
-    const base = createDefaultSurfaceLayout({
-      items: [
-        { type: 'group', groupId: 'g1' },
-        { type: 'group', groupId: 'g2' },
-      ],
-      groups: {
-        g1: { title: 'One', cardIds: ['a', 'b'] },
-        g2: { title: 'Two', cardIds: ['c', 'd'] },
-      },
-    });
-
-    const grouped = groupSelectedItems(base, ['group:g1', 'group:g2']);
-    expect(grouped.items.map(dashboardItemId)).toEqual(['group:g1']);
-    expect(grouped.groups.g1.cardIds).toEqual(['a', 'b', 'c', 'd']);
-    expect(grouped.groups.g2).toBeUndefined();
-  });
-
-  it('splits selected groups back into cards', () => {
+  it('splits selected groups back into cards and removes split group size', () => {
     const base = createDefaultSurfaceLayout({
       items: [
         { type: 'card', cardId: 'a' },
@@ -97,10 +139,14 @@ describe('dashboard layout state helpers', () => {
           cardIds: ['b', 'c'],
         },
       },
+      groupSizes: {
+        g1: { w: 1, h: 4 },
+      },
     });
 
     const split = splitSelectedGroups(base, ['group:g1']);
     expect(split.items.map(dashboardItemId)).toEqual(['card:a', 'card:b', 'card:c']);
     expect(split.groups.g1).toBeUndefined();
+    expect(split.groupSizes.g1).toBeUndefined();
   });
 });

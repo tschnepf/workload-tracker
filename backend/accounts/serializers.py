@@ -31,6 +31,45 @@ ALLOWED_DASHBOARD_SURFACES = {"team-dashboard", "my-work-dashboard"}
 MAX_DASHBOARD_ITEMS = 40
 MAX_DASHBOARD_GROUPS = 20
 MAX_DASHBOARD_GROUP_CARDS = 20
+MAX_DASHBOARD_SIZE_ENTRIES = 80
+
+
+def coerce_dashboard_size_step(raw_value) -> int:
+    if isinstance(raw_value, (int, float)):
+        value = int(raw_value)
+        if 1 <= value <= 4:
+            return value
+
+    normalized = str(raw_value or "").strip().lower()
+    if normalized in {"1", "sm", "small"}:
+        return 1
+    if normalized in {"2", "md", "medium"}:
+        return 2
+    if normalized in {"3", "lg", "large"}:
+        return 3
+    if normalized in {"4", "xl", "xlarge", "x-large"}:
+        return 4
+    return 2
+
+
+def sanitize_dashboard_size_map(payload: Dict, allowed_ids: set[str]) -> Dict:
+    if not isinstance(payload, dict) or not allowed_ids:
+        return {}
+
+    sizes: Dict = {}
+    for raw_id, raw_size in list(payload.items())[:MAX_DASHBOARD_SIZE_ENTRIES]:
+        item_id = str(raw_id or "").strip()
+        if not item_id or item_id not in allowed_ids:
+            continue
+        if not isinstance(raw_size, dict):
+            continue
+
+        sizes[item_id[:120]] = {
+            "w": coerce_dashboard_size_step(raw_size.get("w")),
+            "h": coerce_dashboard_size_step(raw_size.get("h")),
+        }
+
+    return sizes
 
 
 def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
@@ -71,6 +110,9 @@ def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
                     if group_id:
                         items.append({"type": "group", "groupId": group_id[:120]})
 
+        top_level_group_ids = {item.get("groupId") for item in items if item.get("type") == "group" and item.get("groupId")}
+        top_level_card_ids = {item.get("cardId") for item in items if item.get("type") == "card" and item.get("cardId")}
+
         groups_raw = surface_raw.get("groups")
         groups = {}
         if isinstance(groups_raw, dict):
@@ -98,6 +140,10 @@ def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
                     "cardIds": card_ids,
                 }
 
+        all_card_ids = set(top_level_card_ids)
+        for group in groups.values():
+            all_card_ids.update(group.get("cardIds") or [])
+
         hidden_raw = surface_raw.get("hiddenCardIds")
         hidden = []
         if isinstance(hidden_raw, list):
@@ -113,9 +159,14 @@ def sanitize_dashboard_layouts(payload: Dict) -> Dict | None:
         if not updated_at:
             updated_at = None
 
+        card_sizes = sanitize_dashboard_size_map(surface_raw.get("cardSizes"), all_card_ids)
+        group_sizes = sanitize_dashboard_size_map(surface_raw.get("groupSizes"), top_level_group_ids)
+
         surface_payload = {
             "items": items,
             "groups": groups,
+            "cardSizes": card_sizes,
+            "groupSizes": group_sizes,
             "hiddenCardIds": hidden,
         }
         if updated_at:

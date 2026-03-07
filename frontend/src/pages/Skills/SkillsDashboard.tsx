@@ -6,11 +6,14 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import PageState from '@/components/ui/PageState';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { Department, Person, PersonSkill, SkillTag } from '@/types/models';
 import { departmentsApi, peopleApi, personSkillsApi, skillTagsApi } from '@/services/api';
 import { showToast } from '@/lib/toastBus';
 import { confirmAction } from '@/lib/confirmAction';
+import PersonSkillDetailPanel from '@/pages/Skills/components/PersonSkillDetailPanel';
+import { usePersonSkillAutoSave } from '@/pages/Skills/hooks/usePersonSkillAutoSave';
 
 type AssignmentMode = 'skill_to_people' | 'people_to_skills';
 
@@ -37,6 +40,13 @@ function buildDepartmentTree(departments: Department[]) {
   });
   byParent.forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
   return byParent;
+}
+
+function personSkillPillClass(skillType?: string) {
+  if (skillType === 'strength') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+  if (skillType === 'development') return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+  if (skillType === 'learning') return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+  return 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)]';
 }
 
 const SkillsAddDrawer: React.FC<{
@@ -71,8 +81,87 @@ const SkillsAddDrawer: React.FC<{
   );
 };
 
+const PersonDetailsDrawer: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+}> = ({ open, onClose, title = 'Person Details', children }) => {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const focusable = panel.querySelectorAll<HTMLElement>(
+      'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length > 0) focusable[0].focus();
+    else panel.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const activeFocusable = panel.querySelectorAll<HTMLElement>(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      );
+      if (!activeFocusable.length) return;
+      const first = activeFocusable[0];
+      const last = activeFocusable[activeFocusable.length - 1];
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+      if (document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1150] bg-black/60 flex justify-end xl:hidden"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-full max-w-md h-full bg-[var(--surface)] text-[var(--text)] shadow-2xl flex flex-col outline-none"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <div className="text-base font-semibold truncate">{title}</div>
+          <button type="button" className="text-xl text-[var(--muted)]" onClick={onClose} aria-label="Close details panel">
+            x
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 const SkillsDashboard: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
+  const isDesktopPeopleDetails = useMediaQuery('(min-width: 1280px)');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +180,8 @@ const SkillsDashboard: React.FC = () => {
   const [peoplePage, setPeoplePage] = useState(1);
   const [peopleHasNext, setPeopleHasNext] = useState(false);
   const [peopleSearch, setPeopleSearch] = useState('');
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [isMobilePersonDetailOpen, setIsMobilePersonDetailOpen] = useState(false);
 
   const [mode, setMode] = useState<AssignmentMode>('skill_to_people');
   const [expandedSkillIds, setExpandedSkillIds] = useState<Set<number>>(new Set());
@@ -115,12 +206,18 @@ const SkillsDashboard: React.FC = () => {
   const [addSkillsSrAnnouncement, setAddSkillsSrAnnouncement] = useState('');
   const [addSkillsDropdownAbove, setAddSkillsDropdownAbove] = useState(false);
   const addSkillsInputRef = useRef<HTMLInputElement | null>(null);
+  const [detailAddSkillQuery, setDetailAddSkillQuery] = useState('');
+  const [detailAddSkillResults, setDetailAddSkillResults] = useState<SkillTag[]>([]);
+  const [detailAddSkillLoading, setDetailAddSkillLoading] = useState(false);
+  const [detailAddSkillType, setDetailAddSkillType] = useState<PersonSkill['skillType']>('strength');
+  const [removingPersonSkillId, setRemovingPersonSkillId] = useState<number | null>(null);
 
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillCategory, setNewSkillCategory] = useState('');
   const [newSkillScope, setNewSkillScope] = useState<'global' | 'department'>('global');
 
   const [strengthAssignments, setStrengthAssignments] = useState<PersonSkill[]>([]);
+  const [peopleModeSkills, setPeopleModeSkills] = useState<PersonSkill[]>([]);
 
   const deptById = useMemo(() => {
     const map = new Map<number, Department>();
@@ -218,6 +315,29 @@ const SkillsDashboard: React.FC = () => {
     setStrengthAssignments(allRows);
   }, [people, skills]);
 
+  const loadPeopleModeSkills = useCallback(async () => {
+    const personIds = people.map((person) => person.id).filter((id): id is number => typeof id === 'number');
+    if (!personIds.length) {
+      setPeopleModeSkills([]);
+      return;
+    }
+
+    const allRows: PersonSkill[] = [];
+    let page = 1;
+    while (true) {
+      const res = await personSkillsApi.list({
+        person_ids: personIds,
+        page,
+        page_size: 200,
+      });
+      allRows.push(...(res.results || []));
+      const nextPage = nextPageFromUrl(res.next);
+      if (!nextPage) break;
+      page = nextPage;
+    }
+    setPeopleModeSkills(allRows);
+  }, [people]);
+
   const refreshData = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -244,6 +364,36 @@ const SkillsDashboard: React.FC = () => {
   }, [loadStrengthAssignments]);
 
   useEffect(() => {
+    if (mode !== 'people_to_skills') return;
+    void loadPeopleModeSkills();
+  }, [mode, loadPeopleModeSkills]);
+
+  useEffect(() => {
+    if (mode !== 'people_to_skills') return;
+    if (people.length === 0) {
+      setSelectedPersonId(null);
+      setIsMobilePersonDetailOpen(false);
+      return;
+    }
+    setSelectedPersonId((prev) => {
+      if (prev != null && people.some((person) => person.id === prev)) return prev;
+      return people[0]?.id ?? null;
+    });
+  }, [mode, people]);
+
+  useEffect(() => {
+    if (!isDesktopPeopleDetails) return;
+    setIsMobilePersonDetailOpen(false);
+  }, [isDesktopPeopleDetails]);
+
+  useEffect(() => {
+    setDetailAddSkillQuery('');
+    setDetailAddSkillResults([]);
+    setDetailAddSkillLoading(false);
+    setDetailAddSkillType('strength');
+  }, [selectedPersonId]);
+
+  useEffect(() => {
     if (!isAddSkillOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsAddSkillOpen(false);
@@ -268,6 +418,12 @@ const SkillsDashboard: React.FC = () => {
     setAddSkillsLoading(false);
     setAddSkillsSelectedIndex(-1);
     setAddSkillsSrAnnouncement('');
+    setDetailAddSkillQuery('');
+    setDetailAddSkillResults([]);
+    setDetailAddSkillLoading(false);
+    setDetailAddSkillType('strength');
+    setRemovingPersonSkillId(null);
+    setIsMobilePersonDetailOpen(false);
   }, [selectedDepartmentId, mode]);
 
   useEffect(() => {
@@ -423,6 +579,59 @@ const SkillsDashboard: React.FC = () => {
     };
   }, [mode, addSkillsPersonId, addSkillsQuery, selectedDepartmentId, verticalState.selectedVerticalId]);
 
+  useEffect(() => {
+    if (mode !== 'people_to_skills' || selectedPersonId == null) {
+      setDetailAddSkillResults([]);
+      setDetailAddSkillLoading(false);
+      return;
+    }
+    if (!detailAddSkillQuery.trim()) {
+      setDetailAddSkillResults([]);
+      setDetailAddSkillLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setDetailAddSkillLoading(true);
+      try {
+        const res = await skillTagsApi.list({
+          search: detailAddSkillQuery.trim(),
+          page: 1,
+          page_size: 20,
+          vertical: verticalState.selectedVerticalId ?? undefined,
+          department: selectedDepartmentId ?? undefined,
+          scope: selectedDepartmentId == null ? 'global' : undefined,
+          include_children: selectedDepartmentId != null ? 1 : undefined,
+          include_global: selectedDepartmentId != null ? 1 : undefined,
+        });
+        if (cancelled) return;
+        const dedup = new Map<number, SkillTag>();
+        (res.results || []).forEach((skill) => {
+          if (skill.id != null) dedup.set(skill.id, skill);
+        });
+        setDetailAddSkillResults(Array.from(dedup.values()));
+      } catch {
+        if (!cancelled) {
+          setDetailAddSkillResults([]);
+        }
+      } finally {
+        if (!cancelled) setDetailAddSkillLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    detailAddSkillQuery,
+    mode,
+    selectedPersonId,
+    selectedDepartmentId,
+    verticalState.selectedVerticalId,
+  ]);
+
   const isAddPeopleSearchOpen = useMemo(
     () =>
       mode === 'skill_to_people'
@@ -492,14 +701,6 @@ const SkillsDashboard: React.FC = () => {
     return map;
   }, [people]);
 
-  const skillById = useMemo(() => {
-    const map = new Map<number, SkillTag>();
-    skills.forEach((skill) => {
-      if (skill.id != null) map.set(skill.id, skill);
-    });
-    return map;
-  }, [skills]);
-
   const peopleForSkill = useMemo(() => {
     const map = new Map<number, Person[]>();
     strengthAssignments.forEach((row) => {
@@ -534,29 +735,89 @@ const SkillsDashboard: React.FC = () => {
     return set;
   }, [strengthAssignments]);
 
-  const skillsForPerson = useMemo(() => {
-    const map = new Map<number, SkillTag[]>();
-    strengthAssignments.forEach((row) => {
-      const personId = row.person;
-      const skillId = row.skillTagId;
-      if (!personId || !skillId) return;
-      const skill = skillById.get(skillId);
-      if (!skill) return;
-      const existing = map.get(personId) || [];
-      existing.push(skill);
-      map.set(personId, existing);
+  const sortedPeopleModeSkills = useMemo(() => {
+    return [...peopleModeSkills].sort((a, b) => {
+      const nameA = (a.skillTagName || '').toLowerCase();
+      const nameB = (b.skillTagName || '').toLowerCase();
+      if (nameA !== nameB) return nameA.localeCompare(nameB);
+      const updatedA = a.updatedAt || '';
+      const updatedB = b.updatedAt || '';
+      return String(updatedB).localeCompare(String(updatedA));
     });
+  }, [peopleModeSkills]);
 
-    map.forEach((list, personId) => {
-      const dedup = new Map<number, SkillTag>();
-      list.forEach((skill) => {
-        if (skill.id != null) dedup.set(skill.id, skill);
-      });
-      map.set(personId, Array.from(dedup.values()).sort((a, b) => a.name.localeCompare(b.name)));
+  const peopleModeSkillsByPerson = useMemo(() => {
+    const map = new Map<number, PersonSkill[]>();
+    sortedPeopleModeSkills.forEach((row) => {
+      if (!row.person) return;
+      const list = map.get(row.person) || [];
+      list.push(row);
+      map.set(row.person, list);
     });
-
     return map;
-  }, [skillById, strengthAssignments]);
+  }, [sortedPeopleModeSkills]);
+
+  const peopleModeAssignmentSet = useMemo(() => {
+    const set = new Set<string>();
+    peopleModeSkills.forEach((row) => {
+      if (!row.person || !row.skillTagId || !row.skillType) return;
+      set.add(`${row.person}:${row.skillTagId}:${row.skillType}`);
+    });
+    return set;
+  }, [peopleModeSkills]);
+
+  const selectedPerson = useMemo(
+    () => people.find((person) => person.id === selectedPersonId) || null,
+    [people, selectedPersonId]
+  );
+
+  const selectedPersonSkillsGrouped = useMemo(() => {
+    const result = {
+      strengths: [] as PersonSkill[],
+      development: [] as PersonSkill[],
+      learning: [] as PersonSkill[],
+    };
+    if (selectedPersonId == null) return result;
+    const rows = peopleModeSkillsByPerson.get(selectedPersonId) || [];
+    rows.forEach((row) => {
+      if (row.skillType === 'strength') result.strengths.push(row);
+      else if (row.skillType === 'development') result.development.push(row);
+      else if (row.skillType === 'learning') result.learning.push(row);
+    });
+    return result;
+  }, [peopleModeSkillsByPerson, selectedPersonId]);
+
+  const detailAddSkillFilteredResults = useMemo(() => {
+    if (selectedPersonId == null) return [];
+    return detailAddSkillResults.filter((skill) => {
+      if (!skill.id) return false;
+      return !peopleModeAssignmentSet.has(`${selectedPersonId}:${skill.id}:${detailAddSkillType}`);
+    });
+  }, [detailAddSkillResults, detailAddSkillType, peopleModeAssignmentSet, selectedPersonId]);
+
+  const {
+    getDraftForSkill,
+    getSaveStateForSkill,
+    getErrorForSkill,
+    updateSkillDraft,
+    flushSkillDraft,
+    retrySkillSave,
+  } = usePersonSkillAutoSave({
+    skills: peopleModeSkills,
+    debounceMs: 400,
+    onPersist: (skillId, patch) => personSkillsApi.update(skillId, patch),
+    onDraftOptimistic: (skillId, patch) => {
+      setPeopleModeSkills((prev) =>
+        prev.map((row) => (row.id === skillId ? { ...row, ...patch } : row))
+      );
+    },
+    onPersistSuccess: (savedSkill) => {
+      if (!savedSkill.id) return;
+      setPeopleModeSkills((prev) =>
+        prev.map((row) => (row.id === savedSkill.id ? { ...row, ...savedSkill } : row))
+      );
+    },
+  });
 
   const toggleExpandedSkill = (skillId?: number) => {
     if (!skillId) return;
@@ -620,6 +881,14 @@ const SkillsDashboard: React.FC = () => {
       setAddSkillsSrAnnouncement('');
       return personId;
     });
+  };
+
+  const selectPersonForDetails = (person: Person) => {
+    if (!person.id) return;
+    setSelectedPersonId(person.id);
+    if (!isDesktopPeopleDetails) {
+      setIsMobilePersonDetailOpen(true);
+    }
   };
 
   const onAddPeopleQueryChange = (value: string) => {
@@ -710,6 +979,9 @@ const SkillsDashboard: React.FC = () => {
         proficiencyLevel: 'beginner',
       });
       await loadStrengthAssignments();
+      if (mode === 'people_to_skills') {
+        await loadPeopleModeSkills();
+      }
       if (result.created > 0) {
         showToast(`Added ${person.name} to ${skill.name}`, 'success');
       } else {
@@ -728,27 +1000,63 @@ const SkillsDashboard: React.FC = () => {
     }
   };
 
-  const addSkillToPerson = async (person: Person, skill: SkillTag) => {
+  const addSkillToPerson = async (
+    person: Person,
+    skill: SkillTag,
+    skillType: PersonSkill['skillType'] = 'strength'
+  ) => {
     if (!person.id || !skill.id) return;
-    if (assignmentSet.has(`${person.id}:${skill.id}`)) return;
+    if (peopleModeAssignmentSet.has(`${person.id}:${skill.id}:${skillType}`)) {
+      showToast(`${person.name} already has ${skill.name} as ${skillType}`, 'info');
+      return;
+    }
     setBusy(true);
     try {
       await personSkillsApi.bulkAssign({
         operation: 'assign',
         personIds: [person.id],
         skillTagIds: [skill.id],
-        skillType: 'strength',
+        skillType,
         proficiencyLevel: 'beginner',
       });
-      await loadStrengthAssignments();
+      await Promise.all([loadStrengthAssignments(), loadPeopleModeSkills()]);
       showToast(`Added ${skill.name} to ${person.name}`, 'success');
       setAddSkillsQuery('');
       setAddSkillsResults([]);
       setAddSkillsSelectedIndex(-1);
       setAddSkillsSrAnnouncement('');
+      setDetailAddSkillQuery('');
+      setDetailAddSkillResults([]);
     } catch (err: any) {
       showToast(err?.message || 'Failed to add skill to person', 'error');
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeSkillFromPerson = async (skill: PersonSkill) => {
+    if (!skill.id) return;
+    const label = skill.skillTagName || 'this skill';
+    const person = selectedPerson?.name || 'this person';
+    const confirmed = await confirmAction({
+      title: 'Remove Skill',
+      message: `Remove "${label}" from ${person}?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    setRemovingPersonSkillId(skill.id);
+    setBusy(true);
+    try {
+      await personSkillsApi.delete(skill.id);
+      await Promise.all([loadPeopleModeSkills(), loadStrengthAssignments()]);
+      showToast(`Removed ${label} from ${person}`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to remove skill', 'error');
+    } finally {
+      setRemovingPersonSkillId(null);
       setBusy(false);
     }
   };
@@ -914,7 +1222,7 @@ const SkillsDashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="ux-page-shell space-y-4">
+      <div className="h-full min-h-0 w-full space-y-4">
         <div className="ux-page-hero flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[var(--text)]">Skills Workspace</h1>
@@ -1265,153 +1573,226 @@ const SkillsDashboard: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[var(--text)]">People ({selectedDepartmentName})</h2>
-                  <div className="text-xs text-[var(--muted)]">{people.length} loaded</div>
-                </div>
-                <Input
-                  value={peopleSearch}
-                  onChange={(e) => setPeopleSearch(e.target.value)}
-                  placeholder="Search people..."
-                />
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-[var(--text)]">People ({selectedDepartmentName})</h2>
+                    <div className="text-xs text-[var(--muted)]">{people.length} loaded</div>
+                  </div>
+                  <Input
+                    value={peopleSearch}
+                    onChange={(e) => setPeopleSearch(e.target.value)}
+                    placeholder="Search people..."
+                  />
 
-                <div className="max-h-[620px] overflow-auto rounded border border-[var(--border)]">
-                  {people.map((person) => {
-                    const personSkills = person.id ? (skillsForPerson.get(person.id) || []) : [];
-                    return (
-                      <div key={person.id} className="border-b border-[var(--border)] px-2 py-2 last:border-b-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm text-[var(--text)]">{person.name}</div>
-                            <div className="text-xs text-[var(--muted)]">
-                              {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                              onClick={() => toggleAddSkillsPanel(person.id)}
-                              disabled={busy}
-                              aria-label={`Add skill to ${person.name}`}
-                            >
-                              {addSkillsPersonId === person.id ? '-' : '+'}
-                            </button>
-                          </div>
-                        </div>
-                        {addSkillsPersonId === person.id && (
-                          <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)] p-2">
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={addSkillsQuery}
-                                onChange={(e) => onAddSkillsQueryChange(e.target.value)}
-                                onKeyDown={(e) => onAddSkillsSearchKeyDown(e, person)}
-                                placeholder="Search skills to add..."
-                                role="combobox"
-                                aria-expanded={isAddSkillsSearchOpen}
-                                aria-haspopup="listbox"
-                                aria-owns={person.id ? `person-skill-search-results-${person.id}` : undefined}
-                                className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                                ref={addSkillsInputRef}
-                                autoFocus
-                              />
-                              <div aria-live="polite" aria-atomic="true" className="sr-only">
-                                {addSkillsSrAnnouncement}
+                  <div className="max-h-[620px] overflow-auto rounded border border-[var(--border)]">
+                    {people.map((person) => {
+                      const personSkills = person.id ? (peopleModeSkillsByPerson.get(person.id) || []) : [];
+                      const isSelected = person.id != null && selectedPersonId === person.id;
+                      return (
+                        <div
+                          key={person.id}
+                          className={`border-b border-[var(--border)] px-2 py-2 last:border-b-0 ${
+                            isSelected
+                              ? 'border-l-2 border-l-[var(--focus)] bg-[var(--surfaceHover)]/80'
+                              : 'border-l-2 border-l-transparent'
+                          }`}
+                        >
+                          <div
+                            className="flex cursor-pointer items-center justify-between gap-2"
+                            onClick={() => selectPersonForDetails(person)}
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm text-[var(--text)]">{person.name}</div>
+                              <div className="text-xs text-[var(--muted)]">
+                                {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
                               </div>
-                              {isAddSkillsSearchOpen && (
-                                <div className={`absolute left-0 right-0 z-50 ${addSkillsDropdownAbove ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-                                  <div
-                                    id={person.id ? `person-skill-search-results-${person.id}` : undefined}
-                                    role="listbox"
-                                    className="bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg max-h-56 overflow-y-auto"
-                                  >
-                                    <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                                      Skills
-                                    </div>
-                                    {addSkillsResults.map((skill, index) => {
-                                      const alreadyAssigned =
-                                        person.id != null && skill.id != null
-                                          ? assignmentSet.has(`${person.id}:${skill.id}`)
-                                          : false;
-                                      return (
-                                        <button
-                                          key={skill.id}
-                                          type="button"
-                                          onClick={() => {
-                                            if (alreadyAssigned || busy) return;
-                                            void addSkillToPerson(person, skill);
-                                          }}
-                                          className={`w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
-                                            addSkillsSelectedIndex === index ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
-                                          } ${alreadyAssigned ? 'opacity-70' : ''}`}
-                                          disabled={alreadyAssigned || busy}
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <div className="truncate font-medium">{skill.name}</div>
-                                            {alreadyAssigned && (
-                                              <span className="text-[10px] px-1 py-0.5 rounded border border-[var(--border)] text-[var(--muted)]">
-                                                Added
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="truncate text-[var(--muted)]">
-                                            {skill.scopeType === 'global'
-                                              ? 'Global'
-                                              : (skill.departmentName || 'Department')}
-                                          </div>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
                             </div>
-                            <div className="mt-2 min-h-[16px] text-xs text-[var(--muted)]">
-                              {addSkillsLoading
-                                ? 'Searching skills...'
-                                : addSkillsQuery.trim()
-                                  ? 'Click a skill to add it.'
-                                  : 'Type a skill name to search.'}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (person.id != null) setSelectedPersonId(person.id);
+                                  toggleAddSkillsPanel(person.id);
+                                }}
+                                disabled={busy}
+                                aria-label={`Add skill to ${person.name}`}
+                              >
+                                {addSkillsPersonId === person.id ? '-' : '+'}
+                              </button>
                             </div>
                           </div>
-                        )}
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {personSkills.length === 0 ? (
-                            <span className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]">
-                              No skills
-                            </span>
-                          ) : (
-                            personSkills.map((skill) => (
-                              <span
-                                key={skill.id}
-                                className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-xs text-[var(--text)]"
-                              >
-                                {skill.name}
-                              </span>
-                            ))
+                          {addSkillsPersonId === person.id && (
+                            <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)] p-2">
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={addSkillsQuery}
+                                  onChange={(e) => onAddSkillsQueryChange(e.target.value)}
+                                  onKeyDown={(e) => onAddSkillsSearchKeyDown(e, person)}
+                                  placeholder="Search skills to add..."
+                                  role="combobox"
+                                  aria-expanded={isAddSkillsSearchOpen}
+                                  aria-haspopup="listbox"
+                                  aria-owns={person.id ? `person-skill-search-results-${person.id}` : undefined}
+                                  className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                  ref={addSkillsInputRef}
+                                  autoFocus
+                                />
+                                <div aria-live="polite" aria-atomic="true" className="sr-only">
+                                  {addSkillsSrAnnouncement}
+                                </div>
+                                {isAddSkillsSearchOpen && (
+                                  <div className={`absolute left-0 right-0 z-50 ${addSkillsDropdownAbove ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                                    <div
+                                      id={person.id ? `person-skill-search-results-${person.id}` : undefined}
+                                      role="listbox"
+                                      className="bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg max-h-56 overflow-y-auto"
+                                    >
+                                      <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                                        Skills
+                                      </div>
+                                      {addSkillsResults.map((skill, index) => {
+                                        const alreadyAssigned =
+                                          person.id != null && skill.id != null
+                                            ? assignmentSet.has(`${person.id}:${skill.id}`)
+                                            : false;
+                                        return (
+                                          <button
+                                            key={skill.id}
+                                            type="button"
+                                            onClick={() => {
+                                              if (alreadyAssigned || busy) return;
+                                              void addSkillToPerson(person, skill);
+                                            }}
+                                            className={`w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
+                                              addSkillsSelectedIndex === index ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
+                                            } ${alreadyAssigned ? 'opacity-70' : ''}`}
+                                            disabled={alreadyAssigned || busy}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <div className="truncate font-medium">{skill.name}</div>
+                                              {alreadyAssigned && (
+                                                <span className="text-[10px] px-1 py-0.5 rounded border border-[var(--border)] text-[var(--muted)]">
+                                                  Added
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="truncate text-[var(--muted)]">
+                                              {skill.scopeType === 'global'
+                                                ? 'Global'
+                                                : (skill.departmentName || 'Department')}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-2 min-h-[16px] text-xs text-[var(--muted)]">
+                                {addSkillsLoading
+                                  ? 'Searching skills...'
+                                  : addSkillsQuery.trim()
+                                    ? 'Click a skill to add it.'
+                                    : 'Type a skill name to search.'}
+                              </div>
+                            </div>
                           )}
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {personSkills.length === 0 ? (
+                              <span className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                                No skills
+                              </span>
+                            ) : (
+                              personSkills.map((skill) => (
+                                <span
+                                  key={skill.id}
+                                  className={`rounded border px-2 py-0.5 text-xs ${personSkillPillClass(skill.skillType)}`}
+                                >
+                                  {skill.skillTagName || 'Skill'}
+                                </span>
+                              ))
+                            )}
+                          </div>
                         </div>
+                      );
+                    })}
+                    {people.length === 0 && (
+                      <div className="px-3 py-6 text-center text-sm text-[var(--muted)]">
+                        No people found for this scope.
                       </div>
-                    );
-                  })}
-                  {people.length === 0 && (
-                    <div className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                      No people found for this scope.
-                    </div>
+                    )}
+                  </div>
+
+                  {peopleHasNext && (
+                    <Button variant="ghost" onClick={() => void loadPeople(peoplePage + 1, true)}>
+                      Load More People
+                    </Button>
                   )}
                 </div>
 
-                {peopleHasNext && (
-                  <Button variant="ghost" onClick={() => void loadPeople(peoplePage + 1, true)}>
-                    Load More People
-                  </Button>
-                )}
+                <div className="hidden xl:block">
+                  <PersonSkillDetailPanel
+                    person={selectedPerson}
+                    groupedSkills={selectedPersonSkillsGrouped}
+                    getDraftForSkill={getDraftForSkill}
+                    getSaveStateForSkill={getSaveStateForSkill}
+                    getErrorForSkill={getErrorForSkill}
+                    onSkillDraftChange={updateSkillDraft}
+                    onSkillDraftBlur={flushSkillDraft}
+                    onRetrySkillSave={retrySkillSave}
+                    onRemoveSkill={removeSkillFromPerson}
+                    removingSkillId={removingPersonSkillId}
+                    addSkillQuery={detailAddSkillQuery}
+                    addSkillType={detailAddSkillType}
+                    addSkillResults={detailAddSkillFilteredResults}
+                    addSkillLoading={detailAddSkillLoading}
+                    onAddSkillQueryChange={setDetailAddSkillQuery}
+                    onAddSkillTypeChange={(value) => setDetailAddSkillType(value)}
+                    onAddSkill={(skill) => {
+                      if (!selectedPerson) return;
+                      void addSkillToPerson(selectedPerson, skill, detailAddSkillType);
+                    }}
+                    addSkillDisabled={busy || !selectedPerson}
+                  />
+                </div>
               </div>
             )}
           </Card>
         </div>
+
+        <PersonDetailsDrawer
+          open={mode === 'people_to_skills' && !isDesktopPeopleDetails && isMobilePersonDetailOpen}
+          onClose={() => setIsMobilePersonDetailOpen(false)}
+          title={selectedPerson?.name ? `${selectedPerson.name} Details` : 'Person Details'}
+        >
+          <PersonSkillDetailPanel
+            person={selectedPerson}
+            groupedSkills={selectedPersonSkillsGrouped}
+            getDraftForSkill={getDraftForSkill}
+            getSaveStateForSkill={getSaveStateForSkill}
+            getErrorForSkill={getErrorForSkill}
+            onSkillDraftChange={updateSkillDraft}
+            onSkillDraftBlur={flushSkillDraft}
+            onRetrySkillSave={retrySkillSave}
+            onRemoveSkill={removeSkillFromPerson}
+            removingSkillId={removingPersonSkillId}
+            addSkillQuery={detailAddSkillQuery}
+            addSkillType={detailAddSkillType}
+            addSkillResults={detailAddSkillFilteredResults}
+            addSkillLoading={detailAddSkillLoading}
+            onAddSkillQueryChange={setDetailAddSkillQuery}
+            onAddSkillTypeChange={(value) => setDetailAddSkillType(value)}
+            onAddSkill={(skill) => {
+              if (!selectedPerson) return;
+              void addSkillToPerson(selectedPerson, skill, detailAddSkillType);
+            }}
+            addSkillDisabled={busy || !selectedPerson}
+          />
+        </PersonDetailsDrawer>
 
         <SkillsAddDrawer open={isAddSkillOpen} onClose={() => setIsAddSkillOpen(false)}>
           <div className="space-y-3">
