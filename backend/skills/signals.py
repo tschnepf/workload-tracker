@@ -52,3 +52,14 @@ def invalidate_on_person_skill_change(sender, instance: PersonSkill, **kwargs):
         bump_snapshot_scopes(department_ids=_collect_department_ids_for_person_skill(instance))
     except Exception:
         pass
+    try:
+        signal = kwargs.get('signal')
+        if signal is post_save:
+            from reports.person_report_sync import sync_goal_for_person_skill
+            sync_goal_for_person_skill(instance)
+        elif signal is post_delete:
+            from reports.person_report_sync import close_goal_for_deleted_person_skill
+            close_goal_for_deleted_person_skill(instance)
+    except Exception:
+        # Goal sync is best-effort and should never break skill mutations.
+        pass

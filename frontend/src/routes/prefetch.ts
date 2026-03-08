@@ -51,6 +51,7 @@ function importerFor(path: string): (() => Promise<any>) | null {
   if (p.startsWith('/deliverables/dashboard')) return () => import('@/pages/Deliverables/DeliverablesDashboard');
   if (p.startsWith('/reports/forecast')) return () => import('@/pages/Reports/ForecastPlanner');
   if (p.startsWith('/reports/network')) return () => import('@/pages/Reports/NetworkGraph');
+  if (p.startsWith('/reports/person-report')) return () => import('@/pages/Reports/PersonReport');
   if (p.startsWith('/profile')) return () => import('@/pages/Profile/Profile');
   if (p.startsWith('/help')) return () => import('@/pages/ComingSoon/ComingSoon');
   if (p.startsWith('/my-work')) return () => import('@/pages/Personal/PersonalDashboard');

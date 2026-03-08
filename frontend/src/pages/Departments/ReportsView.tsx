@@ -16,7 +16,7 @@ import { dashboardApi, departmentsApi, peopleApi, personSkillsApi, reportsApi } 
 import { DashboardData, Department, DepartmentsOverviewResponse, Person, PersonSkill } from '@/types/models';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
-import { isAdminUser } from '@/utils/roleAccess';
+import { isAdminOrManager, isAdminUser } from '@/utils/roleAccess';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { getDepartmentManagerSummary } from '@/utils/departmentManagers';
 
@@ -180,6 +180,7 @@ const buildReportFromOverview = (
 const ReportsView: React.FC = () => {
   const auth = useAuth();
   const isAdmin = isAdminUser(auth.user);
+  const canUsePersonReport = isAdminOrManager(auth.user);
   const { state: verticalState } = useVerticalFilter();
   const [reports, setReports] = useState<DepartmentReport[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState<number>(4); // weeks
@@ -500,15 +501,15 @@ const ReportsView: React.FC = () => {
           </div>
         </AccordionSection>
 
-        {isAdmin && (
+        {canUsePersonReport && (
           <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)]">
             <div className="p-6 flex items-center justify-between gap-4">
               <div>
-                <div className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">Person Experience Report</div>
-                <div className="text-[var(--color-text-secondary)] text-sm">Search by person and see projects, roles, phases, avg hours, and a weekly sparkline over an adjustable window.</div>
+                <div className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">Person Report</div>
+                <div className="text-[var(--color-text-secondary)] text-sm">Department-first person reporting with workload history, goals, and periodic check-ins.</div>
               </div>
               <a
-                href="/reports/person-experience"
+                href="/reports/person-report"
                 className="px-3 py-2 rounded bg-[var(--primary)] text-white text-sm border border-[var(--primary)] hover:opacity-90"
               >
                 Open Report

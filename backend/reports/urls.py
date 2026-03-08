@@ -17,6 +17,14 @@ from .network_views import (
     NetworkBootstrapView,
     NetworkGraphView,
 )
+from .person_report_views import (
+    PersonReportBootstrapView,
+    PersonReportPeopleView,
+    PersonReportProfileView,
+    PersonReportGoalsView,
+    PersonReportGoalDetailView,
+    PersonReportCheckinsView,
+)
 
 urlpatterns = [
     path('departments/overview/', DepartmentsOverviewView.as_view(), name='departments_overview'),
@@ -31,4 +39,10 @@ urlpatterns = [
     path('pre-deliverable-team-performance/', PreDeliverableTeamPerformanceView.as_view(), name='pre_deliverable_team_performance'),
     path('network/bootstrap/', NetworkBootstrapView.as_view(), name='network_bootstrap'),
     path('network/graph/', NetworkGraphView.as_view(), name='network_graph'),
+    path('person-report/bootstrap/', PersonReportBootstrapView.as_view(), name='person_report_bootstrap'),
+    path('person-report/people/', PersonReportPeopleView.as_view(), name='person_report_people'),
+    path('person-report/profile/', PersonReportProfileView.as_view(), name='person_report_profile'),
+    path('person-report/goals/', PersonReportGoalsView.as_view(), name='person_report_goals'),
+    path('person-report/goals/<int:goal_id>/', PersonReportGoalDetailView.as_view(), name='person_report_goal_detail'),
+    path('person-report/checkins/', PersonReportCheckinsView.as_view(), name='person_report_checkins'),
 ]

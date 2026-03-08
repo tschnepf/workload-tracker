@@ -8,7 +8,6 @@ import { initializePerformanceMonitoring } from './utils/monitoring'
 import { createBrowserRouter, RouterProvider, Navigate, useParams } from 'react-router'
 import App from './App'
 import { RequireAuth } from '@/components/auth/RequireAuth'
-import { RequireAdmin } from '@/components/auth/RequireAdmin'
 import { RequireAdminOrManager } from '@/components/auth/RequireAdminOrManager'
 import { getFlag } from '@/lib/flags'
 import { bootFromDevQuery, boot as bootTheme } from './theme/themeManager'
@@ -79,7 +78,7 @@ const MilestoneCalendar = React.lazy(() => import('./pages/Deliverables/Calendar
 const DeliverablesDashboard = React.lazy(() => import('./pages/Deliverables/DeliverablesDashboard'))
 const TeamForecastPage = React.lazy(() => import('./pages/Reports/TeamForecast'))
 const ForecastPlannerPage = React.lazy(() => import('./pages/Reports/ForecastPlanner'))
-const PersonExperiencePage = React.lazy(() => import('./pages/Reports/PersonExperience'))
+const PersonReportPage = React.lazy(() => import('./pages/Reports/PersonReport'))
 const NetworkGraphPage = React.lazy(() => import('./pages/Reports/NetworkGraph'))
 const Login = React.lazy(() => import('./pages/Auth/Login'))
 const ResetPassword = React.lazy(() => import('./pages/Auth/ResetPassword'))
@@ -135,7 +134,7 @@ const router = createBrowserRouter([
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },
       { path: 'deliverables/dashboard', element: <RequireAuth><DeliverablesDashboard /></RequireAuth> },
       { path: 'reports/forecast', element: <RequireAdminOrManager>{getFlag('FORECAST_PLANNER_V2', true) ? <ForecastPlannerPage /> : <TeamForecastPage />}</RequireAdminOrManager> },
-      { path: 'reports/person-experience', element: <RequireAdmin><PersonExperiencePage /></RequireAdmin> },
+      { path: 'reports/person-report', element: <RequireAdminOrManager><PersonReportPage /></RequireAdminOrManager> },
       { path: 'reports/network', element: <RequireAdminOrManager><NetworkGraphPage /></RequireAdminOrManager> },
       { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
       { path: 'my-work', element: (getFlag('PERSONAL_DASHBOARD', true) ? (

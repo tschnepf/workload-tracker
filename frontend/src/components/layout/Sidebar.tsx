@@ -14,7 +14,7 @@ import { prefetchDataForRoute } from '@/routes/prefetchData';
 import { startViewTransition, supportsViewTransitions } from '@/utils/viewTransitions';
 import { trackPerformanceEvent } from '@/utils/monitoring';
 import { setPendingPath, useNavFeedback } from '@/lib/navFeedback';
-import { isAdminOrManager, isAdminUser } from '@/utils/roleAccess';
+import { isAdminOrManager } from '@/utils/roleAccess';
 import IconButton from '@/components/ui/IconButton';
 
 // Reusable Icon Component for navigation
@@ -220,7 +220,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { pendingPath: localPendingPath } = useNavFeedback();
   const navigate = useNavigate();
   const auth = useAuth();
-  const isAdmin = isAdminUser(auth.user);
   const canUseForecast = isAdminOrManager(auth.user);
   const canUseSkills = isAdminOrManager(auth.user);
   const [logoError, setLogoError] = React.useState(false);
@@ -310,11 +309,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'Network Graph',
       description: 'People-project-client relationship graph'
     },
-    ...(isAdmin ? [{
-      path: '/reports/person-experience',
+    ...(canUseForecast ? [{
+      path: '/reports/person-report',
       icon: 'reports',
-      label: 'Person Experience',
-      description: 'Per-person projects & hours'
+      label: 'Person Report',
+      description: 'Per-person history, goals, and check-ins'
     }] : []),
   ] : [];
 
