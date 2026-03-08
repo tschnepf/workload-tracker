@@ -93,7 +93,7 @@ jobs:
         run: npm run -s check:ui-hardcoded
       - name: Upload TS diagnostics (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ts-errors
           path: frontend/ts-errors.txt
