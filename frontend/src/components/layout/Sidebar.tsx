@@ -182,6 +182,13 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <circle cx="12" cy="17" r="1"/>
         </svg>
       );
+    case 'profile':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 20a8 8 0 0 1 16 0"/>
+        </svg>
+      );
     case 'calendar':
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -544,13 +551,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             aria-current={isActive('/profile') ? 'page' : undefined}
             aria-label={!labelsVisible ? 'Profile' : undefined}
-            className={`flex rounded-md hover:bg-[var(--surfaceHover)] cursor-pointer transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+            className={`
+              group flex rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
+              ${isActive('/profile')
+                ? 'bg-[var(--surfaceHover)] border-l-2 border-[var(--color-action-primary)] text-[var(--color-action-primary)]'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)]'
+              }
+            `}
           >
-            <div className="w-6 h-6 bg-[var(--color-action-primary)] rounded-full flex items-center justify-center flex-shrink-0">
-              <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
+            <div className="flex-shrink-0">
+              <IconComponent type="profile" className="w-4 h-4" isActive={isActive('/profile')} />
             </div>
             {labelsVisible && (
               <span className="text-sm text-[var(--color-text-primary)]">Profile</span>
@@ -591,10 +601,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             aria-current={isActive('/help') ? 'page' : undefined}
             aria-label={!labelsVisible ? 'Help' : undefined}
-            className={`flex rounded-md text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)] transition-colors px-3 py-2.5 ${linkLayoutClass}`}
+            className={`
+              group flex rounded-md text-sm transition-all duration-200 px-3 py-2.5 ${linkLayoutClass}
+              ${isActive('/help')
+                ? 'bg-[var(--surfaceHover)] border-l-2 border-[var(--color-action-primary)] text-[var(--color-action-primary)]'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)]'
+              }
+            `}
           >
             <div className="flex-shrink-0">
-              <IconComponent type="help" className="w-4 h-4" />
+              <IconComponent type="help" className="w-4 h-4" isActive={isActive('/help')} />
             </div>
             {labelsVisible && (
               <span className="text-sm text-[var(--color-text-primary)]">Help</span>
