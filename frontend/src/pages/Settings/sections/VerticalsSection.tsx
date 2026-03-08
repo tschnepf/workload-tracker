@@ -135,7 +135,7 @@ const VerticalsSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={VERTICALS_SECTION_ID}
-      title="Company Verticals"
+      title="Verticals"
       description="Manage the vertical categories used to organize departments and projects."
       actions={(
         <Button type="button" onClick={openCreate}>

@@ -427,6 +427,7 @@ const ManagerDashboard: React.FC = () => {
               department: String(scopeDepartmentId),
               include_children: 0,
               vertical: verticalState.selectedVerticalId ?? undefined,
+              visibility_scope: 'dashboard.manager',
             });
             if (!bootstrap?.dashboard) {
               throw new Error('invalid manager dashboard bootstrap payload');
@@ -444,6 +445,7 @@ const ManagerDashboard: React.FC = () => {
           weeksPeriod,
           String(scopeDepartmentId),
           verticalState.selectedVerticalId ?? undefined,
+          'dashboard.manager',
         );
 
         setDashboardData(response);
@@ -502,6 +504,7 @@ const ManagerDashboard: React.FC = () => {
     },
     Math.max(8, weeksPeriod),
     Boolean(scopeDepartmentId),
+    'dashboard.heatmap',
   );
 
   const heatRows = useMemo(() => heatmapQuery.data ?? [], [heatmapQuery.data]);
@@ -1740,6 +1743,8 @@ const ManagerDashboard: React.FC = () => {
                       useGlobalDepartmentFilter={false}
                       departmentIdOverride={scopeDepartmentId}
                       includeChildrenOverride={false}
+                      visibilityScope="dashboard.manager"
+                      clientProjectsVisibilityScope="dashboard.manager"
                       responsive
                     />
                   ) : (

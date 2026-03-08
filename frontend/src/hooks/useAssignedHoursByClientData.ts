@@ -16,6 +16,7 @@ type Args = {
   departmentId?: number | null;
   includeChildren?: boolean;
   vertical?: number | null;
+  visibilityScope?: string;
 };
 
 
@@ -37,7 +38,7 @@ const PALETTE = [
   '#fb7185', // rose
 ];
 
-export function useAssignedHoursByClientData({ weeks, departmentId, includeChildren, vertical }: Args) {
+export function useAssignedHoursByClientData({ weeks, departmentId, includeChildren, vertical, visibilityScope = 'analytics.by_client' }: Args) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [slices, setSlices] = useState<ClientSlice[]>([]);
@@ -54,6 +55,7 @@ export function useAssignedHoursByClientData({ weeks, departmentId, includeChild
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
           vertical: vertical ?? undefined,
+          visibility_scope: visibilityScope,
         });
         if (!mounted) return;
         const built: ClientSlice[] = (res.clients || []).map((row, idx) => ({
@@ -74,7 +76,7 @@ export function useAssignedHoursByClientData({ weeks, departmentId, includeChild
     return () => {
       mounted = false;
     };
-  }, [weeks, departmentId, includeChildren, vertical]);
+  }, [weeks, departmentId, includeChildren, vertical, visibilityScope]);
 
   const total = Math.max(0, slices.reduce((s, x) => s + x.value, 0));
   return { loading, error, slices, total } as { loading: boolean; error: string | null; slices: ClientSlice[]; total: number };

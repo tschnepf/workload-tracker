@@ -71,6 +71,8 @@ type Props = {
   useGlobalDepartmentFilter?: boolean;
   departmentIdOverride?: number | null;
   includeChildrenOverride?: boolean;
+  visibilityScope?: string;
+  clientProjectsVisibilityScope?: string;
   className?: string;
   responsive?: boolean; // derive pie size from container width when true
 };
@@ -81,6 +83,8 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   useGlobalDepartmentFilter = true,
   departmentIdOverride,
   includeChildrenOverride,
+  visibilityScope = 'analytics.by_client',
+  clientProjectsVisibilityScope,
   className,
   responsive = false,
 }) => {
@@ -96,6 +100,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
     departmentId,
     includeChildren,
     vertical: verticalState.selectedVerticalId ?? null,
+    visibilityScope,
   });
 
   const [focusClient, setFocusClient] = React.useState<string | null>(null);
@@ -122,6 +127,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
           vertical: verticalState.selectedVerticalId ?? undefined,
+          visibility_scope: clientProjectsVisibilityScope || visibilityScope,
         });
         if (cancelled) return;
         const rows = (res.projects || []).map((p, idx) => ({
@@ -140,7 +146,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
     }
     load();
     return () => { cancelled = true; };
-  }, [focusClient, weeks, departmentId, includeChildren, verticalState.selectedVerticalId]);
+  }, [focusClient, weeks, departmentId, includeChildren, verticalState.selectedVerticalId, visibilityScope, clientProjectsVisibilityScope]);
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 

@@ -33,12 +33,13 @@ function withCachedGet<T>(endpoint: string, loader: () => Promise<T>, ttlMs = AN
   return promise;
 }
 
-export async function getAssignedHoursByClient(opts?: { weeks?: number; department?: number; include_children?: 0|1; vertical?: number }) {
+export async function getAssignedHoursByClient(opts?: { weeks?: number; department?: number; include_children?: 0|1; vertical?: number; visibility_scope?: string }) {
   const sp = new URLSearchParams();
   if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts?.department != null) sp.set('department', String(opts.department));
   if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
   if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+  if (opts?.visibility_scope) sp.set('visibility_scope', opts.visibility_scope);
   const qs = sp.toString() ? `?${sp.toString()}` : '';
   const endpoint = `/assignments/analytics_by_client/${qs}`;
   return withCachedGet(endpoint, async () => {
@@ -48,13 +49,14 @@ export async function getAssignedHoursByClient(opts?: { weeks?: number; departme
   });
 }
 
-export async function getAssignedHoursClientProjects(client: string, opts?: { weeks?: number; department?: number; include_children?: 0|1; vertical?: number }) {
+export async function getAssignedHoursClientProjects(client: string, opts?: { weeks?: number; department?: number; include_children?: 0|1; vertical?: number; visibility_scope?: string }) {
   const sp = new URLSearchParams();
   sp.set('client', client);
   if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts?.department != null) sp.set('department', String(opts.department));
   if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
   if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+  if (opts?.visibility_scope) sp.set('visibility_scope', opts.visibility_scope);
   const qs = `?${sp.toString()}`;
   const endpoint = `/assignments/analytics_client_projects/${qs}`;
   return withCachedGet(endpoint, async () => {
@@ -64,12 +66,13 @@ export async function getAssignedHoursClientProjects(client: string, opts?: { we
   });
 }
 
-export async function getAssignedHoursStatusTimeline(opts?: { weeks?: number; department?: number; include_children?: 0|1; vertical?: number }) {
+export async function getAssignedHoursStatusTimeline(opts?: { weeks?: number; department?: number; include_children?: 0|1; vertical?: number; visibility_scope?: string }) {
   const sp = new URLSearchParams();
   if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts?.department != null) sp.set('department', String(opts.department));
   if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
   if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+  if (opts?.visibility_scope) sp.set('visibility_scope', opts.visibility_scope);
   const qs = sp.toString() ? `?${sp.toString()}` : '';
   const endpoint = `/assignments/analytics_status_timeline/${qs}`;
   return withCachedGet(endpoint, async () => {
@@ -83,13 +86,14 @@ export async function getAssignedHoursStatusTimeline(opts?: { weeks?: number; de
   });
 }
 
-export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: number; department?: number; include_children?: 0|1; debug?: 0|1; vertical?: number }) {
+export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: number; department?: number; include_children?: 0|1; debug?: 0|1; vertical?: number; visibility_scope?: string }) {
   const sp = new URLSearchParams();
   if (opts?.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts?.department != null) sp.set('department', String(opts.department));
   if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
   if (opts?.debug != null) sp.set('debug', String(opts.debug));
   if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+  if (opts?.visibility_scope) sp.set('visibility_scope', opts.visibility_scope);
   const qs = sp.toString() ? `?${sp.toString()}` : '';
   const endpoint = `/assignments/analytics_deliverable_timeline/${qs}`;
   return withCachedGet(endpoint, async () => {
@@ -108,13 +112,14 @@ export async function getAssignedHoursDeliverableTimeline(opts?: { weeks?: numbe
 }
 
 // Role capacity vs assigned timeline per department
-export async function getRoleCapacityTimeline(opts: { department?: number | null; weeks?: number; roleIdsCsv?: string; vertical?: number; filterOutLt5h?: boolean }) {
+export async function getRoleCapacityTimeline(opts: { department?: number | null; weeks?: number; roleIdsCsv?: string; vertical?: number; filterOutLt5h?: boolean; visibility_scope?: string }) {
   const sp = new URLSearchParams();
   if (opts.department != null) sp.set('department', String(opts.department));
   if (opts.weeks != null) sp.set('weeks', String(opts.weeks));
   if (opts.roleIdsCsv) sp.set('role_ids', opts.roleIdsCsv);
   if (opts.vertical != null) sp.set('vertical', String(opts.vertical));
   if (opts.filterOutLt5h) sp.set('filter_out_lt5h', '1');
+  if (opts.visibility_scope) sp.set('visibility_scope', opts.visibility_scope);
   const qs = `?${sp.toString()}`;
   const endpoint = `/assignments/analytics_role_capacity/${qs}`;
   return withCachedGet(endpoint, async () => {

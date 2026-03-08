@@ -38,12 +38,14 @@ interface RoleCapacitySummaryProps {
   title?: string;
   className?: string;
   viewAllHref?: string;
+  visibilityScope?: string;
 }
 
 const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
   title = 'Capacity by Role',
   className,
   viewAllHref = '/reports/role-capacity',
+  visibilityScope = 'dashboard.executive',
 }) => {
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
@@ -86,6 +88,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
             weeks,
             vertical: verticalState.selectedVerticalId ?? undefined,
             filter_out_lt5h: filterOutLt5h ? 1 : 0,
+            visibility_scope: visibilityScope,
           });
           hasBootstrappedRef.current = true;
           setWeekKeys(bootstrap.timeline?.weekKeys || []);
@@ -102,6 +105,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
         weeks,
         vertical: verticalState.selectedVerticalId ?? undefined,
         filterOutLt5h,
+        visibility_scope: visibilityScope,
       });
       setWeekKeys(res.weekKeys || []);
       setSeries(res.series || []);
@@ -114,7 +118,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [deptState.selectedDepartmentId, weeks, verticalState.selectedVerticalId, filterOutLt5h]);
+  }, [deptState.selectedDepartmentId, weeks, verticalState.selectedVerticalId, filterOutLt5h, visibilityScope]);
 
   React.useEffect(() => {
     refresh();

@@ -75,6 +75,11 @@ from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from core.cache_keys import build_aggregate_cache_key
 from core.cache_scopes import request_scope_version
 from core.perf import endpoint_timing
+from core.project_visibility import (
+    apply_project_visibility_filters,
+    resolve_visibility_scope,
+    visibility_cache_token,
+)
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -1680,6 +1685,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='role_ids', type=str, required=False, description='CSV of department ProjectRole IDs to include'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
             OpenApiParameter(name='filter_out_lt5h', type=bool, required=False, description='Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations.'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=inline_serializer(
             name='RoleCapacityTimelineResponse',
@@ -1736,6 +1742,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if weeks not in (4, 8, 12, 16, 20, 26, 52):
             weeks = 12
         filter_out_lt5h = str(request.query_params.get('filter_out_lt5h') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='analytics.role_capacity',
+        )
+        visibility_token = visibility_cache_token(visibility_scope)
 
         # Build week keys (Sundays) for current + N-1 weeks
         today = date.today()
@@ -1780,7 +1791,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 cache_key = f"rc:{'all' if dept_id is None else dept_id}:{weeks}:{','.join(str(r) for r in sorted(role_ids))}:v{vertical_id if vertical_id is not None else 'all'}"
                 cache_version = int(cache.get('analytics_cache_version', 1) or 1)
                 cache_key = (
-                    f"{cache_key}:cv{cache_version}:tplmap{1 if settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True) else 0}:lt5h{1 if filter_out_lt5h else 0}"
+                    f"{cache_key}:cv{cache_version}:tplmap{1 if settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True) else 0}:lt5h{1 if filter_out_lt5h else 0}:vs={visibility_scope}:vt={visibility_token}"
                 )
                 cached = cache.get(cache_key)
                 if cached is not None:
@@ -1797,6 +1808,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             role_ids=role_ids or None,
             vertical_id=vertical_id,
             filter_out_lt5h=filter_out_lt5h,
+            visibility_scope=visibility_scope,
         )
         payload = {'weekKeys': wk_strs, 'roles': roles_payload, 'series': series, 'summary': summary}
         # Set cache (best‑effort)
@@ -2524,6 +2536,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=inline_serializer(
             name='AssignedHoursByClientResponse',
@@ -2538,6 +2551,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='analytics_by_client', throttle_classes=[GridSnapshotThrottle])
     def analytics_by_client(self, request):
         from projects.models import Project as Proj
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='analytics.by_client',
+        )
+        visibility_token = visibility_cache_token(visibility_scope)
         # Cache key
         try:
             cache_key = (
@@ -2545,7 +2563,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
                 f"c={request.query_params.get('include_children','')}:"
-                f"v={request.query_params.get('vertical','')}"
+                f"v={request.query_params.get('vertical','')}:"
+                f"vs={visibility_scope}:vt={visibility_token}"
             )
             cached = cache.get(cache_key)
             if cached:
@@ -2605,6 +2624,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 qs = qs.filter(project__vertical_id=int(vertical_param))
             except Exception:
                 pass
+        qs = apply_project_visibility_filters(
+            qs,
+            scope_key=visibility_scope,
+            project_id_field='project_id',
+        )
 
         # Aggregate hours by project/week
         def hours_for_week_from_json(weekly_hours, sunday_key):
@@ -2664,6 +2688,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=inline_serializer(
             name='AssignedHoursClientProjectsResponse',
@@ -2682,6 +2707,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         client = (request.query_params.get('client') or '').strip()
         if not client:
             return Response({'detail': 'client is required'}, status=status.HTTP_400_BAD_REQUEST)
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='analytics.client_projects',
+        )
+        visibility_token = visibility_cache_token(visibility_scope)
 
         # Cache key
         try:
@@ -2691,7 +2721,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
                 f"c={request.query_params.get('include_children','')}:"
-                f"v={request.query_params.get('vertical','')}"
+                f"v={request.query_params.get('vertical','')}:"
+                f"vs={visibility_scope}:vt={visibility_token}"
             )
             cached = cache.get(cache_key)
             if cached:
@@ -2743,7 +2774,15 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 continue
 
         # Resolve project ids for target client
-        proj_rows = list(Proj.objects.filter(client=client).values('id', 'name'))
+        projects_qs = Proj.objects.filter(client=client)
+        projects_qs = apply_project_visibility_filters(
+            projects_qs,
+            scope_key=visibility_scope,
+            project_id_field='id',
+            project_name_field='name',
+            client_field='client',
+        )
+        proj_rows = list(projects_qs.values('id', 'name'))
         proj_map = {row['id']: row['name'] for row in proj_rows}
         project_ids = list(proj_map.keys())
         if not project_ids:
@@ -2752,6 +2791,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         qs = Assignment.objects.filter(is_active=True, person__is_active=True, project_id__in=project_ids).select_related('person', 'project')
         if dept_ids:
             qs = qs.filter(person__department_id__in=dept_ids)
+        qs = apply_project_visibility_filters(
+            qs,
+            scope_key=visibility_scope,
+            project_id_field='project_id',
+        )
 
         def hours_for_week_from_json(weekly_hours, sunday_key):
             try:
@@ -2803,6 +2847,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=inline_serializer(
             name='AssignedHoursStatusTimelineResponse',
@@ -2826,6 +2871,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='analytics_status_timeline', throttle_classes=[GridSnapshotThrottle])
     def analytics_status_timeline(self, request):
         from projects.models import Project as Proj
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='analytics.status_timeline',
+        )
+        visibility_token = visibility_cache_token(visibility_scope)
         # Cache key
         try:
             cache_key = (
@@ -2833,7 +2883,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 f"w={request.query_params.get('weeks','12')}:"
                 f"d={request.query_params.get('department','')}:"
                 f"c={request.query_params.get('include_children','')}:"
-                f"v={request.query_params.get('vertical','')}"
+                f"v={request.query_params.get('vertical','')}:"
+                f"vs={visibility_scope}:vt={visibility_token}"
             )
             cached = cache.get(cache_key)
             if cached:
@@ -2893,6 +2944,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 qs = qs.filter(project__vertical_id=int(vertical_param))
             except Exception:
                 pass
+        qs = apply_project_visibility_filters(
+            qs,
+            scope_key=visibility_scope,
+            project_id_field='project_id',
+        )
 
         # Aggregate per project per week
         def hours_for_week_from_json(weekly_hours, sunday_key):
@@ -3007,6 +3063,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=inline_serializer(
             name='AssignedHoursDeliverableTimelineResponse',
@@ -3034,6 +3091,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     def analytics_deliverable_timeline(self, request):
         from projects.models import Project as Proj
         from deliverables.models import Deliverable
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='analytics.deliverable_timeline',
+        )
+        visibility_token = visibility_cache_token(visibility_scope)
         # Detect debug mode early so we don't serve a cached payload without debug details
         debug_requested = (
             request.query_params.get('debug_unspecified') == '1' or
@@ -3050,7 +3112,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     f"w={request.query_params.get('weeks','12')}:"
                     f"d={request.query_params.get('department','')}:"
                     f"c={request.query_params.get('include_children','')}:"
-                    f"v={request.query_params.get('vertical','')}"
+                    f"v={request.query_params.get('vertical','')}:"
+                    f"vs={visibility_scope}:vt={visibility_token}"
                 )
                 cached = cache.get(cache_key)
                 if cached:
@@ -3110,6 +3173,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 qs = qs.filter(project__vertical_id=int(vertical_param))
             except Exception:
                 pass
+        qs = apply_project_visibility_filters(
+            qs,
+            scope_key=visibility_scope,
+            project_id_field='project_id',
+        )
 
         # Aggregate per project per week
         def hours_for_week_from_json(weekly_hours, sunday_key):

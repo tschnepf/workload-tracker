@@ -12,6 +12,8 @@ type Props = {
   useGlobalDepartmentFilter?: boolean;
   departmentIdOverride?: number | null;
   includeChildrenOverride?: boolean;
+  statusVisibilityScope?: string;
+  deliverableVisibilityScope?: string;
 };
 
 // Small helper to format week labels nicely (show MM-DD)
@@ -46,6 +48,8 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   useGlobalDepartmentFilter = true,
   departmentIdOverride,
   includeChildrenOverride,
+  statusVisibilityScope = 'analytics.status_timeline',
+  deliverableVisibilityScope = 'analytics.deliverable_timeline',
 }) => {
   const [weeks, setWeeks] = React.useState<TimelineWeeks>(initialWeeks);
   const [mode, setMode] = React.useState<'status' | 'deliverable'>('status');
@@ -53,8 +57,20 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const { state: verticalState } = useVerticalFilter();
   const departmentId = useGlobalDepartmentFilter ? (deptState.selectedDepartmentId ?? null) : (departmentIdOverride ?? null);
   const includeChildren = useGlobalDepartmentFilter ? deptState.includeChildren : !!includeChildrenOverride;
-  const statusData = useAssignedHoursTimelineData({ weeks, departmentId, includeChildren, vertical: verticalState.selectedVerticalId ?? null });
-  const deliverableData = useAssignedHoursDeliverableTimelineData({ weeks, departmentId, includeChildren, vertical: verticalState.selectedVerticalId ?? null });
+  const statusData = useAssignedHoursTimelineData({
+    weeks,
+    departmentId,
+    includeChildren,
+    vertical: verticalState.selectedVerticalId ?? null,
+    visibilityScope: statusVisibilityScope,
+  });
+  const deliverableData = useAssignedHoursDeliverableTimelineData({
+    weeks,
+    departmentId,
+    includeChildren,
+    vertical: verticalState.selectedVerticalId ?? null,
+    visibilityScope: deliverableVisibilityScope,
+  });
 
   // Category expansion (SD/DD/IFP/IFC/Masterplan/Bulletins/CA)
   const [openCategory, setOpenCategory] = React.useState<null | 'sd' | 'dd' | 'ifp' | 'ifc' | 'masterplan' | 'bulletins' | 'ca'>(null);
@@ -69,6 +85,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
         vertical: verticalState.selectedVerticalId ?? undefined,
         debug: 1,
+        visibility_scope: deliverableVisibilityScope,
       });
       const dbg: any[] = (res as any).categoriesDebug || [];
       const map = new Map<number, { projectId: number; projectName: string; hours: number }>();
@@ -85,7 +102,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
     } catch (e: any) {
       setCategoryDetails(prev => ({ ...prev, [cat]: { loading: false, error: e?.message || 'Failed to load details', projects: [] } }));
     }
-  }, [weeks, departmentId, includeChildren, verticalState.selectedVerticalId]);
+  }, [weeks, departmentId, includeChildren, verticalState.selectedVerticalId, deliverableVisibilityScope]);
 
   // Extras expansion (additional breakdown labels including Other)
   const [openExtra, setOpenExtra] = React.useState<string | null>(null);
@@ -100,6 +117,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
         vertical: verticalState.selectedVerticalId ?? undefined,
         debug: 1,
+        visibility_scope: deliverableVisibilityScope,
       });
       const rows: any[] = (res as any).extrasDebug || [];
       const map = new Map<number, { projectId: number; projectName: string; hours: number }>();
@@ -116,7 +134,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
     } catch (e: any) {
       setExtraDetails(prev => ({ ...prev, [label]: { loading: false, error: e?.message || 'Failed to load details', projects: [] } }));
     }
-  }, [weeks, departmentId, includeChildren, verticalState.selectedVerticalId]);
+  }, [weeks, departmentId, includeChildren, verticalState.selectedVerticalId, deliverableVisibilityScope]);
 
   // Legacy Unspecified expansion vars retained to satisfy type-checking for an old block we no longer render
   const [unspecOpen, setUnspecOpen] = React.useState(false);

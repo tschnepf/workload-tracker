@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminOrManager
 from assignments.models import AssignmentMembershipEvent, WeeklyAssignmentSnapshot
+from core.project_visibility import apply_project_visibility_filters
 from departments.models import Department
 from people.models import Person
 from projects.models import ProjectRole
@@ -237,6 +238,13 @@ class PersonReportProfileView(APIView):
             week_start__gte=start,
             week_start__lte=today,
         )
+        snapshots_qs = apply_project_visibility_filters(
+            snapshots_qs,
+            scope_key='report.person_report',
+            project_id_field='project_id',
+            project_name_field='project_name',
+            client_field='client',
+        )
 
         summary_aggr = snapshots_qs.aggregate(
             totalHours=Sum('hours'),
@@ -315,11 +323,19 @@ class PersonReportProfileView(APIView):
             for row in role_rows
         ]
 
-        events_count = AssignmentMembershipEvent.objects.filter(
+        events_qs = AssignmentMembershipEvent.objects.filter(
             person_id=person_id,
             week_start__gte=start,
             week_start__lte=today,
-        ).count()
+        )
+        events_qs = apply_project_visibility_filters(
+            events_qs,
+            scope_key='report.person_report',
+            project_id_field='project_id',
+            project_name_field='project_name',
+            client_field='client',
+        )
+        events_count = events_qs.count()
 
         skills_qs = PersonSkill.objects.filter(person_id=person_id).select_related('skill_tag').order_by('skill_type', 'skill_tag__name')
         strengths = []

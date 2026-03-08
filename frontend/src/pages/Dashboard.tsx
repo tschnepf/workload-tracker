@@ -86,7 +86,8 @@ const Dashboard: React.FC = () => {
       vertical: verticalState.selectedVerticalId ?? null,
     },
     heatWeeks,
-    !loading && !!auth.accessToken
+    !loading && !!auth.accessToken,
+    'dashboard.heatmap',
   );
   const heatLoading = heatQuery.isLoading || heatQuery.isFetching || loading;
   const heatmapView = useDashboardHeatmapView(heatQuery.data ?? [], peopleMeta);
@@ -290,7 +291,8 @@ const Dashboard: React.FC = () => {
     const response = await dashboardApi.getDashboard(
       weeksPeriod,
       deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined,
-      verticalState.selectedVerticalId ?? undefined
+      verticalState.selectedVerticalId ?? undefined,
+      'dashboard.executive',
     );
     setData(response);
     await Promise.all([loadProjectsLegacy(), loadPeopleMetaLegacy()]);
@@ -308,6 +310,7 @@ const Dashboard: React.FC = () => {
             department: deptState.selectedDepartmentId != null ? String(deptState.selectedDepartmentId) : undefined,
             include_children: deptState.includeChildren ? 1 : 0,
             vertical: verticalState.selectedVerticalId ?? undefined,
+            visibility_scope: 'dashboard.executive',
           });
           if (!bootstrap?.dashboard) {
             throw new Error('invalid dashboard bootstrap payload');
@@ -457,7 +460,12 @@ const Dashboard: React.FC = () => {
       render: () => (
         <div className="h-full min-h-0">
           {showClientMixCard ? (
-            <AssignedHoursByClientCard className="w-full h-full" responsive />
+            <AssignedHoursByClientCard
+              className="w-full h-full"
+              responsive
+              visibilityScope="dashboard.executive"
+              clientProjectsVisibilityScope="dashboard.executive"
+            />
           ) : (
             <Card className="ux-panel w-full h-full p-5">
               <div className="text-lg font-semibold text-[var(--text)]">Assigned Hours by Client</div>
@@ -535,7 +543,7 @@ const Dashboard: React.FC = () => {
       id: 'role-capacity-summary',
       title: 'Role Capacity Summary',
       render: () => (
-        <RoleCapacitySummary className="h-full min-h-0" />
+        <RoleCapacitySummary className="h-full min-h-0" visibilityScope="dashboard.executive" />
       ),
       renderPreview: () => <span>Role capacity heatmap</span>,
     },

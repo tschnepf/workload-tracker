@@ -445,6 +445,33 @@ class NetworkGraphSettings(models.Model):
         return obj
 
 
+class ProjectVisibilitySettings(models.Model):
+    """Singleton settings for project/client keyword visibility by UI scope."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    config_json = models.JSONField(default=dict, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_visibility_settings_updates',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Project Visibility Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"ProjectVisibilitySettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(key='default')
+        return obj
+
+
 class AutoHoursRoleSetting(models.Model):
     """Global auto-hours defaults per project role."""
 

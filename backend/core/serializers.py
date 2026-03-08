@@ -22,6 +22,11 @@ from .models import (
     NotificationTemplate,
     _normalize_task_progress_ranges,
 )
+from .project_visibility import (
+    VISIBILITY_SCOPE_CATALOG,
+    VISIBILITY_SCOPE_KEYS,
+    normalize_visibility_config,
+)
 from projects.models import Project
 
 
@@ -524,6 +529,89 @@ class NetworkGraphSettingsSerializer(serializers.ModelSerializer):
             'lastSnapshotWeekStart',
             'updatedAt',
         ]
+
+
+class ProjectVisibilitySettingsSerializer(serializers.Serializer):
+    scopes = serializers.SerializerMethodField()
+    config = serializers.SerializerMethodField()
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    updatedBy = serializers.SerializerMethodField()
+
+    def get_scopes(self, _obj):
+        return [dict(item) for item in VISIBILITY_SCOPE_CATALOG]
+
+    def get_config(self, obj):
+        return normalize_visibility_config(getattr(obj, 'config_json', None))
+
+    def get_updatedBy(self, obj):
+        user = getattr(obj, 'updated_by', None)
+        if not user:
+            return None
+        return {
+            'id': int(user.id),
+            'username': str(getattr(user, 'username', '') or ''),
+        }
+
+
+class ProjectVisibilitySettingsUpdateSerializer(serializers.Serializer):
+    config = serializers.DictField()
+
+    MAX_KEYWORDS_PER_SCOPE = 100
+    MAX_KEYWORD_LENGTH = 80
+
+    def _validate_keywords(self, raw, *, field_name: str):
+        if raw in (None, ''):
+            return []
+        if not isinstance(raw, (list, tuple)):
+            raise serializers.ValidationError(f'{field_name} must be a list of keywords.')
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in raw:
+            token = ' '.join(str(item or '').strip().lower().split())
+            if not token:
+                continue
+            if len(token) > self.MAX_KEYWORD_LENGTH:
+                raise serializers.ValidationError(
+                    f'Keywords in {field_name} must be {self.MAX_KEYWORD_LENGTH} characters or less.'
+                )
+            if token in seen:
+                continue
+            seen.add(token)
+            out.append(token)
+            if len(out) > self.MAX_KEYWORDS_PER_SCOPE:
+                raise serializers.ValidationError(
+                    f'{field_name} supports at most {self.MAX_KEYWORDS_PER_SCOPE} keywords per scope.'
+                )
+        return out
+
+    def validate_config(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('config must be an object keyed by scope.')
+
+        normalized = normalize_visibility_config({})
+        unknown_scope_keys = [key for key in value.keys() if key not in VISIBILITY_SCOPE_KEYS]
+        if unknown_scope_keys:
+            raise serializers.ValidationError(f'Unknown scope keys: {unknown_scope_keys[:10]}')
+
+        for scope_key in VISIBILITY_SCOPE_KEYS:
+            scope_payload = value.get(scope_key)
+            if scope_payload is None:
+                continue
+            if not isinstance(scope_payload, dict):
+                raise serializers.ValidationError(f'{scope_key} must be an object.')
+            project_keywords = self._validate_keywords(
+                scope_payload.get('projectKeywords', scope_payload.get('project_keywords', [])),
+                field_name=f'{scope_key}.projectKeywords',
+            )
+            client_keywords = self._validate_keywords(
+                scope_payload.get('clientKeywords', scope_payload.get('client_keywords', [])),
+                field_name=f'{scope_key}.clientKeywords',
+            )
+            normalized[scope_key] = {
+                'projectKeywords': project_keywords,
+                'clientKeywords': client_keywords,
+            }
+        return normalized
 
 
 class TaskProgressColorRangeSerializer(serializers.Serializer):

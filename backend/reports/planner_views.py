@@ -19,6 +19,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serial
 
 from accounts.permissions import IsAdminOrManager, is_admin_or_manager
 from core.models import AutoHoursTemplate
+from core.project_visibility import resolve_visibility_scope, visibility_cache_token
 from departments.models import Department
 from departments.serializers import DepartmentSerializer
 from projects.status_definitions import get_status_definition_index
@@ -141,6 +142,8 @@ def _evaluate_cache_key(payload: dict[str, Any]) -> str:
         "department": payload.get("department"),
         "includeChildren": bool(payload.get("include_children") or payload.get("includeChildren")),
         "vertical": payload.get("vertical"),
+        "visibilityScope": payload.get("visibilityScope"),
+        "visibilityToken": payload.get("visibilityToken"),
         "statusKeys": sorted(payload.get("statusKeys") if isinstance(payload.get("statusKeys"), list) else []),
         "projects": payload.get("projects") if isinstance(payload.get("projects"), list) else [],
         "thresholds": payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else {},
@@ -173,6 +176,7 @@ class ForecastPlannerBootstrapView(APIView):
             OpenApiParameter(name="department", type=int, required=False),
             OpenApiParameter(name="include_children", type=bool, required=False, description="Include descendant departments"),
             OpenApiParameter(name="vertical", type=int, required=False),
+            OpenApiParameter(name="visibility_scope", type=str, required=False, description="Visibility scope key for keyword-based project/client exclusion."),
         ],
         responses=inline_serializer(
             name="ForecastPlannerBootstrapResponse",
@@ -192,6 +196,10 @@ class ForecastPlannerBootstrapView(APIView):
             return feature_resp
 
         weeks, department_id, include_children, vertical_id = _parse_scope_from_request(request)
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get("visibility_scope"),
+            default_scope="report.forecast_planner",
+        )
         scope = build_scope(
             weeks=weeks,
             department_id=department_id,
@@ -205,6 +213,7 @@ class ForecastPlannerBootstrapView(APIView):
             projects_payload=[],
             thresholds_payload=None,
             use_probability_weighting=False,
+            visibility_scope=visibility_scope,
         )
 
         departments_qs = Department.objects.filter(is_active=True).order_by("name")
@@ -272,6 +281,8 @@ class ForecastPlannerEvaluateView(APIView):
         projects_clean = [item for item in projects_payload if isinstance(item, dict)]
         use_probability_weighting = bool(payload.get("useProbabilityWeighting"))
         thresholds_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else None
+        visibility_scope = "report.forecast_planner"
+        visibility_token = visibility_cache_token(visibility_scope)
         use_cache = bool(settings.FEATURES.get("SHORT_TTL_AGGREGATES", False))
         cache_key = _evaluate_cache_key(
             {
@@ -279,6 +290,8 @@ class ForecastPlannerEvaluateView(APIView):
                 "department": department_id,
                 "include_children": include_children,
                 "vertical": vertical_id,
+                "visibilityScope": visibility_scope,
+                "visibilityToken": visibility_token,
                 "statusKeys": status_keys,
                 "projects": projects_clean,
                 "thresholds": thresholds_payload or {},
@@ -294,6 +307,7 @@ class ForecastPlannerEvaluateView(APIView):
                 projects_payload=projects_clean,
                 thresholds_payload=thresholds_payload,
                 use_probability_weighting=use_probability_weighting,
+                visibility_scope=visibility_scope,
             )
             if use_cache:
                 cache.set(cache_key, result, timeout=120)

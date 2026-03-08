@@ -14,7 +14,7 @@ const DepartmentRolesSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={DEPARTMENT_ROLES_SECTION_ID}
-      title="Department Project Roles"
+      title="Project Roles"
       description="Configure project role catalogs per department."
       className="mt-6"
     >

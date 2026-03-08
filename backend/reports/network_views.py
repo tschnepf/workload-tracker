@@ -20,6 +20,7 @@ from accounts.permissions import IsAdminOrManager
 from assignments.models import WeeklyAssignmentSnapshot
 from core.departments import get_descendant_department_ids
 from core.models import NetworkGraphSettings
+from core.project_visibility import apply_project_visibility_filters
 from core.week_utils import sunday_of_week
 from projects.models import Project
 
@@ -130,9 +131,19 @@ class _NetworkGraphBaseView(APIView):
         client_name: str | None,
     ):
         qs = WeeklyAssignmentSnapshot.objects.filter(week_start__gte=start_week, week_start__lte=end_week)
-        omitted_project_ids = [int(v) for v in (settings_obj.omitted_project_ids or []) if str(v).isdigit()]
-        if omitted_project_ids:
-            qs = qs.exclude(project_id__in=omitted_project_ids)
+        omitted_project_ids = {
+            int(v)
+            for v in (settings_obj.omitted_project_ids or [])
+            if str(v).isdigit()
+        }
+        qs = apply_project_visibility_filters(
+            qs,
+            scope_key='report.network_graph',
+            project_id_field='project_id',
+            project_name_field='project_name',
+            client_field='client',
+            extra_project_ids=omitted_project_ids,
+        )
 
         if vertical_id is not None:
             qs = qs.filter(project__vertical_id=vertical_id)

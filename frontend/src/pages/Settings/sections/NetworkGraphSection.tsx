@@ -1,10 +1,9 @@
 import React from 'react';
 import SettingsSectionFrame from '@/pages/Settings/components/SettingsSectionFrame';
 import { useSettingsData } from '../SettingsDataContext';
-import { networkGraphSettingsApi, projectsApi, type NetworkGraphSettings } from '@/services/api';
+import { networkGraphSettingsApi, type NetworkGraphSettings } from '@/services/api';
 import { isAdminUser, isAdminOrManager } from '@/utils/roleAccess';
 import Button from '@/components/ui/Button';
-import { useDebounce } from '@/utils/useDebounce';
 
 export const NETWORK_GRAPH_SECTION_ID = 'network-graph-settings';
 
@@ -21,10 +20,6 @@ const NetworkGraphSection: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<NetworkGraphSettings | null>(null);
-  const [projectQuery, setProjectQuery] = React.useState('');
-  const [projectOptions, setProjectOptions] = React.useState<Array<{ id: number; name: string }>>([]);
-  const [projectSearchLoading, setProjectSearchLoading] = React.useState(false);
-  const debouncedProjectQuery = useDebounce(projectQuery.trim(), 200);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -48,35 +43,6 @@ const NetworkGraphSection: React.FC = () => {
     void load();
   }, [canAccess, load]);
 
-  React.useEffect(() => {
-    const query = debouncedProjectQuery;
-    if (!isAdmin || query.length < 2) {
-      setProjectOptions([]);
-      setProjectSearchLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setProjectSearchLoading(true);
-    projectsApi
-      .autocomplete(query, 12)
-      .then((results) => {
-        if (cancelled) return;
-        const selected = new Set(form?.omittedProjectIds || []);
-        setProjectOptions(results.filter((r) => !selected.has(r.id)));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setProjectOptions([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setProjectSearchLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedProjectQuery, isAdmin, form?.omittedProjectIds]);
-
   const setField = <K extends keyof NetworkGraphSettings>(key: K, value: NetworkGraphSettings[K]) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
@@ -96,42 +62,13 @@ const NetworkGraphSection: React.FC = () => {
     }
   };
 
-  const addOmittedProject = React.useCallback((project: { id: number; name: string }) => {
-    setForm((prev) => {
-      if (!prev) return prev;
-      const currentIds = prev.omittedProjectIds || [];
-      if (currentIds.includes(project.id)) return prev;
-      const nextIds = [...currentIds, project.id];
-      const currentProjects = prev.omittedProjects || [];
-      const nextProjects = [...currentProjects.filter((p) => p.id !== project.id), project];
-      return {
-        ...prev,
-        omittedProjectIds: nextIds,
-        omittedProjects: nextProjects,
-      };
-    });
-    setProjectQuery('');
-    setProjectOptions([]);
-  }, []);
-
-  const removeOmittedProject = React.useCallback((projectId: number) => {
-    setForm((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        omittedProjectIds: (prev.omittedProjectIds || []).filter((id) => id !== projectId),
-        omittedProjects: (prev.omittedProjects || []).filter((p) => p.id !== projectId),
-      };
-    });
-  }, []);
-
   if (!canAccess) return null;
 
   return (
     <SettingsSectionFrame
       id={NETWORK_GRAPH_SECTION_ID}
       title="Network Graph Analytics"
-      description="Set default scoring/thresholds for coworker and client relationships, plus weekly snapshot scheduler settings."
+      description="Set default scoring/thresholds for coworker and client relationships, plus weekly snapshot scheduler settings. Project/client exclusions are managed in Settings > General."
       className="mt-6"
       actions={
         <div className="flex items-center gap-2">
@@ -164,66 +101,6 @@ const NetworkGraphSection: React.FC = () => {
                 <input className={checkboxClass} type="checkbox" checked={form.includeInactiveDefault} disabled={!isAdmin} onChange={(e) => setField('includeInactiveDefault', e.target.checked)} />
                 <span>Include inactive by default</span>
               </label>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--text)] mb-2">Global Omitted Projects</h3>
-            <p className="text-xs text-[var(--muted)] mb-2">
-              Omitted projects are excluded from all network graph modes for all users.
-            </p>
-            <div className="relative max-w-xl">
-              <input
-                className={numberInputClass}
-                type="text"
-                value={projectQuery}
-                disabled={!isAdmin}
-                onChange={(e) => setProjectQuery(e.target.value)}
-                placeholder={isAdmin ? 'Type project name to omit…' : 'Admin-only'}
-              />
-              {isAdmin && projectQuery.trim().length >= 2 ? (
-                <div className="absolute z-20 mt-1 w-full rounded border border-[var(--border)] bg-[var(--card)] shadow-lg max-h-56 overflow-auto">
-                  {projectSearchLoading ? (
-                    <div className="px-3 py-2 text-sm text-[var(--muted)]">Searching projects…</div>
-                  ) : projectOptions.length ? (
-                    projectOptions.map((project) => (
-                      <button
-                        key={project.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--surface)]"
-                        onClick={() => addOmittedProject(project)}
-                      >
-                        {project.name}
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-[var(--muted)]">No matching projects</div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(form.omittedProjects || []).map((project) => (
-                <span
-                  key={project.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs"
-                >
-                  <span>{project.name}</span>
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      className="text-[var(--muted)] hover:text-[var(--text)]"
-                      onClick={() => removeOmittedProject(project.id)}
-                      aria-label={`Remove ${project.name}`}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </span>
-              ))}
-              {(form.omittedProjects || []).length === 0 ? (
-                <span className="text-xs text-[var(--muted)]">No omitted projects configured.</span>
-              ) : null}
             </div>
           </div>
 

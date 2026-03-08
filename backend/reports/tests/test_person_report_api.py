@@ -43,6 +43,20 @@ class PersonReportApiTests(TestCase):
             start_date=self.project_start,
             end_date=self.project_end,
         )
+        self.project_overhead = Project.objects.create(
+            name='Overhead Planning',
+            client='Stack',
+            vertical=self.vertical,
+            start_date=self.project_start,
+            end_date=self.project_end,
+        )
+        self.project_smc = Project.objects.create(
+            name='Operations',
+            client='SMC',
+            vertical=self.vertical,
+            start_date=self.project_start,
+            end_date=self.project_end,
+        )
 
         week_1 = today - timedelta(days=7)
         week_2 = today - timedelta(days=14)
@@ -84,6 +98,30 @@ class PersonReportApiTests(TestCase):
             project_name=self.project.name,
             client='Stack',
         )
+        WeeklyAssignmentSnapshot.objects.create(
+            week_start=week_1,
+            person=self.person,
+            project=self.project_overhead,
+            role_on_project_id=self.project_role.id,
+            department_id=self.department.id,
+            deliverable_phase='DD',
+            hours=12,
+            person_name=self.person.name,
+            project_name=self.project_overhead.name,
+            client=self.project_overhead.client,
+        )
+        WeeklyAssignmentSnapshot.objects.create(
+            week_start=week_2,
+            person=self.person,
+            project=self.project_smc,
+            role_on_project_id=self.project_role.id,
+            department_id=self.department.id,
+            deliverable_phase='CD',
+            hours=11,
+            person_name=self.person.name,
+            project_name=self.project_smc.name,
+            client=self.project_smc.client,
+        )
 
         self.skill_tag = SkillTag.objects.create(name='Lighting Design', is_active=True)
 
@@ -113,6 +151,9 @@ class PersonReportApiTests(TestCase):
         self.assertEqual(p['projects'][0]['projectName'], 'Atlas')
         self.assertEqual(p['projects'][0]['startDate'], self.project_start.isoformat())
         self.assertEqual(p['projects'][0]['endDate'], self.project_end.isoformat())
+        project_names = {row['projectName'] for row in p['projects']}
+        self.assertNotIn(self.project_overhead.name, project_names)
+        self.assertNotIn(self.project_smc.name, project_names)
 
     def test_goals_and_checkins_manager(self):
         self.client.force_authenticate(user=self.manager)

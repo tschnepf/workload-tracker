@@ -7,6 +7,7 @@ from typing import Any
 
 from assignments.models import Assignment
 from core.models import AutoHoursRoleSetting, AutoHoursTemplate, AutoHoursTemplateRoleSetting, UtilizationScheme
+from core.project_visibility import get_hidden_project_ids_for_scope
 from departments.models import Department
 from people.eligibility import is_hired_in_week
 from people.models import Person
@@ -258,6 +259,7 @@ def _evaluate_baseline(
     *,
     scope: PlannerScope,
     status_keys: set[str],
+    hidden_project_ids: set[int] | None = None,
 ) -> BaselineEvaluation:
     demand_by_role: dict[int, list[float]] = defaultdict(lambda: [0.0] * scope.weeks)
     total_demand = [0.0] * scope.weeks  # Included statuses only (planner baseline)
@@ -275,6 +277,8 @@ def _evaluate_baseline(
         "person",
         "role_on_project_ref",
     )
+    if hidden_project_ids:
+        base_qs = base_qs.exclude(project_id__in=sorted(hidden_project_ids))
     if scope.vertical_id is not None:
         base_qs = base_qs.filter(project__vertical_id=scope.vertical_id)
 
@@ -814,13 +818,16 @@ def evaluate_forecast_planner(
     projects_payload: list[dict[str, Any]],
     thresholds_payload: dict[str, Any] | None,
     use_probability_weighting: bool,
+    visibility_scope: str = "report.forecast_planner",
 ) -> dict[str, Any]:
     thresholds = _thresholds_with_defaults(thresholds_payload)
     status_key_set = set(status_keys)
+    hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
     capacity_by_role, team_capacity, role_names = _capacity_by_role_and_team(scope)
     baseline_eval = _evaluate_baseline(
         scope=scope,
         status_keys=status_key_set,
+        hidden_project_ids=hidden_project_ids,
     )
     baseline_by_role = baseline_eval.demand_by_role
     baseline_total = baseline_eval.baseline_total

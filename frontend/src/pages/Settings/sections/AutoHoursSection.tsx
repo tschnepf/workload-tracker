@@ -14,7 +14,7 @@ const AutoHoursSection: React.FC = () => {
   return (
     <>
       <SettingsSectionFrame
-        title="Project Manloader Template"
+        title="Manloader Template"
         description="Create templates to override the global defaults on a per-project basis."
         className="mt-6"
       >

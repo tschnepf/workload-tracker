@@ -38,6 +38,11 @@ from assignments.models import Assignment
 from django.db.models import Q
 from django.db.models.functions import Coalesce, Lower
 from core.search_tokens import parse_search_tokens, apply_token_filter
+from core.project_visibility import (
+    get_hidden_project_ids_for_scope,
+    resolve_visibility_scope,
+    visibility_cache_token,
+)
 from core.job_access import JobAccessRegistrationError, enqueue_user_facing_task
 from django.conf import settings as django_settings
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
@@ -1659,6 +1664,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=PersonCapacityHeatmapItemSerializer(many=True)
     )
@@ -1678,6 +1684,12 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         department_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='dashboard.heatmap',
+        )
+        hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
+        visibility_token = visibility_cache_token(visibility_scope)
         cache_scope = 'all'
         if department_param not in (None, ""):
             try:
@@ -1714,10 +1726,13 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
                 except Exception:
                     pass
+            if hidden_project_ids:
+                asn_qs = asn_qs.exclude(project_id__in=sorted(hidden_project_ids))
             asn_qs = asn_qs.only('weekly_hours', 'person_id')
             people = people.prefetch_related(Prefetch('assignments', queryset=asn_qs))
         except Exception:  # nosec B110
             pass
+        cache_scope = f"{cache_scope}:vs={visibility_scope}:vt={visibility_token}"
         # Build cache key and short-TTL caching (optional via feature flag)
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
         cache_key = f"people:capacity_heatmap:{weeks}:{cache_scope}"
@@ -1730,6 +1745,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 asn_aggr_qs = asn_aggr_qs.filter(project__vertical_id=int(vertical_param))
             except Exception:
                 pass
+        if hidden_project_ids:
+            asn_aggr_qs = asn_aggr_qs.exclude(project_id__in=sorted(hidden_project_ids))
         asn_aggr = asn_aggr_qs.aggregate(last_modified=Max('updated_at'))
 
         lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
@@ -1847,6 +1864,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='department', type=int, required=False),
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=WorkloadForecastItemSerializer(many=True)
     )
@@ -1868,6 +1886,12 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='report.team_forecast',
+        )
+        hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
+        visibility_token = visibility_cache_token(visibility_scope)
         cache_scope = 'all'
         if dept_param not in (None, ""): 
             try:
@@ -1895,6 +1919,7 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 cache_scope = f"{cache_scope}_v{int(vertical_param)}"
             except Exception:  # nosec B110
                 pass
+        cache_scope = f"{cache_scope}:vs={visibility_scope}:vt={visibility_token}"
         try:
             asn_qs = Assignment.objects.filter(is_active=True)
             if vertical_param not in (None, ""):
@@ -1902,6 +1927,8 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
                 except Exception:
                     pass
+            if hidden_project_ids:
+                asn_qs = asn_qs.exclude(project_id__in=sorted(hidden_project_ids))
             asn_qs = asn_qs.only('weekly_hours', 'person_id')
             people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
         except Exception:  # nosec B110

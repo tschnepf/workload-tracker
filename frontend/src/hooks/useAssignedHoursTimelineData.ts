@@ -25,9 +25,10 @@ type Args = {
   departmentId?: number | null;
   includeChildren?: boolean;
   vertical?: number | null;
+  visibilityScope?: string;
 };
 
-export function useAssignedHoursTimelineData({ weeks, departmentId, includeChildren, vertical }: Args): TimelineData {
+export function useAssignedHoursTimelineData({ weeks, departmentId, includeChildren, vertical, visibilityScope = 'analytics.status_timeline' }: Args): TimelineData {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [weekKeys, setWeekKeys] = useState<string[]>([]);
@@ -45,6 +46,7 @@ export function useAssignedHoursTimelineData({ weeks, departmentId, includeChild
           department: departmentId != null ? Number(departmentId) : undefined,
           include_children: departmentId != null ? (includeChildren ? 1 : 0) : undefined,
           vertical: vertical ?? undefined,
+          visibility_scope: visibilityScope,
         });
         if (!mounted) return;
         const nextWeekKeys = res.weekKeys || [];
@@ -70,7 +72,7 @@ export function useAssignedHoursTimelineData({ weeks, departmentId, includeChild
       }
     })();
     return () => { mounted = false; };
-  }, [weeks, departmentId, includeChildren, vertical]);
+  }, [weeks, departmentId, includeChildren, vertical, visibilityScope]);
 
   const maxY = useMemo(() => {
     return totalsByWeek.reduce((m, v) => (v > m ? v : m), 0);

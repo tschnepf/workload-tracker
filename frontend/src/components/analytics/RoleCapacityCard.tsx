@@ -25,6 +25,7 @@ export interface RoleCapacityCardProps {
   className?: string;
   hideControls?: HideControls;
   responsive?: boolean; // when true, derive chart height from container width
+  visibilityScope?: string;
 }
 
 const WEEK_OPTIONS: ReadonlyArray<4 | 8 | 12 | 16 | 20 | 26 | 52> = [4, 8, 12, 16, 20, 26, 52];
@@ -39,6 +40,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
   className,
   hideControls,
   responsive = false,
+  visibilityScope = 'report.role_capacity',
 }) => {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -93,6 +95,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
             department: effectiveDeptId != null ? Number(effectiveDeptId) : undefined,
             weeks,
             vertical: verticalState.selectedVerticalId ?? undefined,
+            visibility_scope: visibilityScope,
           });
           hasBootstrappedRef.current = true;
           setDepartments(
@@ -120,6 +123,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
         weeks,
         roleIdsCsv,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        visibility_scope: visibilityScope,
       });
       if (res.roles?.length) {
         setRoles(
@@ -139,7 +143,7 @@ const RoleCapacityCard: React.FC<RoleCapacityCardProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [canQuery, effectiveDeptId, weeks, selectedRoleIds, verticalState.selectedVerticalId]);
+  }, [canQuery, effectiveDeptId, weeks, selectedRoleIds, verticalState.selectedVerticalId, visibilityScope]);
 
   React.useEffect(() => { if (canQuery) refresh(); }, [canQuery, refresh]);
 

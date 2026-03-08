@@ -20,7 +20,7 @@ const SettingsSectionFrame: React.FC<SettingsSectionFrameProps> = ({
 }) => (
   <section
     id={id}
-    className={clsx('bg-[var(--card)] border border-[var(--border)] rounded-lg p-6', className)}
+    className={clsx('settings-section-frame bg-[var(--card)] border border-[var(--border)] rounded-lg p-6', className)}
   >
     <div className="flex items-start justify-between gap-4 mb-4">
       <div>
@@ -34,4 +34,3 @@ const SettingsSectionFrame: React.FC<SettingsSectionFrameProps> = ({
 );
 
 export default SettingsSectionFrame;
-

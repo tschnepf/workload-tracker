@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from assignments.models import Assignment
 from core.week_utils import sunday_of_week
+from core.models import ProjectVisibilitySettings
 from people.models import Person
 from projects.models import Project, ProjectStatusDefinition
 
@@ -132,3 +133,28 @@ class StatusAnalyticsInclusionTests(TestCase):
         projects = by_project.json().get('projects', [])
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0]['hours'], 10.0)
+
+    def test_visibility_scope_query_param_applies_scope_specific_exclusions(self):
+        settings_obj = ProjectVisibilitySettings.get_active()
+        config = settings_obj.config_json or {}
+        config['dashboard.manager'] = {
+            'projectKeywords': [],
+            'clientKeywords': ['smc'],
+        }
+        settings_obj.config_json = config
+        settings_obj.save(update_fields=['config_json', 'updated_at'])
+
+        visible = Project.objects.create(name='Visible Work', client='Acme', status='active')
+        hidden = Project.objects.create(name='Hidden Work', client='SMC', status='active')
+        self._assignment(visible, 10)
+        self._assignment(hidden, 8)
+
+        default_resp = self.client.get('/api/assignments/analytics_by_client/?weeks=1')
+        self.assertEqual(default_resp.status_code, 200)
+        default_clients = {row['label'] for row in default_resp.json().get('clients', [])}
+        self.assertIn('SMC', default_clients)
+
+        scoped_resp = self.client.get('/api/assignments/analytics_by_client/?weeks=1&visibility_scope=dashboard.manager')
+        self.assertEqual(scoped_resp.status_code, 200)
+        scoped_clients = {row['label'] for row in scoped_resp.json().get('clients', [])}
+        self.assertNotIn('SMC', scoped_clients)

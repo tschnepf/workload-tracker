@@ -11,6 +11,7 @@ from people.eligibility import is_hired_in_week
 from .models import Assignment as Asn
 from roles.models import Role
 from core.models import AutoHoursRoleSetting, AutoHoursTemplateRoleSetting
+from core.project_visibility import get_hidden_project_ids_for_scope
 
 
 def _eligible_role_capacity_people_ids(
@@ -20,6 +21,7 @@ def _eligible_role_capacity_people_ids(
     week_keys: List[str],
     min_hours_per_week: float,
     weeks_to_check: int,
+    hidden_project_ids: set[int] | None = None,
 ) -> set[int]:
     eval_weeks = max(0, min(int(weeks_to_check or 0), len(week_keys)))
     if eval_weeks == 0:
@@ -37,6 +39,8 @@ def _eligible_role_capacity_people_ids(
         asn_qs = asn_qs.filter(person__department_id=dept_id)
     if vertical_id is not None:
         asn_qs = asn_qs.filter(project__vertical_id=vertical_id)
+    if hidden_project_ids:
+        asn_qs = asn_qs.exclude(project_id__in=sorted(hidden_project_ids))
     asn_qs = asn_qs.select_related('person').only(
         'person_id',
         'weekly_hours',
@@ -88,6 +92,7 @@ def _python_role_capacity(
     filter_out_lt5h: bool = False,
     low_hours_threshold: float = 5.0,
     low_hours_weeks: int = 4,
+    hidden_project_ids: set[int] | None = None,
 ) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Optimized Python implementation (portable across DB vendors).
 
@@ -136,6 +141,7 @@ def _python_role_capacity(
             week_keys=wk_strs,
             min_hours_per_week=low_hours_threshold,
             weeks_to_check=low_hours_weeks,
+            hidden_project_ids=hidden_project_ids,
         )
 
     caps: Dict[Tuple[str, int], float] = {}
@@ -161,6 +167,8 @@ def _python_role_capacity(
         asn_qs = asn_qs.filter(person__department_id=dept_id)
     if vertical_id is not None:
         asn_qs = asn_qs.filter(project__vertical_id=vertical_id)
+    if hidden_project_ids:
+        asn_qs = asn_qs.exclude(project_id__in=sorted(hidden_project_ids))
     asn_qs = asn_qs.select_related('person').only('id', 'weekly_hours', 'person__id', 'person__role_id', 'person__hire_date', 'person__is_active')
     assigned: Dict[Tuple[str, int], float] = {}
     wk_dates_by_key: Dict[str, date] = {}
@@ -212,6 +220,8 @@ def _python_role_capacity(
             )
         if vertical_id is not None:
             placeholder_qs = placeholder_qs.filter(project__vertical_id=vertical_id)
+        if hidden_project_ids:
+            placeholder_qs = placeholder_qs.exclude(project_id__in=sorted(hidden_project_ids))
         placeholder_qs = placeholder_qs.select_related('project').only(
             'weekly_hours',
             'role_on_project_ref_id',
@@ -426,10 +436,26 @@ def compute_role_capacity(
     filter_out_lt5h: bool = False,
     low_hours_threshold: float = 5.0,
     low_hours_weeks: int = 4,
+    visibility_scope: str | None = None,
 ) -> Tuple[List[str], List[Dict], List[Dict], Dict]:
     """Dispatch to the best implementation based on DB vendor.
     Falls back safely to the Python path if Postgres query fails.
     """
+    hidden_project_ids: set[int] = set()
+    if visibility_scope:
+        hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
+
+    if hidden_project_ids:
+        return _python_role_capacity(
+            dept_id,
+            week_keys,
+            role_ids,
+            vertical_id=vertical_id,
+            filter_out_lt5h=filter_out_lt5h,
+            low_hours_threshold=low_hours_threshold,
+            low_hours_weeks=low_hours_weeks,
+            hidden_project_ids=hidden_project_ids,
+        )
     if filter_out_lt5h:
         return _python_role_capacity(
             dept_id,
@@ -439,6 +465,7 @@ def compute_role_capacity(
             filter_out_lt5h=filter_out_lt5h,
             low_hours_threshold=low_hours_threshold,
             low_hours_weeks=low_hours_weeks,
+            hidden_project_ids=hidden_project_ids,
         )
     if bool(settings.FEATURES.get('FF_ROLE_CAPACITY_TEMPLATE_ROLE_MAPPING', True)):
         return _python_role_capacity(
@@ -449,6 +476,7 @@ def compute_role_capacity(
             filter_out_lt5h=filter_out_lt5h,
             low_hours_threshold=low_hours_threshold,
             low_hours_weeks=low_hours_weeks,
+            hidden_project_ids=hidden_project_ids,
         )
     if vertical_id is not None:
         return _python_role_capacity(
@@ -459,6 +487,7 @@ def compute_role_capacity(
             filter_out_lt5h=filter_out_lt5h,
             low_hours_threshold=low_hours_threshold,
             low_hours_weeks=low_hours_weeks,
+            hidden_project_ids=hidden_project_ids,
         )
     if connection.vendor == 'postgresql':
         try:
@@ -481,6 +510,7 @@ def compute_role_capacity(
                 filter_out_lt5h=filter_out_lt5h,
                 low_hours_threshold=low_hours_threshold,
                 low_hours_weeks=low_hours_weeks,
+                hidden_project_ids=hidden_project_ids,
             )
     return _python_role_capacity(
         dept_id,
@@ -490,4 +520,5 @@ def compute_role_capacity(
         filter_out_lt5h=filter_out_lt5h,
         low_hours_threshold=low_hours_threshold,
         low_hours_weeks=low_hours_weeks,
+        hidden_project_ids=hidden_project_ids,
     )

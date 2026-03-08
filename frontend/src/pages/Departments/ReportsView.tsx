@@ -251,7 +251,12 @@ const ReportsView: React.FC = () => {
           let dashboardData: DashboardData | undefined;
           for (let attempt = 0; attempt <= FALLBACK_MAX_RETRIES_PER_DEPARTMENT; attempt += 1) {
             try {
-              dashboardData = await dashboardApi.getDashboard(selectedTimeframe, String(dept.id), selectedVertical);
+              dashboardData = await dashboardApi.getDashboard(
+                selectedTimeframe,
+                String(dept.id),
+                selectedVertical,
+                'dashboard.executive',
+              );
               break;
             } catch (err) {
               if (attempt >= FALLBACK_MAX_RETRIES_PER_DEPARTMENT) {

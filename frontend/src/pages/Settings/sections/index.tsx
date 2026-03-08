@@ -11,19 +11,19 @@ import AutoHoursSection, { AUTO_HOURS_SECTION_ID } from './AutoHoursSection';
 import CalendarFeedsSection, { CALENDAR_FEEDS_SECTION_ID } from './CalendarFeedsSection';
 import AdminUsersSection, { ADMIN_USERS_SECTION_ID } from './AdminUsersSection';
 import BackupRestoreSection, { BACKUP_RESTORE_SECTION_ID } from './BackupRestoreSection';
-import AuditLogSection, { AUDIT_LOG_SECTION_ID } from './AuditLogSection';
-import ProjectAuditLogSection, { PROJECT_AUDIT_LOG_SECTION_ID } from './ProjectAuditLogSection';
 import IntegrationsSection, { INTEGRATIONS_SECTION_ID } from './IntegrationsSection';
 import DeliverablePhaseMappingSection, { DELIVERABLE_PHASE_MAPPING_SECTION_ID } from './DeliverablePhaseMappingSection';
 import DeliverableTaskTemplatesSection, { DELIVERABLE_TASK_TEMPLATES_SECTION_ID } from './DeliverableTaskTemplatesSection';
 import NetworkGraphSection, { NETWORK_GRAPH_SECTION_ID } from './NetworkGraphSection';
+import GeneralSettingsSection, { GENERAL_SETTINGS_SECTION_ID } from './GeneralSettingsSection';
+import LogsSection, { LOGS_SECTION_ID } from './LogsSection';
 
 export type SettingsSectionDefinition = {
   id: string;
   title: string;
   requiresAdmin: boolean;
   allowManager?: boolean;
-  separatorBefore?: boolean;
+  group: 'company' | 'projects' | 'admin';
   featureFlag?: (caps?: Capabilities) => boolean;
   component: React.ComponentType;
 };
@@ -31,35 +31,39 @@ export type SettingsSectionDefinition = {
 export const settingsSections: SettingsSectionDefinition[] = [
   {
     id: ROLE_MANAGEMENT_SECTION_ID,
-    title: 'Company Roles',
+    title: 'Roles',
     requiresAdmin: true,
+    group: 'company',
     component: RoleManagementSection,
   },
   {
     id: VERTICALS_SECTION_ID,
-    title: 'Company Verticals',
+    title: 'Verticals',
     requiresAdmin: true,
+    group: 'company',
     component: VerticalsSection,
   },
   {
     id: DEPARTMENT_ROLES_SECTION_ID,
-    title: 'Department Project Roles',
+    title: 'Project Roles',
     requiresAdmin: true,
+    group: 'company',
     component: DepartmentRolesSection,
   },
   {
     id: PROJECT_STATUSES_SECTION_ID,
-    title: 'Project Status and Colors',
+    title: 'Status and Colors',
     requiresAdmin: true,
     allowManager: true,
-    separatorBefore: true,
+    group: 'projects',
     component: ProjectStatusesSection,
   },
   {
     id: AUTO_HOURS_SECTION_ID,
-    title: 'Project Manloader Template',
+    title: 'Manloader Template',
     requiresAdmin: true,
     allowManager: true,
+    group: 'projects',
     component: AutoHoursSection,
   },
   {
@@ -67,39 +71,80 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Pre-Deliverables',
     requiresAdmin: true,
     allowManager: true,
+    group: 'projects',
     component: PreDeliverablesSection,
   },
   {
     id: DELIVERABLE_TASK_TEMPLATES_SECTION_ID,
-    title: 'Project Task Templates',
+    title: 'Task Templates',
     requiresAdmin: true,
     allowManager: true,
+    group: 'projects',
     component: DeliverableTaskTemplatesSection,
   },
   {
-    id: CALENDAR_FEEDS_SECTION_ID,
-    title: 'Calendar Feeds',
-    requiresAdmin: false,
-    separatorBefore: true,
-    component: CalendarFeedsSection,
+    id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,
+    title: 'Deliverable Phase Mapping',
+    requiresAdmin: true,
+    group: 'projects',
+    component: DeliverablePhaseMappingSection,
   },
   {
     id: ADMIN_USERS_SECTION_ID,
-    title: 'Create User & Admin Users',
+    title: 'User Accounts',
     requiresAdmin: true,
-    separatorBefore: true,
+    group: 'admin',
     component: AdminUsersSection,
   },
   {
     id: PUSH_NOTIFICATIONS_SECTION_ID,
     title: 'Notifications',
     requiresAdmin: true,
+    group: 'admin',
     component: PushNotificationsSection,
+  },
+  {
+    id: CALENDAR_FEEDS_SECTION_ID,
+    title: 'Calendar Feeds',
+    requiresAdmin: false,
+    group: 'admin',
+    component: CalendarFeedsSection,
+  },
+  {
+    id: INTEGRATIONS_SECTION_ID,
+    title: 'Integrations Hub',
+    requiresAdmin: true,
+    group: 'admin',
+    featureFlag: (caps) => !!caps?.integrations?.enabled,
+    component: IntegrationsSection,
+  },
+  {
+    id: GENERAL_SETTINGS_SECTION_ID,
+    title: 'General',
+    requiresAdmin: true,
+    group: 'admin',
+    component: GeneralSettingsSection,
+  },
+  {
+    id: BACKUP_RESTORE_SECTION_ID,
+    title: 'Backup & Restore',
+    requiresAdmin: true,
+    group: 'admin',
+    component: BackupRestoreSection,
+  },
+  {
+    id: LOGS_SECTION_ID,
+    title: 'Logs',
+    requiresAdmin: true,
+    allowManager: true,
+    group: 'admin',
+    component: LogsSection,
   },
   {
     id: UTILIZATION_SECTION_ID,
     title: 'Utilization Hours and Color Scheme',
     requiresAdmin: true,
+    group: 'admin',
     component: UtilizationSection,
   },
   {
@@ -107,38 +152,7 @@ export const settingsSections: SettingsSectionDefinition[] = [
     title: 'Network Graph Analytics',
     requiresAdmin: true,
     allowManager: true,
+    group: 'admin',
     component: NetworkGraphSection,
-  },
-  {
-    id: DELIVERABLE_PHASE_MAPPING_SECTION_ID,
-    title: 'Deliverable Phase Mapping',
-    requiresAdmin: true,
-    component: DeliverablePhaseMappingSection,
-  },
-  {
-    id: BACKUP_RESTORE_SECTION_ID,
-    title: 'Backup & Restore',
-    requiresAdmin: true,
-    component: BackupRestoreSection,
-  },
-  {
-    id: INTEGRATIONS_SECTION_ID,
-    title: 'Integrations Hub',
-    requiresAdmin: true,
-    featureFlag: (caps) => !!caps?.integrations?.enabled,
-    component: IntegrationsSection,
-  },
-  {
-    id: AUDIT_LOG_SECTION_ID,
-    title: 'Admin Audit Log',
-    requiresAdmin: true,
-    component: AuditLogSection,
-  },
-  {
-    id: PROJECT_AUDIT_LOG_SECTION_ID,
-    title: 'Project Audit Log',
-    requiresAdmin: true,
-    allowManager: true,
-    component: ProjectAuditLogSection,
   },
 ];

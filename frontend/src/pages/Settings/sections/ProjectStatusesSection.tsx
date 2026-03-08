@@ -199,7 +199,7 @@ const ProjectStatusesSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={PROJECT_STATUSES_SECTION_ID}
-      title="Project Status and Colors"
+      title="Status and Colors"
       description="Define project statuses used across forms, filters, and analytics. Keys are immutable after creation."
       className="mt-6"
     >

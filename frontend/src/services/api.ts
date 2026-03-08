@@ -658,7 +658,7 @@ export const peopleApi = {
 
   // Capacity heatmap (supports department/include_children)
   capacityHeatmap: (
-    params?: { weeks?: number; department?: string | number; include_children?: 0 | 1; vertical?: number },
+    params?: { weeks?: number; department?: string | number; include_children?: 0 | 1; vertical?: number; visibility_scope?: string },
     options?: RequestInit
   ) => {
     const query = new URLSearchParams();
@@ -668,17 +668,19 @@ export const peopleApi = {
     }
     if (params?.include_children != null) query.set('include_children', String(params.include_children));
     if (params?.vertical != null) query.set('vertical', String(params.vertical));
+    if (params?.visibility_scope) query.set('visibility_scope', params.visibility_scope);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return fetchApi<PersonCapacityHeatmapItem[]>(`/people/capacity_heatmap/${qs}`, options);
   },
 
   // Team workload forecast
-  workloadForecast: (opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number }) => {
+  workloadForecast: (opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number; visibility_scope?: string }) => {
     const sp = new URLSearchParams();
     if (opts?.weeks) sp.set('weeks', String(opts.weeks));
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
     if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.visibility_scope) sp.set('visibility_scope', opts.visibility_scope);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return fetchApi<WorkloadForecastItem[]>(`/people/workload_forecast/${qs}`);
   },
@@ -937,6 +939,43 @@ export const networkGraphSettingsApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as NetworkGraphSettings;
+  },
+};
+
+export type ProjectVisibilityScope = {
+  key: string;
+  label: string;
+  group: string;
+};
+
+export type ProjectVisibilityScopeConfig = {
+  projectKeywords: string[];
+  clientKeywords: string[];
+};
+
+export type ProjectVisibilitySettings = {
+  scopes: ProjectVisibilityScope[];
+  config: Record<string, ProjectVisibilityScopeConfig>;
+  updatedAt: string | null;
+  updatedBy: { id: number; username: string } | null;
+};
+
+export const projectVisibilitySettingsApi = {
+  get: async (): Promise<ProjectVisibilitySettings> => {
+    const res = await apiClient.GET('/core/settings/project-visibility/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as ProjectVisibilitySettings;
+  },
+  update: async (payload: { config: Record<string, ProjectVisibilityScopeConfig> }): Promise<ProjectVisibilitySettings> => {
+    const res = await apiClient.PUT('/core/settings/project-visibility/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as ProjectVisibilitySettings;
   },
 };
 
@@ -1897,11 +1936,12 @@ export type DashboardBootstrapResponse = {
 
 export const dashboardApi = {
   // Get dashboard data with optional weeks and department parameters
-  getDashboard: async (weeks?: number, department?: string, vertical?: number) => {
+  getDashboard: async (weeks?: number, department?: string, vertical?: number, visibility_scope?: string) => {
     const params = new URLSearchParams();
     if (weeks && weeks !== 1) params.set('weeks', weeks.toString());
     if (department) params.set('department', department);
     if (vertical != null) params.set('vertical', String(vertical));
+    if (visibility_scope) params.set('visibility_scope', visibility_scope);
     const queryString = params.toString() ? `?${params.toString()}` : '';
     const res = await apiClient.GET(`/dashboard/${queryString}` as any, { headers: authHeaders() });
     if (!res.data) {
@@ -1916,12 +1956,14 @@ export const dashboardApi = {
     department?: string;
     include_children?: 0 | 1;
     vertical?: number;
+    visibility_scope?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.weeks && params.weeks !== 1) queryParams.set('weeks', String(params.weeks));
     if (params?.department) queryParams.set('department', params.department);
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.visibility_scope) queryParams.set('visibility_scope', params.visibility_scope);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApiCached<DashboardBootstrapResponse>(`/dashboard/bootstrap/${queryString}`);
   },
@@ -1952,6 +1994,7 @@ export type ForecastPlannerEvaluateRequest = {
   department?: number | null;
   include_children?: boolean;
   vertical?: number | null;
+  visibility_scope?: string;
   statusKeys: string[];
   projects: ForecastPlannerProjectInput[];
   thresholds?: ForecastPlannerThresholds;
@@ -1966,6 +2009,7 @@ export const reportsApi = {
     vertical?: number;
     include_inactive?: 0 | 1;
     filter_out_lt5h?: 0 | 1;
+    visibility_scope?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
@@ -1974,6 +2018,7 @@ export const reportsApi = {
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
     if (params?.include_inactive != null) queryParams.set('include_inactive', String(params.include_inactive));
     if (params?.filter_out_lt5h != null) queryParams.set('filter_out_lt5h', String(params.filter_out_lt5h));
+    if (params?.visibility_scope) queryParams.set('visibility_scope', params.visibility_scope);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApiCached<RoleCapacityBootstrapResponse>(`/reports/role-capacity/bootstrap/${queryString}`);
   },
@@ -1983,12 +2028,14 @@ export const reportsApi = {
     department?: number;
     include_children?: 0 | 1;
     vertical?: number;
+    visibility_scope?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.visibility_scope) queryParams.set('visibility_scope', params.visibility_scope);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<ForecastBootstrapResponse>(`/reports/forecast/bootstrap/${queryString}`);
   },
@@ -1998,12 +2045,14 @@ export const reportsApi = {
     department?: number | null;
     include_children?: 0 | 1;
     vertical?: number | null;
+    visibility_scope?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.weeks != null) queryParams.set('weeks', String(params.weeks));
     if (params?.department != null) queryParams.set('department', String(params.department));
     if (params?.include_children != null) queryParams.set('include_children', String(params.include_children));
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.visibility_scope) queryParams.set('visibility_scope', params.visibility_scope);
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return fetchApi<ForecastPlannerBootstrapResponse>(`/reports/forecast/planner-bootstrap/${queryString}`);
   },

@@ -17,6 +17,7 @@ from .views import (
     NotificationAnalyticsView,
     WebPushVapidKeysView,
     NetworkGraphSettingsView,
+    ProjectVisibilitySettingsView,
     TaskProgressColorSettingsView,
 )
 
@@ -38,5 +39,6 @@ urlpatterns = [
     path('notifications/analytics/', NotificationAnalyticsView.as_view(), name='notification_analytics'),
     path('web_push_vapid_keys/', WebPushVapidKeysView.as_view(), name='web_push_vapid_keys'),
     path('network_graph_settings/', NetworkGraphSettingsView.as_view(), name='network_graph_settings'),
+    path('settings/project-visibility/', ProjectVisibilitySettingsView.as_view(), name='project_visibility_settings'),
     path('task_progress_colors/', TaskProgressColorSettingsView.as_view(), name='task_progress_colors'),
 ]

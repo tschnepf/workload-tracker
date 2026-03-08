@@ -230,7 +230,7 @@ class Person(models.Model):
             'assignments': assignment_details
         }
 
-    def get_utilization_over_weeks(self, weeks=1):
+    def get_utilization_over_weeks(self, weeks=1, hidden_project_ids=None):
         """Calculate utilization over multiple weeks (average) based on weekly hours.
 
         Uses a Monday-based week key and tolerates nearby date keys (+/- 3 days)
@@ -239,6 +239,8 @@ class Person(models.Model):
         from datetime import datetime, timedelta
 
         active_assignments = self.assignments.filter(is_active=True)
+        if hidden_project_ids:
+            active_assignments = active_assignments.exclude(project_id__in=list(hidden_project_ids))
 
         # Current week (Monday) to align with frontend calculation
         today = datetime.now().date()

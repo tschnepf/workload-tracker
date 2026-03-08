@@ -13,7 +13,7 @@ const DeliverableTaskTemplatesSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={DELIVERABLE_TASK_TEMPLATES_SECTION_ID}
-      title="Project Task Templates"
+      title="Task Templates"
       description="Define per-vertical task templates for project and deliverable tracking."
       className="mt-6"
     >

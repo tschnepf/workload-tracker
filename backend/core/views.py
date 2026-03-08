@@ -30,6 +30,8 @@ from .serializers import (
     WebPushVapidKeysStatusSerializer,
     WebPushVapidKeysGenerateSerializer,
     NetworkGraphSettingsSerializer,
+    ProjectVisibilitySettingsSerializer,
+    ProjectVisibilitySettingsUpdateSerializer,
     TaskProgressColorSettingsSerializer,
 )
 from .models import (
@@ -46,6 +48,7 @@ from .models import (
     NotificationTemplate,
     TaskProgressColorSettings,
     NetworkGraphSettings,
+    ProjectVisibilitySettings,
     AutoHoursRoleSetting,
     AutoHoursGlobalSettings,
     AutoHoursTemplate,
@@ -1037,6 +1040,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'integrations', 'title': 'Integrations Hub', 'requires_admin': True, 'allow_manager': False, 'integrations_only': True},
         {'id': 'admin-audit-log', 'title': 'Admin Audit Log', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'project-audit-log', 'title': 'Project Audit Log', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'general-settings', 'title': 'General', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
     ]
 
     def _visible_sections(self, request):
@@ -3027,6 +3031,30 @@ class NetworkGraphSettingsView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(NetworkGraphSettingsSerializer(obj).data)
+
+
+class ProjectVisibilitySettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    @extend_schema(responses=ProjectVisibilitySettingsSerializer)
+    def get(self, request):
+        if not is_admin_user(getattr(request, 'user', None)):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        obj = ProjectVisibilitySettings.get_active()
+        return Response(ProjectVisibilitySettingsSerializer(obj).data)
+
+    @extend_schema(request=ProjectVisibilitySettingsUpdateSerializer, responses=ProjectVisibilitySettingsSerializer)
+    def put(self, request):
+        if not is_admin_user(getattr(request, 'user', None)):
+            return Response({'detail': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        obj = ProjectVisibilitySettings.get_active()
+        ser = ProjectVisibilitySettingsUpdateSerializer(data=request.data or {})
+        ser.is_valid(raise_exception=True)
+        obj.config_json = ser.validated_data['config']
+        obj.updated_by = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+        obj.save(update_fields=['config_json', 'updated_by', 'updated_at'])
+        _bump_analytics_cache_version()
+        return Response(ProjectVisibilitySettingsSerializer(obj).data)
 
 
 class TaskProgressColorSettingsView(APIView):

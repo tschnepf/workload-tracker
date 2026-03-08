@@ -14,6 +14,11 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 import logging
 from core.models import UtilizationScheme
 from core.cache_keys import build_aggregate_cache_key
+from core.project_visibility import (
+    get_hidden_project_ids_for_scope,
+    resolve_visibility_scope,
+    visibility_cache_token,
+)
 from projects.models import Project
 from departments.models import Department
 from .serializers import DashboardResponseSerializer
@@ -28,6 +33,7 @@ class DashboardView(APIView):
             OpenApiParameter(name='weeks', type=int, required=False, description='Number of weeks to aggregate (1-12)'),
             OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
         responses=DashboardResponseSerializer
     )
@@ -52,6 +58,12 @@ class DashboardView(APIView):
                 vertical_filter = int(vertical_id)
             except (ValueError, TypeError):
                 vertical_filter = None
+        visibility_scope = resolve_visibility_scope(
+            request.GET.get('visibility_scope'),
+            default_scope='dashboard.executive',
+        )
+        hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
+        visibility_token = visibility_cache_token(visibility_scope)
 
         # Short-TTL cache wrapper (feature-flagged)
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
@@ -64,6 +76,8 @@ class DashboardView(APIView):
                     'weeks': weeks,
                     'department': department_filter if department_filter is not None else 'all',
                     'vertical': vertical_filter if vertical_filter is not None else 'all',
+                    'visibility_scope': visibility_scope,
+                    'visibility_token': visibility_token,
                     'hire_eligibility_version': 2,
                 },
             )
@@ -121,7 +135,7 @@ class DashboardView(APIView):
 
         for person in active_people:
             # Use multi-week utilization calculation
-            utilization_data = person.get_utilization_over_weeks(weeks)
+            utilization_data = person.get_utilization_over_weeks(weeks, hidden_project_ids=hidden_project_ids)
             percent = utilization_data['total_percentage']
             peak_percent = utilization_data['peak_percentage']
             total_utilization += percent
@@ -202,6 +216,8 @@ class DashboardView(APIView):
         # Get total active assignments, optionally filtered by department
         assignments_qs = Assignment.objects.filter(is_active=True, person__is_active=True)
         assignments_qs = assignments_qs.filter(person_id__in=active_people.values('id'))
+        if hidden_project_ids:
+            assignments_qs = assignments_qs.exclude(project_id__in=sorted(hidden_project_ids))
         if department_filter:
             assignments_qs = assignments_qs.filter(person__department_id=department_filter)
         if vertical_filter:
@@ -214,6 +230,8 @@ class DashboardView(APIView):
             created_at__gte=timezone.now() - timedelta(days=7)
         ).select_related('person', 'project', 'role_on_project_ref')
         recent_assignment_qs = recent_assignment_qs.filter(person_id__in=active_people.values('id'))
+        if hidden_project_ids:
+            recent_assignment_qs = recent_assignment_qs.exclude(project_id__in=sorted(hidden_project_ids))
         
         if department_filter:
             recent_assignment_qs = recent_assignment_qs.filter(person__department_id=department_filter)
@@ -317,6 +335,7 @@ class DashboardBootstrapView(APIView):
             OpenApiParameter(name='department', type=int, required=False, description='Filter by department id'),
             OpenApiParameter(name='include_children', type=int, required=False, description='Include child departments for people metadata (0|1)'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
     )
     def get(self, request):
@@ -328,6 +347,12 @@ class DashboardBootstrapView(APIView):
         department_filter = _parse_int(request.GET.get('department'))
         include_children = _parse_bool(request.GET.get('include_children'))
         vertical_filter = _parse_int(request.GET.get('vertical'))
+        visibility_scope = resolve_visibility_scope(
+            request.GET.get('visibility_scope'),
+            default_scope='dashboard.executive',
+        )
+        hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
+        visibility_token = visibility_cache_token(visibility_scope)
 
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
         cache_key = None
@@ -341,6 +366,8 @@ class DashboardBootstrapView(APIView):
                     'department': department_filter if department_filter is not None else 'all',
                     'include_children': 1 if include_children else 0,
                     'vertical': vertical_filter if vertical_filter is not None else 'all',
+                    'visibility_scope': visibility_scope,
+                    'visibility_token': visibility_token,
                     'hire_eligibility_version': 2,
                 },
             )
@@ -359,6 +386,8 @@ class DashboardBootstrapView(APIView):
         projects_qs = Project.objects.filter(is_active=True)
         if vertical_filter is not None:
             projects_qs = projects_qs.filter(vertical_id=vertical_filter)
+        if hidden_project_ids:
+            projects_qs = projects_qs.exclude(id__in=sorted(hidden_project_ids))
         project_counts_rows = projects_qs.values('status').annotate(count=Count('id'))
         project_counts_by_status = {}
         for row in project_counts_rows:

@@ -79,6 +79,7 @@ const TeamForecastPage: React.FC = () => {
             department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
             include_children: deptState.includeChildren ? 1 : 0,
             vertical: verticalState.selectedVerticalId ?? undefined,
+            visibility_scope: 'report.team_forecast',
           });
           if (requestId === forecastRequestIdRef.current) {
             setForecast(bootstrap.workloadForecast || []);
@@ -99,6 +100,7 @@ const TeamForecastPage: React.FC = () => {
           department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
           include_children: deptState.includeChildren ? 1 : 0,
           vertical: verticalState.selectedVerticalId ?? undefined,
+          visibility_scope: 'report.team_forecast',
         });
         if (requestId === forecastRequestIdRef.current) setForecast(data || []);
         return;
@@ -111,6 +113,7 @@ const TeamForecastPage: React.FC = () => {
             department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
             include_children: deptState.includeChildren ? 1 : 0,
             vertical: verticalState.selectedVerticalId ?? undefined,
+            visibility_scope: 'report.team_forecast',
           }),
           projectsApi.list({ page: 1, page_size: 200, vertical: verticalState.selectedVerticalId ?? undefined }),
           departmentsApi.listAll({ vertical: verticalState.selectedVerticalId ?? undefined }),
@@ -129,6 +132,7 @@ const TeamForecastPage: React.FC = () => {
         department: deptState.selectedDepartmentId == null ? undefined : Number(deptState.selectedDepartmentId),
         include_children: deptState.includeChildren ? 1 : 0,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        visibility_scope: 'report.team_forecast',
       });
       if (requestId === forecastRequestIdRef.current) setForecast(data || []);
     } catch (e: any) {

@@ -64,6 +64,7 @@ const ForecastPlannerPage: React.FC = () => {
         department,
         include_children: department != null ? (includeChildren ? 1 : 0) : 0,
         vertical,
+        visibility_scope: 'report.forecast_planner',
       });
       setBootstrap(payload);
       if (!initializedStatusesRef.current) {
@@ -129,6 +130,7 @@ const ForecastPlannerPage: React.FC = () => {
         department,
         include_children: includeChildren,
         vertical,
+        visibility_scope: 'report.forecast_planner',
         statusKeys,
         projects,
         thresholds,

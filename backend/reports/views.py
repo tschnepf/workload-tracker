@@ -24,6 +24,11 @@ from assignments.models import Assignment
 from assignments.analytics import compute_role_capacity
 from projects.models import Project
 from core.cache_keys import build_aggregate_cache_key
+from core.project_visibility import (
+    get_hidden_project_ids_for_scope,
+    resolve_visibility_scope,
+    visibility_cache_token,
+)
 from accounts.permissions import IsAdminOrManager
 
 
@@ -630,6 +635,7 @@ class RoleCapacityBootstrapView(APIView):
             OpenApiParameter(name='vertical', type=int, required=False, description='Optional vertical id filter.'),
             OpenApiParameter(name='include_inactive', type=bool, required=False, description='Include inactive departments in department metadata list.'),
             OpenApiParameter(name='filter_out_lt5h', type=bool, required=False, description='Exclude people assigned under 5h in each of the next 4 weeks from capacity and assigned calculations.'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
     )
     def get(self, request):
@@ -658,6 +664,10 @@ class RoleCapacityBootstrapView(APIView):
 
         include_inactive = str(request.query_params.get('include_inactive') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
         filter_out_lt5h = str(request.query_params.get('filter_out_lt5h') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='report.role_capacity',
+        )
 
         role_ids_param = str(request.query_params.get('role_ids') or '').strip()
         role_ids = None
@@ -677,6 +687,7 @@ class RoleCapacityBootstrapView(APIView):
             role_ids=role_ids,
             vertical_id=vertical_id,
             filter_out_lt5h=filter_out_lt5h,
+            visibility_scope=visibility_scope,
         )
 
         departments_qs = Department.objects.order_by('name')
@@ -708,6 +719,7 @@ class ForecastBootstrapView(APIView):
             OpenApiParameter(name='department', type=int, required=False, description='Optional department id filter.'),
             OpenApiParameter(name='include_children', type=bool, required=False, description='Include descendant departments when department is set.'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Optional vertical id filter.'),
+            OpenApiParameter(name='visibility_scope', type=str, required=False, description='Visibility scope key for keyword-based project/client exclusion.'),
         ],
     )
     def get(self, request):
@@ -734,6 +746,12 @@ class ForecastBootstrapView(APIView):
                 return Response({'detail': 'invalid vertical'}, status=400)
 
         include_children = str(request.query_params.get('include_children') or '').strip().lower() in self._BOOLEAN_TRUE
+        visibility_scope = resolve_visibility_scope(
+            request.query_params.get('visibility_scope'),
+            default_scope='report.team_forecast',
+        )
+        hidden_project_ids = get_hidden_project_ids_for_scope(visibility_scope)
+        visibility_token = visibility_cache_token(visibility_scope)
 
         departments_qs = Department.objects.filter(is_active=True).order_by('name')
         if vertical_id is not None:
@@ -743,6 +761,8 @@ class ForecastBootstrapView(APIView):
         projects_qs = Project.objects.filter(is_active=True).order_by('name')
         if vertical_id is not None:
             projects_qs = projects_qs.filter(vertical_id=vertical_id)
+        if hidden_project_ids:
+            projects_qs = projects_qs.exclude(id__in=sorted(hidden_project_ids))
         projects_payload = [
             {
                 'id': project.id,
@@ -773,10 +793,13 @@ class ForecastBootstrapView(APIView):
         if vertical_id is not None:
             people_qs = people_qs.filter(department__vertical_id=vertical_id)
             cache_scope = f'{cache_scope}_v{vertical_id}'
+        cache_scope = f'{cache_scope}:vs={visibility_scope}:vt={visibility_token}'
 
         assignments_qs = Assignment.objects.filter(is_active=True)
         if vertical_id is not None:
             assignments_qs = assignments_qs.filter(project__vertical_id=vertical_id)
+        if hidden_project_ids:
+            assignments_qs = assignments_qs.exclude(project_id__in=sorted(hidden_project_ids))
         assignments_qs = assignments_qs.only('weekly_hours', 'person_id')
         people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=assignments_qs))
         workload_forecast = CapacityAnalysisService.get_workload_forecast(people_qs, weeks, cache_scope=cache_scope)

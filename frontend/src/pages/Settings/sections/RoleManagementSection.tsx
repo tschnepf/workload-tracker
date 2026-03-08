@@ -116,7 +116,7 @@ const RoleManagementSection: React.FC = () => {
   return (
     <SettingsSectionFrame
       id={ROLE_MANAGEMENT_SECTION_ID}
-      title="Company Roles"
+      title="Roles"
       description="Manage job roles used throughout the system. Roles can be assigned to people and used for reporting."
       actions={actions}
     >

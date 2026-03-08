@@ -42,6 +42,8 @@ class NetworkGraphApiTests(TestCase):
         self.project_a = Project.objects.create(name='Project A', client='Acme', vertical=self.vertical_a, is_active=True)
         self.project_b = Project.objects.create(name='Project B', client='Acme', vertical=self.vertical_a, is_active=True)
         self.project_c = Project.objects.create(name='Project C', client='Globex', vertical=self.vertical_b, is_active=True)
+        self.project_overhead = Project.objects.create(name='General Overhead', client='Acme', vertical=self.vertical_a, is_active=True)
+        self.project_smc = Project.objects.create(name='Client Ops', client='SMC', vertical=self.vertical_a, is_active=True)
         self.project_inactive = Project.objects.create(name='Project Inactive', client='Acme', vertical=self.vertical_a, is_active=False)
         settings_obj = NetworkGraphSettings.get_active()
         settings_obj.omitted_project_ids = []
@@ -110,6 +112,28 @@ class NetworkGraphApiTests(TestCase):
             person_name=self.person_b.name,
             project_name=self.project_c.name,
             client=self.project_c.client,
+            person_is_active=True,
+        )
+        WeeklyAssignmentSnapshot.objects.create(
+            week_start=week3,
+            person=self.person_a,
+            project=self.project_overhead,
+            department_id=self.dept_parent.id,
+            hours=7,
+            person_name=self.person_a.name,
+            project_name=self.project_overhead.name,
+            client=self.project_overhead.client,
+            person_is_active=True,
+        )
+        WeeklyAssignmentSnapshot.objects.create(
+            week_start=week3,
+            person=self.person_b,
+            project=self.project_smc,
+            department_id=self.dept_child.id,
+            hours=6,
+            person_name=self.person_b.name,
+            project_name=self.project_smc.name,
+            client=self.project_smc.client,
             person_is_active=True,
         )
         WeeklyAssignmentSnapshot.objects.create(
@@ -263,6 +287,16 @@ class NetworkGraphApiTests(TestCase):
         self.assertEqual(len(payload['edges']), 1)
         edge = payload['edges'][0]
         self.assertEqual(edge['id'], f'assignment:{self.person_a.id}:{self.project_a.id}')
+
+    def test_seeded_keyword_visibility_hides_overhead_and_smc_projects(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get(
+            f'/api/reports/network/graph/?mode=project_people&start={self.start}&end={self.end}'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        labels = {n['label'] for n in resp.json()['nodes']}
+        self.assertNotIn(self.project_overhead.name, labels)
+        self.assertNotIn(self.project_smc.name, labels)
 
     def test_omitted_projects_setting_excludes_projects_from_all_modes(self):
         self.client.force_authenticate(self.admin)
