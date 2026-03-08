@@ -374,10 +374,10 @@ function addDays(dateString: string, days: number): string {
 }
 
 function percentToBackground(percent: number): string {
-  if (!Number.isFinite(percent)) return 'var(--heatmap-unknown, #475569)';
-  if (percent >= 110) return 'var(--heatmap-burn, #be123c)';
-  if (percent >= 95) return 'var(--heatmap-high, #f97316)';
-  if (percent >= 70) return 'var(--heatmap-nominal, #22c55e)';
-  if (percent >= 40) return 'var(--heatmap-low, #0ea5e9)';
-  return 'var(--heatmap-idle, #6366f1)';
+  if (!Number.isFinite(percent)) return 'var(--chart-neutral)';
+  if (percent >= 110) return 'var(--color-state-danger)';
+  if (percent >= 95) return 'var(--color-state-warning)';
+  if (percent >= 70) return 'var(--color-state-success)';
+  if (percent >= 40) return 'var(--color-state-info)';
+  return 'var(--chart-accent-a)';
 }

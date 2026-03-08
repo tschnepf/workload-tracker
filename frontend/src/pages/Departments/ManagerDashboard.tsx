@@ -187,19 +187,19 @@ const riskBadgeClasses = [
 const riskCellToneClasses: Record<RiskCellTone, { base: string; selected: string }> = {
   critical: {
     base: 'border-red-500/35 bg-red-500/12 hover:border-red-400/45 hover:bg-red-500/18',
-    selected: 'border-red-400/70 bg-red-500/24 shadow-[0_10px_22px_rgba(239,68,68,0.28)]',
+    selected: 'border-red-400/70 bg-red-500/24 shadow-[var(--elevation-2)]',
   },
   warning: {
     base: 'border-amber-500/35 bg-amber-500/11 hover:border-amber-400/45 hover:bg-amber-500/16',
-    selected: 'border-amber-400/70 bg-amber-500/23 shadow-[0_10px_22px_rgba(245,158,11,0.24)]',
+    selected: 'border-amber-400/70 bg-amber-500/23 shadow-[var(--elevation-2)]',
   },
   watch: {
     base: 'border-blue-500/30 bg-blue-500/10 hover:border-blue-400/45 hover:bg-blue-500/16',
-    selected: 'border-blue-400/70 bg-blue-500/22 shadow-[0_10px_22px_rgba(59,130,246,0.26)]',
+    selected: 'border-blue-400/70 bg-blue-500/22 shadow-[var(--elevation-2)]',
   },
   stable: {
     base: 'border-emerald-500/28 bg-emerald-500/9 hover:border-emerald-400/42 hover:bg-emerald-500/14',
-    selected: 'border-emerald-400/65 bg-emerald-500/20 shadow-[0_10px_22px_rgba(16,185,129,0.25)]',
+    selected: 'border-emerald-400/65 bg-emerald-500/20 shadow-[var(--elevation-2)]',
   },
 };
 
@@ -211,13 +211,13 @@ function getRiskCellTone(row: ManagerRiskRow): RiskCellTone {
 }
 
 const shellCardClass =
-  'rounded-2xl border border-white/10 bg-[linear-gradient(150deg,rgba(23,26,41,0.95)_0%,rgba(13,15,26,0.93)_62%,rgba(9,11,18,0.95)_100%)] shadow-[0_24px_72px_rgba(0,0,0,0.5)] backdrop-blur';
+  'rounded-2xl border border-white/10 bg-[linear-gradient(150deg,rgba(23,26,41,0.95)_0%,rgba(13,15,26,0.93)_62%,rgba(9,11,18,0.95)_100%)] shadow-[var(--elevation-3)] backdrop-blur';
 
 const sectionCardClass =
-  'rounded-xl border border-white/10 bg-[linear-gradient(160deg,rgba(30,33,49,0.86)_0%,rgba(16,18,30,0.94)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_16px_38px_rgba(0,0,0,0.34)]';
+  'rounded-xl border border-white/10 bg-[linear-gradient(160deg,rgba(30,33,49,0.86)_0%,rgba(16,18,30,0.94)_100%)] shadow-[var(--elevation-3)]';
 
 const insetCardClass =
-  'rounded-lg border border-white/10 bg-[linear-gradient(160deg,rgba(19,22,35,0.88)_0%,rgba(12,14,23,0.9)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
+  'rounded-lg border border-white/10 bg-[linear-gradient(160deg,rgba(19,22,35,0.88)_0%,rgba(12,14,23,0.9)_100%)] shadow-[var(--elevation-1)]';
 
 const MetricTile: React.FC<{
   label: string;
@@ -1136,7 +1136,7 @@ const ManagerDashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_15%_-15%,rgba(72,92,150,0.26)_0%,rgba(16,19,30,0.96)_48%,rgba(8,10,16,0.99)_100%)] p-4 sm:p-6 lg:p-7">
+      <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-white/10 bg-[radial-gradient(circle_at_15%_-15%,rgba(72,92,150,0.26)_0%,rgba(16,19,30,0.96)_48%,rgba(8,10,16,0.99)_100%)] p-4 sm:p-6 lg:p-7">
         <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-blue-500/12 blur-3xl" />
         <div className="pointer-events-none absolute -right-24 top-10 h-60 w-60 rounded-full bg-indigo-500/10 blur-3xl" />
         <div className="relative space-y-6">
@@ -1199,7 +1199,7 @@ const ManagerDashboard: React.FC = () => {
                         onClick={() => setWeeksPeriod(weeks)}
                         className={`flex-1 rounded-md px-2 py-1 text-xs font-semibold transition-all ${
                           weeksPeriod === weeks
-                            ? 'bg-gradient-to-r from-blue-500 to-sky-400 text-white shadow-[0_4px_18px_rgba(59,130,246,0.35)]'
+                            ? 'bg-gradient-to-r from-blue-500 to-sky-400 text-white shadow-[var(--elevation-2)]'
                             : 'text-slate-300 hover:bg-white/5 hover:text-white'
                         }`}
                       >
@@ -1219,7 +1219,7 @@ const ManagerDashboard: React.FC = () => {
                         onClick={() => setLayoutOption(option)}
                         className={`flex-1 rounded-md px-2 py-1 text-xs font-semibold transition-all ${
                           layoutOption === option
-                            ? 'bg-gradient-to-r from-blue-500 to-sky-400 text-white shadow-[0_4px_18px_rgba(59,130,246,0.35)]'
+                            ? 'bg-gradient-to-r from-blue-500 to-sky-400 text-white shadow-[var(--elevation-2)]'
                             : 'text-slate-300 hover:bg-white/5 hover:text-white'
                         }`}
                         aria-pressed={layoutOption === option}
@@ -1232,7 +1232,7 @@ const ManagerDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 rounded-lg border border-blue-500/40 bg-blue-500/12 px-4 py-2.5 text-sm font-medium text-blue-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <div className="mt-4 rounded-lg border border-blue-500/40 bg-blue-500/12 px-4 py-2.5 text-sm font-medium text-blue-100 shadow-[var(--elevation-1)]">
               {layoutLabels[layoutOption]} • {selectedDepartmentInfo?.name || 'No Department Selected'} •{' '}
               {scopeDepartmentInfo?.name || 'No Scope'}
               {busy ? ' • Refreshing live data…' : ''}

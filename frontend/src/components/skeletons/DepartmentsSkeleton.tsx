@@ -1,13 +1,13 @@
 import React from 'react';
 
 const Bar: React.FC<{ w?: string; h?: string }>= ({ w = '100%', h = '12px' }) => (
-  <div className="bg-[#3e3e42] rounded animate-pulse" style={{ width: w, height: h }} />
+  <div className="bg-[var(--color-border)] rounded animate-pulse" style={{ width: w, height: h }} />
 );
 
 const DepartmentsSkeleton: React.FC = () => {
   return (
     <div className="h-full min-h-0 flex bg-[var(--color-bg)]" role="status" aria-live="polite" aria-busy="true">
-      <div className="w-1/3 p-6 border-r border-[var(--color-border)] bg-[#252526] min-h-0">
+      <div className="w-1/3 p-6 border-r border-[var(--color-border)] bg-[var(--color-surface)] min-h-0">
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
             <Bar w="140px" h="22px" />

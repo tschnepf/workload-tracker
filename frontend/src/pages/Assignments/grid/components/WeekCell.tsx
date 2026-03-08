@@ -48,7 +48,7 @@ const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, isLocked = f
             if (e.key === 'Enter') onEditSave();
             if (e.key === 'Escape') onEditCancel();
           }}
-          className="w-full h-8 px-1 text-xs bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] focus:border-[var(--focus)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield]"
+          className="w-full h-8 px-1 text-xs bg-[var(--surface)] text-[var(--text)] border border-[var(--border)] focus:border-[var(--focus)] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield]"
           autoFocus
         />
       ) : (
@@ -57,7 +57,7 @@ const WeekCell: React.FC<WeekCellProps> = ({ isSelected, isEditing, isLocked = f
         </div>
       )}
       {hasDeliverable && (
-        <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
+        <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-0.5 pointer-events-none">
           {entries.slice(0,3).map((e, idx) => (
             <div key={idx} className="w-[3px] rounded" style={{ background: colorFor(e.type) }} />
           ))}

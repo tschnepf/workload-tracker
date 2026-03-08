@@ -40,7 +40,7 @@ const SearchTokenBar: React.FC<Props> = ({
       <div className="flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden">
         <div className="flex items-center border-r border-[var(--border)] bg-[var(--surface)] px-2">
           <select
-            className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none"
+            className="bg-transparent text-[11px] uppercase tracking-wide text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]"
             value={activeToken?.op ?? searchOp}
             onChange={(e) => onSearchOpChange(e.target.value as SearchTokenOp)}
             aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
@@ -69,7 +69,7 @@ const SearchTokenBar: React.FC<Props> = ({
                   isActive
                     ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
+                } focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]`}
                 title={`${token.op.toUpperCase()} ${token.term}`}
               >
                 <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
@@ -95,7 +95,7 @@ const SearchTokenBar: React.FC<Props> = ({
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={onInputKeyDown}
             placeholder={placeholder}
-            className="flex-1 min-w-[140px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none"
+            className="flex-1 min-w-[140px] px-1 py-0.5 text-base lg:text-sm bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]"
           />
         </div>
       </div>

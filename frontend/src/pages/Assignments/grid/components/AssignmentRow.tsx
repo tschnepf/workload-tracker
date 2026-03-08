@@ -94,7 +94,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
 
   return (
     <div className="grid gap-px p-0.5 bg-[var(--surface)] hover:bg-[var(--surfaceHover)] transition-colors" style={{ gridTemplateColumns: gridTemplate }}>
-      <div className="flex items-start pt-0.5 pb-0 pl-[60px] pr-2">
+      <div className="flex items-start pt-0.5 pb-0 pl-14 pr-2">
         <div className="min-w-0 flex-1">
           <div className="text-[var(--muted)] text-xs whitespace-normal break-words leading-snug" title={clientName}>
             {clientName || ''}

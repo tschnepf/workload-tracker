@@ -33,7 +33,7 @@ const IconButton: React.FC<IconButtonProps> = ({
       title={label}
       className={[
         'inline-flex items-center justify-center rounded-[var(--radius-md)] border',
-        'focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]',
         'transition-colors motion-reduce:transition-none',
         'disabled:opacity-60 disabled:pointer-events-none',
         sizeMap[size],

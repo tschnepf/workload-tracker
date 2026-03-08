@@ -24,7 +24,7 @@ const GlobalNavPending: React.FC = () => {
         justifyContent: 'center',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
         <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[var(--color-action-primary-hover)] border-t-transparent motion-reduce:hidden" />
         <span style={{ color: 'var(--color-text-primary)' }}>Loading…</span>
       </div>

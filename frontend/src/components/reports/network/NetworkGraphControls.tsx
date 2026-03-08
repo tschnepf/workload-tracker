@@ -138,7 +138,7 @@ const NetworkGraphControls: React.FC<Props> = ({
           <input className={`${fieldClass} h-8 text-xs py-1`} type="number" min={100} max={10000} value={maxEdges} onChange={(e) => onMaxEdgesChange(Math.max(100, Math.min(10000, Number(e.target.value || 4000))))} />
         </label>
 
-        <label className="relative group text-[11px] flex items-center gap-2 h-8 px-2 mt-[17px] rounded border border-[var(--border)] bg-[var(--surface)]">
+        <label className="relative group text-[11px] flex items-center gap-2 h-8 px-2 mt-4 rounded border border-[var(--border)] bg-[var(--surface)]">
           <input type="checkbox" checked={includeInactive} onChange={(e) => onIncludeInactiveChange(e.target.checked)} />
           <span>Include inactive</span>
           <span className={tooltipClass}>

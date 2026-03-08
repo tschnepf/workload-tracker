@@ -13,14 +13,14 @@ export function startOfWeekSunday(d: Date): Date {
 }
 
 export const typeColors: Record<string, string> = {
-  bulletin: '#3b82f6',
+  bulletin: 'var(--color-state-info)',
   cd: '#fb923c',
   dd: '#818cf8',
   ifc: '#06b6d4',
   ifp: '#f472b6',
   masterplan: '#a78bfa',
-  sd: '#f59e0b',
-  milestone: '#64748b',
+  sd: 'var(--color-state-warning)',
+  milestone: 'var(--chart-neutral)',
   pre_deliverable: 'var(--surfaceOverlay)',
 };
 

@@ -50,7 +50,7 @@ const StatusStrip: React.FC<StatusStripProps> = ({ tone = 'warning', icon, child
   return (
     <div
       role="status"
-      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-[0_6px_18px_rgba(0,0,0,0.25)] ${styles.bg} ${styles.border} ${className ?? ''}`}
+      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-[var(--elevation-2)] ${styles.bg} ${styles.border} ${className ?? ''}`}
     >
       <div className={`flex h-7 w-7 items-center justify-center rounded-full ${styles.iconBg}`}>
         {icon ?? <DefaultIcon />}

@@ -31,7 +31,7 @@ export default function SkillsEditor(props: SkillsEditorProps) {
           onSkillsChange={(skills) => onChange('strengths', skills)}
           skillType="strength"
           placeholder="Add strengths..."
-          className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
+          className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
         />
       </div>
 
@@ -46,7 +46,7 @@ export default function SkillsEditor(props: SkillsEditorProps) {
           onSkillsChange={(skills) => onChange('inProgress', skills)}
           skillType="in_progress"
           placeholder="Add in-progress skills..."
-          className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
+          className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
         />
       </div>
 
@@ -61,7 +61,7 @@ export default function SkillsEditor(props: SkillsEditorProps) {
           onSkillsChange={(skills) => onChange('goals', skills)}
           skillType="goals"
           placeholder="Add goals..."
-          className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
+          className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
         />
       </div>
     </>

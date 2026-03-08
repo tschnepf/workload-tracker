@@ -333,7 +333,7 @@ const ProjectSection: React.FC<ProjectSectionProps> = React.memo(({
 
           {!loadingAssignments && (project.assignments || []).length === 0 && (
             <div className="grid gap-px py-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
-              <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
+              <div className="col-span-2 flex items-center py-1 pl-14 pr-2">
                 <div className="text-[var(--muted)] text-xs italic">No assignments</div>
               </div>
               <div></div>

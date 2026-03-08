@@ -36,7 +36,7 @@ const ProjectCell: React.FC<ProjectCellProps> = ({ assignmentId, projectId, proj
   return (
     <div className="flex items-start pt-0.5 pb-1 pr-2">
       <div className="min-w-0 flex-1">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gridTemplateRows: 'auto auto', columnGap: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gridTemplateRows: 'auto auto', columnGap: 'var(--space-2)' }}>
           {/* Project name (row 1, col 1) */}
           <div className="text-[var(--text)] text-xs truncate leading-5" title={projectName} style={{ gridColumn: 1, gridRow: 1 }}>
             {projectId ? (

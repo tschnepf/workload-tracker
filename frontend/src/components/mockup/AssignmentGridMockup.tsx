@@ -680,7 +680,7 @@ const AssignmentGridMockup: React.FC = () => {
                     >
                       
                       {/* Assignment Name - Clearly Indented */}
-                      <div className="flex items-center py-1 pl-[60px] pr-2">
+                      <div className="flex items-center py-1 pl-14 pr-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-slate-300 text-xs truncate">{assignment.projectName}</div>
                         </div>
@@ -706,7 +706,7 @@ const AssignmentGridMockup: React.FC = () => {
                                 step="0.5"
                                 value={editingValue}
                                 onChange={(e) => setEditingValue(e.target.value)}
-                                className="w-12 h-6 text-xs rounded border bg-slate-700 border-slate-500 text-slate-50 text-center focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                className="w-12 h-6 text-xs rounded border bg-slate-700 border-slate-500 text-slate-50 text-center focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 onBlur={() => {
                                   // Save the value when losing focus
                                   const numValue = parseFloat(editingValue) || 0;
@@ -824,7 +824,7 @@ const AssignmentGridMockup: React.FC = () => {
                   {/* Empty State - Minimal */}
                   {person.isExpanded && person.assignments.length === 0 && (
                     <div className="grid grid-cols-[280px_repeat(12,70px)_80px] gap-px p-1 bg-slate-850">
-                      <div className="flex items-center py-1 pl-[60px] pr-2">
+                      <div className="flex items-center py-1 pl-14 pr-2">
                         <div className="text-slate-500 text-xs italic">
                           No assignments
                         </div>

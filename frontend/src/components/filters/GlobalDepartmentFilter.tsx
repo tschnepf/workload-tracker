@@ -154,8 +154,8 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
     overflowY: 'auto',
     backgroundColor: 'var(--surface)',
     border: '1px solid var(--border)',
-    borderRadius: '6px',
-    boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
+    borderRadius: 'var(--radius-sm)',
+    boxShadow: 'var(--elevation-2)',
   };
   const departmentNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -195,7 +195,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
                 <button
                   onClick={() => removeDepartmentFilter(filter.departmentId)}
                   aria-label={`Remove ${filter.op.toUpperCase()} ${name}`}
-                  className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none"
+                  className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                 >
                   ×
                 </button>
@@ -241,7 +241,7 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          className={`relative z-50 h-10 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-0 ${expand ? '' : 'min-w-[100px]'}`}
+          className={`relative z-50 h-10 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 ${expand ? '' : 'min-w-[100px]'}`}
         />
         {open && dropdownRect &&
           createPortal(
@@ -252,10 +252,10 @@ export const GlobalDepartmentFilter: React.FC<Props> = ({ rightActions, showCopy
               style={{ ...listboxStyle, left: dropdownRect.left, top: dropdownRect.top, width: dropdownRect.width }}
             >
               {error && (
-                <div style={{ padding: 8, color: 'var(--color-state-danger)' }}>Error: {error}</div>
+                <div style={{ padding: 'var(--space-2)', color: 'var(--color-state-danger)' }}>Error: {error}</div>
               )}
               {!error && results.length === 0 && (
-                <div style={{ padding: 8, color: 'var(--color-text-secondary)' }}>No results</div>
+                <div style={{ padding: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>No results</div>
               )}
               {!error && results.map((dep, idx) => (
                 <div

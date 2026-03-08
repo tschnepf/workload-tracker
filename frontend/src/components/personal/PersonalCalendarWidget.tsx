@@ -127,14 +127,14 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
             <div className="text-[var(--text)] font-semibold">My Calendar</div>
             <p className="text-[var(--muted)] text-sm">Milestones and pre-deliverables synced to your assignments</p>
           </div>
-          <label className="text-sm text-[#cbd5e1] inline-flex items-center gap-2">
+          <label className="text-sm text-[var(--color-text-secondary)] inline-flex items-center gap-2">
             <input type="checkbox" checked={showPre} onChange={(e) => setShowPre(e.currentTarget.checked)} />
             Show Pre-Deliverables
           </label>
         </div>
 
         {!personId ? (
-          <div className="text-sm text-[#94a3b8]">Link your account to a Person to view your calendar.</div>
+          <div className="text-sm text-[var(--chart-neutral)]">Link your account to a Person to view your calendar.</div>
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
             <FullCalendarWrapper
@@ -143,7 +143,7 @@ const PersonalCalendarWidget: React.FC<Props> = ({ className }) => {
               loading={isLoading}
               emptyState={
                 error ? (
-                  <div className="text-sm text-[#fca5a5]">{(error as Error)?.message || 'Failed to load calendar'}</div>
+                  <div className="text-sm text-[var(--color-state-danger)]">{(error as Error)?.message || 'Failed to load calendar'}</div>
                 ) : (
                   <div className="text-sm text-[var(--muted)]">No deliverables scheduled for this window.</div>
                 )

@@ -71,13 +71,13 @@ export const INTEGRATIONS_SECTION_ID = 'integrations';
 const SELECT_STYLES = `
   w-full px-3 py-2 rounded-md border text-sm bg-[var(--surface)]
   border-[var(--border)] text-[var(--text)] focus:border-[var(--focus)]
-  focus:ring-1 focus:ring-[var(--focus)] focus:outline-none motion-reduce:transition-none
+  focus:ring-1 focus:ring-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] motion-reduce:transition-none
   min-h-[44px]
 `;
 const INPUT_STYLES = `
   w-full px-3 py-2 rounded-md border text-sm bg-[var(--surface)]
   border-[var(--border)] text-[var(--text)] focus:border-[var(--focus)]
-  focus:ring-1 focus:ring-[var(--focus)] focus:outline-none motion-reduce:transition-none
+  focus:ring-1 focus:ring-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] motion-reduce:transition-none
 `;
 
 const behaviorOptions = [

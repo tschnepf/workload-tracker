@@ -16,7 +16,7 @@ const Navigation: React.FC = () => {
     logo: 'text-xl font-bold text-[var(--color-text-primary)]',
     links: 'flex space-x-8',
     link: 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] px-3 py-2 text-sm font-medium transition-colors',
-    activeLink: 'text-[#007acc] hover:text-[#1e90ff] px-3 py-2 text-sm font-medium'
+    activeLink: 'text-[var(--color-action-primary)] hover:text-[var(--color-action-primary-hover)] px-3 py-2 text-sm font-medium'
   };
 
   const isActive = (path: string) => location.pathname === path;

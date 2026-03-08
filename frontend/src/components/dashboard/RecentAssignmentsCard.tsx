@@ -58,7 +58,7 @@ const RecentAssignmentsCard: React.FC<{
   }, [items, matchesTokensText]);
 
   return (
-    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] flex flex-col min-h-[240px] overflow-hidden ${className ?? ''}`}>
+    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--elevation-3)] flex flex-col min-h-[240px] overflow-hidden ${className ?? ''}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-[var(--text)]">Recent Assignments</h3>

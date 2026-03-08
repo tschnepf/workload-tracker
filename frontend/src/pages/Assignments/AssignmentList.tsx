@@ -108,10 +108,10 @@ const AssignmentList: React.FC = () => {
           loadingState={(
             <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6">
               <div className="space-y-2">
-                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
-                <div className="w-full h-5 bg-[#3e3e42] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[var(--color-border)] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[var(--color-border)] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[var(--color-border)] animate-pulse rounded" />
+                <div className="w-full h-5 bg-[var(--color-border)] animate-pulse rounded" />
               </div>
             </Card>
           )}
@@ -205,7 +205,7 @@ const AssignmentList: React.FC = () => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-[#3e3e42] border-b border-[var(--color-border)]">
+                <thead className="bg-[var(--color-border)] border-b border-[var(--color-border)]">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-[var(--color-text-primary)] uppercase tracking-wider">
                       Person
@@ -226,7 +226,7 @@ const AssignmentList: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-600">
                 {assignments.map((assignment) => (
-                    <tr key={assignment.id} className="hover:bg-[#3e3e42]/50 transition-colors">
+                    <tr key={assignment.id} className="hover:bg-[var(--color-border)]/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-medium text-[var(--color-text-primary)]">
                           {assignment.personName

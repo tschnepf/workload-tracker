@@ -617,9 +617,9 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
   const isSoon = !!(deliverableDate && deliverableDate >= today && deliverableDate <= soonEnd);
   const isRecent = !!(deliverableDate && deliverableDate <= today && (today.getTime() - deliverableDate.getTime()) <= 8 * 24 * 60 * 60 * 1000);
   const dateClass = isSoon
-    ? 'text-[#b22222] font-semibold'
+    ? 'text-[var(--color-state-danger)] font-semibold'
     : isRecent
-      ? 'text-[#d2691e] italic'
+      ? 'text-[var(--color-state-warning)] italic'
       : 'text-[var(--muted)]';
 
   const rowPaddingClass = appearance === 'presentation' ? 'py-1.5 px-0' : 'p-2';
@@ -635,7 +635,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
                 type="number"
                 min={0}
                 max={100}
-                className="w-12 bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                className="w-12 bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-center [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -652,7 +652,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             {inlineField === 'description' ? (
               <input
                 type="text"
-                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 text-center"
+                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-center"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}
@@ -684,7 +684,7 @@ const DeliverableRow: React.FC<DeliverableRowProps> = ({
             {inlineField === 'notes' ? (
               <input
                 type="text"
-                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0 text-center"
+                className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-center"
                 value={inlineDraft}
                 onChange={(e) => setInlineDraft(e.currentTarget.value)}
                 onBlur={commitInline}

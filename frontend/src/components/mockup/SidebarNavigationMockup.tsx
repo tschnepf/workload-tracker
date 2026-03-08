@@ -36,15 +36,15 @@ const SidebarNavigationMockup: React.FC = () => {
   const Tooltip = ({ children, title, description }: { children: React.ReactNode, title: string, description: string }) => (
     <div className="group/tooltip relative">
       {children}
-      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-[#2d2d30] border border-[#3e3e42] rounded-md shadow-lg z-50 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 pointer-events-none min-w-[180px]">
+      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-[#2d2d30] border border-[var(--color-border)] rounded-md shadow-lg z-50 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 pointer-events-none min-w-[180px]">
         <div className="text-[#cccccc] text-sm font-medium mb-1">
           {title}
         </div>
-        <div className="text-[#969696] text-xs">
+        <div className="text-[var(--color-text-secondary)] text-xs">
           {description}
         </div>
         {/* Arrow pointing to the icon */}
-        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#3e3e42]" />
+        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[var(--color-border)]" />
         <div className="absolute right-full top-1/2 -translate-y-1/2 translate-x-px border-4 border-transparent border-r-[#2d2d30]" />
       </div>
     </div>
@@ -163,25 +163,25 @@ const SidebarNavigationMockup: React.FC = () => {
     <div className="min-h-screen bg-[#1e1e1e] flex">
       
       {/* Demo Controls */}
-      <div className="fixed top-4 right-4 z-50 bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-4 space-y-3">
+      <div className="fixed top-4 right-4 z-50 bg-[#2d2d30] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
         <div className="text-[#cccccc] text-sm font-medium">Always-Collapsed Sidebar Demo</div>
-        <div className="text-[#969696] text-xs">Screen Width: {screenWidth}px</div>
-        <div className="text-[#969696] text-xs">
+        <div className="text-[var(--color-text-secondary)] text-xs">Screen Width: {screenWidth}px</div>
+        <div className="text-[var(--color-text-secondary)] text-xs">
           State: Always Collapsed
         </div>
-        <div className="text-[#969696] text-xs">
+        <div className="text-[var(--color-text-secondary)] text-xs">
           Hover icons for tooltips
         </div>
       </div>
 
       {/* Sidebar - Always Collapsed */}
-      <div className="bg-[#2d2d30] border-r border-[#3e3e42] flex-shrink-0 w-16">
+      <div className="bg-[#2d2d30] border-r border-[var(--color-border)] flex-shrink-0 w-16">
         
         {/* Header */}
-        <div className="h-16 flex items-center border-b border-[#3e3e42] relative">
+        <div className="h-16 flex items-center border-b border-[var(--color-border)] relative">
           <Tooltip title="Workload Tracker" description="Resource Management System">
             <div className="w-full h-full flex items-center justify-center">
-              <div className="w-8 h-8 bg-[#007acc] rounded flex items-center justify-center">
+              <div className="w-8 h-8 bg-[var(--color-action-primary)] rounded flex items-center justify-center">
                 <span className="text-white text-sm font-bold">WT</span>
               </div>
             </div>
@@ -198,8 +198,8 @@ const SidebarNavigationMockup: React.FC = () => {
                   className={`
                     group flex items-center rounded-md text-sm transition-all duration-200 px-3 py-2.5 justify-center
                     ${isActive(item.path) 
-                      ? 'bg-[#007acc]/10 border-r-2 border-[#007acc] text-[#007acc]' 
-                      : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50'
+                      ? 'bg-[var(--color-action-primary)]/10 border-r-2 border-[var(--color-action-primary)] text-[var(--color-action-primary)]' 
+                      : 'text-[var(--color-text-secondary)] hover:text-[#cccccc] hover:bg-[var(--color-border)]/50'
                     }
                   `}
                 >
@@ -216,14 +216,14 @@ const SidebarNavigationMockup: React.FC = () => {
           </div>
 
           {/* Separator */}
-          <div className="my-6 mx-6 border-t border-[#3e3e42]" />
+          <div className="my-6 mx-6 border-t border-[var(--color-border)]" />
 
           {/* Bottom Section */}
           <div className="px-3 space-y-1">
             {/* User Profile */}
             <Tooltip title="Tim User" description="Administrator">
-              <div className="flex items-center rounded-md hover:bg-[#3e3e42]/50 cursor-pointer transition-colors px-3 py-2.5 justify-center">
-                <div className="w-6 h-6 bg-[#007acc] rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="flex items-center rounded-md hover:bg-[var(--color-border)]/50 cursor-pointer transition-colors px-3 py-2.5 justify-center">
+                <div className="w-6 h-6 bg-[var(--color-action-primary)] rounded-full flex items-center justify-center flex-shrink-0">
                   <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                     <circle cx="12" cy="7" r="4"/>
@@ -236,7 +236,7 @@ const SidebarNavigationMockup: React.FC = () => {
             <Tooltip title="Help & Support" description="Documentation and assistance">
               <Link
                 to="/help"
-                className="flex items-center rounded-md text-[#969696] hover:text-[#cccccc] hover:bg-[#3e3e42]/50 transition-colors px-3 py-2.5 justify-center"
+                className="flex items-center rounded-md text-[var(--color-text-secondary)] hover:text-[#cccccc] hover:bg-[var(--color-border)]/50 transition-colors px-3 py-2.5 justify-center"
               >
                 <div className="flex-shrink-0">
                   <IconComponent type="help" className="w-4 h-4" />
@@ -251,8 +251,8 @@ const SidebarNavigationMockup: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Top Bar (optional, for breadcrumbs or actions) */}
-        <div className="h-12 bg-[#2d2d30] border-b border-[#3e3e42] flex items-center px-6">
-          <div className="flex items-center gap-3 text-sm text-[#969696]">
+        <div className="h-12 bg-[#2d2d30] border-b border-[var(--color-border)] flex items-center px-6">
+          <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)]">
             <span>Dashboard</span>
             <span>/</span>
             <span className="text-[#cccccc]">Overview</span>
@@ -265,81 +265,81 @@ const SidebarNavigationMockup: React.FC = () => {
             <h1 className="text-3xl font-bold text-[#cccccc] mb-2">
               Dashboard Overview
             </h1>
-            <p className="text-[#969696] mb-8">
+            <p className="text-[var(--color-text-secondary)] mb-8">
               Welcome to your workload management dashboard
             </p>
 
             {/* Demo Content Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+              <div className="bg-[#2d2d30] border border-[var(--color-border)] rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-[#cccccc] mb-2">
                   Team Utilization
                 </h3>
-                <div className="text-3xl font-bold text-[#007acc] mb-2">82%</div>
-                <p className="text-[#969696] text-sm">
+                <div className="text-3xl font-bold text-[var(--color-action-primary)] mb-2">82%</div>
+                <p className="text-[var(--color-text-secondary)] text-sm">
                   Average team utilization this week
                 </p>
               </div>
 
-              <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+              <div className="bg-[#2d2d30] border border-[var(--color-border)] rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-[#cccccc] mb-2">
                   Active Projects
                 </h3>
-                <div className="text-3xl font-bold text-[#007acc] mb-2">12</div>
-                <p className="text-[#969696] text-sm">
+                <div className="text-3xl font-bold text-[var(--color-action-primary)] mb-2">12</div>
+                <p className="text-[var(--color-text-secondary)] text-sm">
                   Currently active projects
                 </p>
               </div>
 
-              <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+              <div className="bg-[#2d2d30] border border-[var(--color-border)] rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-[#cccccc] mb-2">
                   Overallocated
                 </h3>
                 <div className="text-3xl font-bold text-amber-400 mb-2">3</div>
-                <p className="text-[#969696] text-sm">
+                <p className="text-[var(--color-text-secondary)] text-sm">
                   Team members over capacity
                 </p>
               </div>
             </div>
 
             {/* Demo Explanation */}
-            <div className="bg-[#2d2d30] border border-[#3e3e42] rounded-lg p-6">
+            <div className="bg-[#2d2d30] border border-[var(--color-border)] rounded-lg p-6">
               <h3 className="text-lg font-semibold text-[#cccccc] mb-4">
                 Always-Collapsed Sidebar Features
               </h3>
-              <div className="space-y-3 text-sm text-[#969696]">
+              <div className="space-y-3 text-sm text-[var(--color-text-secondary)]">
                 <div className="flex items-start gap-3">
-                  <span className="text-[#007acc] font-mono">•</span>
+                  <span className="text-[var(--color-action-primary)] font-mono">•</span>
                   <div>
                     <strong className="text-[#cccccc]">Always Collapsed:</strong> Fixed 64px width sidebar that never expands
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="text-[#007acc] font-mono">•</span>
+                  <span className="text-[var(--color-action-primary)] font-mono">•</span>
                   <div>
                     <strong className="text-[#cccccc]">Smart Tooltips:</strong> Hover over any icon to see title and description
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="text-[#007acc] font-mono">•</span>
+                  <span className="text-[var(--color-action-primary)] font-mono">•</span>
                   <div>
                     <strong className="text-[#cccccc]">Space Efficient:</strong> Maximum content area with minimal navigation footprint
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="text-[#007acc] font-mono">•</span>
+                  <span className="text-[var(--color-action-primary)] font-mono">•</span>
                   <div>
                     <strong className="text-[#cccccc]">Active States:</strong> Current page highlighted with accent color and border
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="text-[#007acc] font-mono">•</span>
+                  <span className="text-[var(--color-action-primary)] font-mono">•</span>
                   <div>
                     <strong className="text-[#cccccc]">VSCode-Style:</strong> Minimalistic icons and professional tooltip design
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="text-[#007acc] font-mono">•</span>
+                  <span className="text-[var(--color-action-primary)] font-mono">•</span>
                   <div>
                     <strong className="text-[#cccccc]">Consistent Layout:</strong> Same visual hierarchy as expanded mode but space-optimized
                   </div>

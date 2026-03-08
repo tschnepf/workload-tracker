@@ -168,7 +168,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
           </label>
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
-              <thead className="text-[#cbd5e1]">
+              <thead className="text-[var(--color-text-secondary)]">
                 <tr>
                   <th className="py-2 pr-4 text-left">Key</th>
                   <th className="py-2 pr-4 text-left">Label</th>
@@ -178,14 +178,14 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                   <th className="py-2 pr-4 text-left">Actions</th>
                 </tr>
               </thead>
-              <tbody className="text-[#e5e7eb]">
+              <tbody className="text-[var(--color-text-primary)]">
                 {rows.map((row, index) => (
                   <tr key={row._localId} className="border-t border-[var(--color-border)]">
                     <td className="py-2 pr-4">
                       <input
                         type="text"
                         value={row.key || ''}
-                        className="w-24 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                        className="w-24 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => updatePhaseField(index, 'key', e.currentTarget.value)}
                       />
                     </td>
@@ -193,7 +193,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                       <input
                         type="text"
                         value={row.label || ''}
-                        className="w-24 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                        className="w-24 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => updatePhaseField(index, 'label', e.currentTarget.value)}
                       />
                     </td>
@@ -201,7 +201,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                       <input
                         type="text"
                         value={row._tokensText}
-                        className="w-64 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                        className="w-64 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => {
                           const value = e.currentTarget.value;
                           const phases = settings?.phases.slice() || [];
@@ -231,7 +231,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                         min={0}
                         max={100}
                         value={row.rangeMin ?? ''}
-                        className="w-20 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                        className="w-20 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => {
                           const v = e.currentTarget.value.trim();
                           updatePhaseField(index, 'rangeMin', v === '' ? null : Number(v));
@@ -244,7 +244,7 @@ const DeliverablePhaseMappingEditor: React.FC = () => {
                         min={0}
                         max={100}
                         value={row.rangeMax ?? ''}
-                        className="w-20 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                        className="w-20 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                         onChange={(e) => {
                           const v = e.currentTarget.value.trim();
                           updatePhaseField(index, 'rangeMax', v === '' ? null : Number(v));

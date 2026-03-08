@@ -26,7 +26,7 @@ const CompactHeatStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotal
           height: size,
           background: bg,
           opacity: 0.6,
-          borderRadius: 2,
+          borderRadius: 'var(--radius-xs)',
           marginRight: 4,
           border: '1px solid var(--color-border)',
         }}

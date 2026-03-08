@@ -1,0 +1,32 @@
+{
+  "entries": [
+    {
+      "id": "analytics-palette-hex",
+      "rule": "hex-color",
+      "filePattern": "src/components/analytics/*.tsx",
+      "samplePattern": "^#(?:22d3ee|34d399|60a5fa|a78bfa|ef4444|f59e0b|10b981|38bdf8|93c5fd|f472b6|f87171|fbbf24|2dd4bf|c084fc|fb7185|64748b|9ca3af|818cf8|06b6d4|3b82f6)$",
+      "reason": "Intentional categorical chart palette values."
+    },
+    {
+      "id": "deliverable-type-colors",
+      "rule": "hex-color",
+      "filePattern": "src/components/deliverables/calendar.utils.ts",
+      "samplePattern": "^#(?:3b82f6|fb923c|818cf8|06b6d4|f472b6|a78bfa|f59e0b|64748b|b22222|d2691e)$",
+      "reason": "Deliverable type legend encodings."
+    },
+    {
+      "id": "project-status-fallback-palette",
+      "rule": "hex-color",
+      "filePattern": "src/components/projects/status.*.ts",
+      "samplePattern": "^#(?:60a5fa|34d399|f59e0b|9ca3af|ef4444|64748b)$",
+      "reason": "Fallback status colors when server definitions are unavailable."
+    },
+    {
+      "id": "fullcalendar-type-colors",
+      "rule": "hex-color",
+      "filePattern": "src/features/fullcalendar/fullcalendar-theme.css",
+      "samplePattern": "^#(?:fb7185|0f172a|3b82f6|fb923c|818cf8|06b6d4|f472b6|a78bfa|f59e0b|64748b|1f2937|f1f5f9)$",
+      "reason": "FullCalendar event-type palette and high-contrast label colors."
+    }
+  ]
+}

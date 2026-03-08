@@ -32,7 +32,7 @@ function normalizeHex(value: string): string {
   return (value || '').trim().toLowerCase();
 }
 
-function getPickerHex(value: string, fallback = '#64748b'): string {
+function getPickerHex(value: string, fallback = 'var(--chart-neutral)'): string {
   return isHexColor(value) ? normalizeHex(value) : fallback;
 }
 
@@ -55,7 +55,7 @@ const ProjectStatusesSection: React.FC = () => {
   const [newKey, setNewKey] = useState('');
   const [newState, setNewState] = useState<EditState>({
     label: '',
-    colorHex: '#64748b',
+    colorHex: 'var(--chart-neutral)',
     includeInAnalytics: false,
     treatAsCaWhenNoDeliverable: false,
     isActive: true,
@@ -75,7 +75,7 @@ const ProjectStatusesSection: React.FC = () => {
       setNewKey('');
       setNewState({
         label: '',
-        colorHex: '#64748b',
+        colorHex: 'var(--chart-neutral)',
         includeInAnalytics: false,
         treatAsCaWhenNoDeliverable: false,
         isActive: true,
@@ -236,7 +236,7 @@ const ProjectStatusesSection: React.FC = () => {
               className="flex-1 rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-sm text-[var(--text)]"
               value={newState.colorHex}
               onChange={(e) => setNewState((prev) => ({ ...prev, colorHex: normalizeHex(e.target.value) }))}
-              placeholder="#64748b"
+              placeholder="var(--chart-neutral)"
             />
           </div>
           <input
@@ -325,7 +325,7 @@ const ProjectStatusesSection: React.FC = () => {
                             value={editingState?.label || ''}
                             onChange={(e) => setEditingState((prev) => prev ? { ...prev, label: e.target.value } : prev)}
                           />
-                          <span className="inline-block h-4 w-4 rounded border border-[var(--border)]" style={{ backgroundColor: editingState?.colorHex || '#64748b' }} />
+                          <span className="inline-block h-4 w-4 rounded border border-[var(--border)]" style={{ backgroundColor: editingState?.colorHex || 'var(--chart-neutral)' }} />
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
@@ -392,15 +392,15 @@ const ProjectStatusesSection: React.FC = () => {
                           <input
                             type="color"
                             className="h-7 w-10 cursor-pointer rounded border border-[var(--border)] bg-[var(--card)] p-1"
-                            value={getPickerHex(editingState?.colorHex || '#64748b')}
+                            value={getPickerHex(editingState?.colorHex || 'var(--chart-neutral)')}
                             onChange={(e) => setEditingState((prev) => prev ? { ...prev, colorHex: normalizeHex(e.target.value) } : prev)}
                             aria-label={`Select color for ${item.label}`}
                           />
                           <input
                             className="w-28 rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-xs text-[var(--text)]"
-                            value={editingState?.colorHex || '#64748b'}
+                            value={editingState?.colorHex || 'var(--chart-neutral)'}
                             onChange={(e) => setEditingState((prev) => prev ? { ...prev, colorHex: normalizeHex(e.target.value) } : prev)}
-                            placeholder="#64748b"
+                            placeholder="var(--chart-neutral)"
                           />
                           <Button type="button" onClick={() => onSaveEdit(item.key)} disabled={updateMutation.isPending}>Save</Button>
                           <button

@@ -9,7 +9,7 @@ export interface EmptyStateRowProps {
 const EmptyStateRow: React.FC<EmptyStateRowProps> = ({ weeks, gridTemplate }) => {
   return (
     <div className="grid gap-px p-1 bg-[var(--surface)]" style={{ gridTemplateColumns: gridTemplate }}>
-      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
+      <div className="col-span-2 flex items-center py-1 pl-14 pr-2">
         <div className="text-[var(--muted)] text-xs italic">No assignments</div>
       </div>
       <div></div>

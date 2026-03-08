@@ -109,7 +109,7 @@ const Toast: React.FC<ToastProps> = ({
             flex items-center justify-center
             ${styles.text} opacity-60 hover:opacity-100 
             hover:bg-white/10 transition-all duration-200
-            focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-focus-ring)]
           `}
           aria-label="Dismiss notification"
         >

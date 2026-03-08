@@ -70,7 +70,7 @@ const WeeksHorizonField: React.FC<Props> = ({
           }
         }}
         aria-label="Weeks horizon"
-        className="w-16 bg-transparent text-sm text-[var(--text)] focus:outline-none"
+        className="w-16 bg-transparent text-sm text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]"
       />
     </div>
   );

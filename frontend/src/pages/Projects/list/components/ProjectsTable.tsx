@@ -1003,17 +1003,17 @@ const ProjectsTable: React.FC<Props> = ({
         const futureStartBottom = projectStartDate
           ? projectStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : '';
-        const nextTopClass = isSoonNext ? 'text-[#b22222] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
-        const nextBottomClass = isSoonNext ? 'text-[#b22222] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+        const nextTopClass = isSoonNext ? 'text-[var(--color-state-danger)] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
+        const nextBottomClass = isSoonNext ? 'text-[var(--color-state-danger)] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
         const prevTop = prevTopRaw || '-';
         const prevBottom = prevDeliverable?.date ? parseLocal(prevDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         const today = new Date(); today.setHours(0,0,0,0);
         const prevDate = prevDeliverable?.date ? parseLocal(prevDeliverable.date) : null;
         const isRecentPrev = !!(prevDate && prevDate <= today && (today.getTime() - prevDate.getTime()) <= 8*24*60*60*1000);
-        // Recent last deliverable: chocolate tint (#d2691e), italic, still smaller than next deliverable
-        const prevTopClass = isRecentPrev ? 'text-[#d2691e] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
-        const prevBottomClass = isRecentPrev ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+        // Recent last deliverable: chocolate tint (var(--color-state-warning)), italic, still smaller than next deliverable
+        const prevTopClass = isRecentPrev ? 'text-[var(--color-state-warning)] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+        const prevBottomClass = isRecentPrev ? 'text-[var(--color-state-warning)] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
         const isEditingNotes = notesEditor?.projectId === project.id && notesEditor?.deliverableId === nextDeliverable?.id;
         const isEditingProjectNumber = projectNumberEditor?.projectId === project.id;
         const projectNumberDisplay = project.projectNumber ?? '';
@@ -1025,7 +1025,7 @@ const ProjectsTable: React.FC<Props> = ({
             key={project.id}
             data-project-id={project.id}
             onClick={() => handleRowClick(project, index)}
-            className={`relative grid ${gridColsClass} gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
+            className={`relative grid ${gridColsClass} gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]`}
             tabIndex={0}
           >
             {isSelected && (
@@ -1059,7 +1059,7 @@ const ProjectsTable: React.FC<Props> = ({
                 <input
                   autoFocus
                   type="text"
-                  className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
+                  className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0"
                   value={projectNumberEditor?.value ?? ''}
                   onChange={(e) => setProjectNumberEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                   onClick={(e) => e.stopPropagation()}
@@ -1136,7 +1136,7 @@ const ProjectsTable: React.FC<Props> = ({
                           autoFocus
                           type="text"
                           inputMode="decimal"
-                          className="w-10 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus:ring-0 text-[inherit]"
+                          className="w-10 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-[inherit]"
                           value={nextEditor?.value ?? ''}
                           onChange={(e) => setNextEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                           onBlur={() => { void saveNextDeliverable(); }}
@@ -1174,7 +1174,7 @@ const ProjectsTable: React.FC<Props> = ({
                       <input
                         autoFocus
                         type="text"
-                        className="flex-1 min-w-0 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus:ring-0 text-[inherit]"
+                        className="flex-1 min-w-0 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-[inherit]"
                         value={nextEditor?.value ?? ''}
                         onChange={(e) => setNextEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                         onBlur={() => { void saveNextDeliverable(); }}
@@ -1284,7 +1284,7 @@ const ProjectsTable: React.FC<Props> = ({
                     <textarea
                       autoFocus
                       rows={1}
-                      className="w-full text-xs rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] px-2 py-1 h-7 leading-tight outline-none focus:outline-none focus:ring-0"
+                      className="w-full text-xs rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] px-2 py-1 h-7 leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0"
                       value={notesEditor?.value ?? ''}
                       onChange={(e) => setNotesEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                       onClick={(e) => e.stopPropagation()}
@@ -1375,16 +1375,16 @@ const ProjectsTable: React.FC<Props> = ({
           const futureStartBottom2 = projectStartDate2
             ? projectStartDate2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             : '';
-          const nextTopClass2 = isSoonNext2 ? 'text-[#b22222] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
-          const nextBottomClass2 = isSoonNext2 ? 'text-[#b22222] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+          const nextTopClass2 = isSoonNext2 ? 'text-[var(--color-state-danger)] font-semibold leading-tight' : 'text-[var(--text)] font-medium leading-tight';
+          const nextBottomClass2 = isSoonNext2 ? 'text-[var(--color-state-danger)] text-xs leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const prevTopRaw = prevDeliverable ? `${prevDeliverable.percentage != null ? `${prevDeliverable.percentage}% ` : ''}${prevDeliverable.description || ''}`.trim() : '';
           const prevTop = prevTopRaw || '-';
           const prevBottom = prevDeliverable?.date ? parseLocal(prevDeliverable.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
           const today2 = new Date(); today2.setHours(0,0,0,0);
           const prevDate2 = prevDeliverable?.date ? parseLocal(prevDeliverable.date) : null;
           const isRecentPrev2 = !!(prevDate2 && prevDate2 <= today2 && (today2.getTime() - prevDate2.getTime()) <= 8*24*60*60*1000);
-          const prevTopClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
-          const prevBottomClass2 = isRecentPrev2 ? 'text-[#d2691e] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+          const prevTopClass2 = isRecentPrev2 ? 'text-[var(--color-state-warning)] text-xs font-semibold italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
+          const prevBottomClass2 = isRecentPrev2 ? 'text-[var(--color-state-warning)] text-xs italic leading-tight' : 'text-[var(--muted)] text-xs leading-tight';
           const isEditingNotes2 = notesEditor?.projectId === project.id && notesEditor?.deliverableId === nextDeliverable?.id;
           const isEditingProjectNumber2 = projectNumberEditor?.projectId === project.id;
           const projectNumberDisplay2 = project.projectNumber ?? '';
@@ -1397,7 +1397,7 @@ const ProjectsTable: React.FC<Props> = ({
               data-project-id={project.id}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
               onClick={() => handleRowClick(project, v.index)}
-              className={`relative grid ${gridColsClass} gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none`}
+              className={`relative grid ${gridColsClass} gap-2 px-2 py-1.5 text-sm ${hoverEnabled && !isSelected ? 'row-hover-subtle' : ''} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]`}
               tabIndex={0}
             >
               {isSelected && (
@@ -1429,7 +1429,7 @@ const ProjectsTable: React.FC<Props> = ({
                   <input
                     autoFocus
                     type="text"
-                    className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus:ring-0"
+                    className="w-full bg-transparent border-none p-0 m-0 text-[inherit] text-xs leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0"
                     value={projectNumberEditor?.value ?? ''}
                     onChange={(e) => setProjectNumberEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                     onClick={(e) => e.stopPropagation()}
@@ -1506,7 +1506,7 @@ const ProjectsTable: React.FC<Props> = ({
                             autoFocus
                             type="text"
                             inputMode="decimal"
-                            className="w-10 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus:ring-0 text-[inherit]"
+                            className="w-10 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-[inherit]"
                             value={nextEditor?.value ?? ''}
                             onChange={(e) => setNextEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                             onBlur={() => { void saveNextDeliverable(); }}
@@ -1544,7 +1544,7 @@ const ProjectsTable: React.FC<Props> = ({
                         <input
                           autoFocus
                           type="text"
-                          className="flex-1 min-w-0 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus:ring-0 text-[inherit]"
+                          className="flex-1 min-w-0 bg-transparent border-none p-0 m-0 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 text-[inherit]"
                           value={nextEditor?.value ?? ''}
                           onChange={(e) => setNextEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                           onBlur={() => { void saveNextDeliverable(); }}
@@ -1654,7 +1654,7 @@ const ProjectsTable: React.FC<Props> = ({
                     <textarea
                       autoFocus
                       rows={1}
-                      className="w-full text-xs rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] px-2 py-1 h-7 leading-tight outline-none focus:outline-none focus:ring-0"
+                      className="w-full text-xs rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] px-2 py-1 h-7 leading-tight outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0"
                       value={notesEditor?.value ?? ''}
                       onChange={(e) => setNotesEditor(prev => (prev ? { ...prev, value: e.target.value } : prev))}
                       onClick={(e) => e.stopPropagation()}

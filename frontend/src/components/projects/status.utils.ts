@@ -41,7 +41,7 @@ export const getStatusColor = (
   definitionMap?: Record<string, ProjectStatusDefinition>
 ): string => {
   const def = readStatusDefinition(status, definitionMap);
-  return def?.colorHex || '#64748b';
+  return def?.colorHex || 'var(--chart-neutral)';
 };
 
 export const getStatusBgColor = (

@@ -650,7 +650,7 @@ const Dashboard: React.FC = () => {
                       e.currentTarget.blur();
                     }}
                     onBlur={handleCustomWeeksBlur}
-                    className="w-14 bg-transparent text-center text-[11px] [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:outline-none placeholder:opacity-70"
+                    className="w-14 bg-transparent text-center text-[11px] [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] placeholder:opacity-70"
                     aria-label="Custom weeks"
                   />
                   <span className="text-[11px]">w</span>
@@ -668,7 +668,7 @@ const Dashboard: React.FC = () => {
                   const val = e.target.value;
                   setDepartment(val ? Number(val) : null);
                 }}
-                className="min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:border-[var(--primary)]"
+                className="min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:border-[var(--primary)]"
               >
                 <option value="">All Departments</option>
                 {departments.map((dept) => (

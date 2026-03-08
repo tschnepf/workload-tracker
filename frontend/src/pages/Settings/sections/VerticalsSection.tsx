@@ -169,7 +169,7 @@ const VerticalsSection: React.FC = () => {
               <textarea
                 value={formState.description}
                 onChange={(e) => setFormState(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--surface)] border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:ring-1 focus:ring-[var(--focus)] focus:outline-none resize-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--surface)] border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:ring-1 focus:ring-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] resize-none"
                 rows={3}
                 placeholder="Optional description"
               />

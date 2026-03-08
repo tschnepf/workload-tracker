@@ -285,7 +285,7 @@ const PersonForm: React.FC = () => {
             <select
               value={formData.role || ''}
               onChange={(e) => handleChange('role', e.target.value)}
-              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
+              className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
               disabled={loading}
               required
             >
@@ -328,7 +328,7 @@ const PersonForm: React.FC = () => {
                     id="department"
                     value={formData.department || ''}
                     onChange={(e) => handleChange('department', e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
+                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
                     disabled={loading}
                   >
                     <option value="">None Assigned</option>
@@ -356,7 +356,7 @@ const PersonForm: React.FC = () => {
                     id="hireDate"
                     value={formData.hireDate || ''}
                     onChange={(e) => handleChange('hireDate', (e.target as HTMLInputElement).value)}
-                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
+                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-md text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--focus)] focus:border-transparent min-h-[44px]"
                     disabled={loading}
                   />
                   <p className="text-[var(--muted)] text-sm mt-1">Optional start date (YYYY-MM-DD)</p>

@@ -195,7 +195,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
       statusLayers.push({
         key: item.key,
         label: item.label,
-        colorHex: item.colorHex || '#64748b',
+        colorHex: item.colorHex || 'var(--chart-neutral)',
         top: running.map(scaleY),
         bottom: prev.map(scaleY),
       });
@@ -223,15 +223,15 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
   const baseLine = new Array(n).fill(PAD_TOP + innerH);
 
   // Colors
-  const C_GRAY = '#9ca3af';    // Other swatch
+  const C_GRAY = 'var(--chart-neutral)';    // Other swatch
   // Deliverables align with calendar.utils typeColors
-  const D_SD = '#f59e0b';
-  const D_DD = '#818cf8';
-  const D_IFP = '#f472b6';
-  const D_IFC = '#06b6d4';
-  const D_MASTERPLAN = '#a78bfa';
-  const D_BULLETIN = '#3b82f6';
-  const D_CA = '#06b6d4';
+  const D_SD = 'var(--chart-phase-sd)';
+  const D_DD = 'var(--chart-phase-dd)';
+  const D_IFP = 'var(--chart-phase-ifp)';
+  const D_IFC = 'var(--chart-phase-ifc)';
+  const D_MASTERPLAN = 'var(--chart-phase-masterplan)';
+  const D_BULLETIN = 'var(--chart-phase-bulletin)';
+  const D_CA = 'var(--chart-phase-ifc)';
 
   // Y-axis ticks (0, 25%, 50%, 75%, 100%)
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => ({
@@ -281,7 +281,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
         {loading ? (
           <div className="text-[var(--muted)]">Loading timeline...</div>
         ) : error ? (
-          <div className="text-red-400">Error: {error}</div>
+          <div className="text-[var(--color-state-danger)]">Error: {error}</div>
         ) : n === 0 ? (
           <div className="text-[var(--muted)]">No assigned hours</div>
         ) : (
@@ -440,7 +440,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                                 <path d="M7 5l6 5-6 5V5z" />
                               </svg>
                             </span>
-                            {rawLabel === 'Unspecified' && <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#9ca3af' }} />}
+                            {rawLabel === 'Unspecified' && <span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'var(--chart-neutral)' }} />}
                             <span className="truncate" title={displayLabel}>{displayLabel}</span>
                           </span>
                           <span className="text-[var(--muted)]">{Math.round(total)}h</span>
@@ -448,7 +448,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                         {isOpen && (
                           <div className="px-2 pb-2">
                             {details.loading && <div className="text-[var(--muted)]">Loading...</div>}
-                            {details.error && <div className="text-red-400">{details.error}</div>}
+                            {details.error && <div className="text-[var(--color-state-danger)]">{details.error}</div>}
                             {!details.loading && !details.error && (
                               <div className="mt-1 space-y-1 max-h-48 overflow-auto pr-1">
                                 {details.projects.length === 0 ? (
@@ -477,7 +477,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                     </div>
                     <div className="px-2 pb-2">
                       {categoryDetails[openCategory]?.loading && <div className="text-[var(--muted)]">Loading...</div>}
-                      {categoryDetails[openCategory]?.error && <div className="text-red-400">{categoryDetails[openCategory]?.error}</div>}
+                      {categoryDetails[openCategory]?.error && <div className="text-[var(--color-state-danger)]">{categoryDetails[openCategory]?.error}</div>}
                       {!categoryDetails[openCategory]?.loading && !categoryDetails[openCategory]?.error && (
                         <div className="mt-1 space-y-1 max-h-48 overflow-auto pr-1">
                           {(categoryDetails[openCategory]?.projects || []).length === 0 ? (
@@ -503,7 +503,7 @@ const AssignedHoursTimelineCard: React.FC<Props> = ({
                     </div>
                     <div className="px-2 pb-2">
                       {extraDetails[openExtra]?.loading && <div className="text-[var(--muted)]">Loading...</div>}
-                      {extraDetails[openExtra]?.error && <div className="text-red-400">{extraDetails[openExtra]?.error}</div>}
+                      {extraDetails[openExtra]?.error && <div className="text-[var(--color-state-danger)]">{extraDetails[openExtra]?.error}</div>}
                       {!extraDetails[openExtra]?.loading && !extraDetails[openExtra]?.error && (
                         <div className="mt-1 space-y-1 max-h-48 overflow-auto pr-1">
                           {(extraDetails[openExtra]?.projects || []).length === 0 ? (

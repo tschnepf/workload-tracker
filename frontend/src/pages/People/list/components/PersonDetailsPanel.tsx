@@ -124,7 +124,7 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                   }}
                   onBlur={onNameSave}
                   disabled={isUpdating}
-                  className="text-xl font-bold bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50 w-full"
+                  className="text-xl font-bold bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50 w-full"
                   autoFocus
                 />
                 <div className="text-xs text-[var(--muted)] mt-1">Press Enter to save, Escape to cancel</div>
@@ -191,7 +191,7 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                   }}
                   placeholder="Search roles..."
                   disabled={isUpdating}
-                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
+                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                 />
                 <AutocompleteDropdowns
                   visible={showRoleAutocomplete && filteredRoles.length > 0}
@@ -215,7 +215,7 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                     onChange={(e) => onFieldChange('weeklyCapacity', parseInt(e.target.value) || 36)}
                     onBlur={() => onSaveField('weeklyCapacity')}
                     disabled={isUpdating}
-                    className="w-16 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-16 px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-[var(--muted)]">hours/week</span>
                 </div>
@@ -234,7 +234,7 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                     onSaveField('department', deptId);
                   }}
                   disabled={isUpdating}
-                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
+                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                 >
                   <option value="">No Department</option>
                   {departments.map((dept) => (
@@ -254,7 +254,7 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                   onChange={(e) => onFieldChange('hireDate', (e.target as HTMLInputElement).value)}
                   onBlur={() => onSaveField('hireDate')}
                   disabled={isUpdating}
-                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
+                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                 />
               </div>
 
@@ -326,7 +326,7 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
                   }}
                   placeholder="e.g., New York, NY or Remote"
                   disabled={isUpdating}
-                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
+                  className="w-full px-2 py-1 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--focus)] focus:border-transparent disabled:opacity-50"
                 />
                 <AutocompleteDropdowns
                   visible={showLocationAutocomplete && filteredLocations.length > 0}

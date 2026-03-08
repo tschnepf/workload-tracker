@@ -181,7 +181,7 @@ const PersonalDashboard: React.FC = () => {
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1
-              className="text-3xl font-bold text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded-sm"
+              className="text-3xl font-bold text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded-sm"
               tabIndex={-1}
               id="mywork-heading"
               ref={headingRef}

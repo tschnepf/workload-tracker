@@ -8,14 +8,15 @@ import { reportsApi } from '@/services/api';
 import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
 import { Link } from 'react-router';
+import { UTILIZATION_COLOR_TOKENS } from '@/theme/chartPalette';
 
 const WEEK_OPTIONS: Array<4 | 8 | 12 | 16 | 26 | 52> = [4, 8, 12, 16, 26, 52];
 
 const utilizationTone = (pct: number) => {
-  if (pct <= 70) return { bar: '#60a5fa', text: 'text-blue-300' };
-  if (pct <= 85) return { bar: '#34d399', text: 'text-emerald-300' };
-  if (pct <= 100) return { bar: '#f59e0b', text: 'text-amber-300' };
-  return { bar: '#ef4444', text: 'text-red-300' };
+  if (pct <= 70) return { bar: UTILIZATION_COLOR_TOKENS.low, text: UTILIZATION_COLOR_TOKENS.low };
+  if (pct <= 85) return { bar: UTILIZATION_COLOR_TOKENS.healthy, text: UTILIZATION_COLOR_TOKENS.healthy };
+  if (pct <= 100) return { bar: UTILIZATION_COLOR_TOKENS.warning, text: UTILIZATION_COLOR_TOKENS.warning };
+  return { bar: UTILIZATION_COLOR_TOKENS.over, text: UTILIZATION_COLOR_TOKENS.over };
 };
 
 type RoleHeatmapCell = {
@@ -216,7 +217,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
   );
 
   return (
-    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] h-full min-h-0 ${className ?? ''}`}>
+    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--elevation-2)] h-full min-h-0 ${className ?? ''}`}>
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-[var(--text)]">{title}</h3>
@@ -232,7 +233,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
               {showTrend ? 'Hide trend' : 'View trend'}
             </button>
             {viewAllHref ? (
-              <Link to={viewAllHref} className="text-xs text-[var(--primary)] hover:underline">
+              <Link to={viewAllHref} className="text-xs text-[var(--color-action-primary)] hover:underline">
                 View all
               </Link>
             ) : null}
@@ -248,7 +249,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                 onClick={() => setWeeks(w)}
                 className={`px-2.5 py-1 text-[11px] rounded-full transition-colors ${
                   weeks === w
-                    ? 'bg-[var(--primary)] text-white'
+                    ? 'bg-[var(--color-action-primary)] text-white'
                     : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
                 aria-pressed={weeks === w}
@@ -264,7 +265,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
           {loading ? (
             <div className="text-sm text-[var(--muted)]">Loading role capacity…</div>
           ) : error ? (
-            <div className="text-sm text-red-400">{error}</div>
+            <div className="text-sm text-[var(--color-state-danger)]">{error}</div>
           ) : showTrend ? (
             <div id="role-capacity-trend" role="region" aria-label="Capacity by role trend">
               {series.length > 0 ? (
@@ -299,7 +300,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                               <td className="sticky left-0 z-10 bg-[var(--surface)]/95 px-1.5 py-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="whitespace-nowrap text-[var(--text)]">{row.roleName}</span>
-                                  <span className={`${tone.text} text-[10px]`}>{row.latestUtilization}%</span>
+                                  <span className="text-[10px]" style={{ color: tone.text }}>{row.latestUtilization}%</span>
                                 </div>
                               </td>
                               {row.cells.map((cell) => {
@@ -316,7 +317,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                                   <td key={`${row.roleName}-${cell.weekKey}`} className="p-0 text-center leading-none">
                                     <button
                                       type="button"
-                                      className="block h-4 w-4 rounded-none border-0 transition-transform hover:scale-105 focus-visible:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                                      className="block h-4 w-4 rounded-none border-0 transition-transform hover:scale-105 focus-visible:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                                       style={{ backgroundColor: cellTone.bar, opacity: 0.88 }}
                                       title={tooltipText}
                                       aria-label={tooltipText}
@@ -337,7 +338,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                     {hoveredCell ? (
                       <div
                         role="tooltip"
-                        className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 -translate-y-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-2 text-[11px] text-[var(--text)] shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+                        className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 -translate-y-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-2 text-[11px] text-[var(--text)] shadow-[var(--elevation-2)]"
                         style={{
                           left: hoveredCell.left,
                           top: hoveredCell.top,
@@ -354,10 +355,10 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                     ) : null}
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-[var(--muted)]">
-                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#60a5fa' }} />0-70%</div>
-                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#34d399' }} />71-85%</div>
-                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#f59e0b' }} />86-100%</div>
-                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ backgroundColor: '#ef4444' }} />100%+</div>
+                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[var(--radius-xs)]" style={{ backgroundColor: 'var(--chart-accent-a)' }} />0-70%</div>
+                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[var(--radius-xs)]" style={{ backgroundColor: 'var(--color-state-success)' }} />71-85%</div>
+                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[var(--radius-xs)]" style={{ backgroundColor: 'var(--color-state-warning)' }} />86-100%</div>
+                    <div className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[var(--radius-xs)]" style={{ backgroundColor: 'var(--color-state-danger)' }} />100%+</div>
                   </div>
                   <label className="inline-flex items-center gap-2 text-[11px] text-[var(--muted)]">
                     <input
@@ -371,7 +372,7 @@ const RoleCapacitySummary: React.FC<RoleCapacitySummaryProps> = ({
                 </div>
               )}
               {(summary?.unmappedProjectRoleHours || 0) > 0 ? (
-                <div className="mt-3 text-xs text-amber-300">
+                <div className="mt-3 text-xs text-[var(--color-state-warning)]">
                   {Math.round(summary?.unmappedProjectRoleHours || 0)}h forecast demand is unmapped from project-role to people-role.
                 </div>
               ) : null}

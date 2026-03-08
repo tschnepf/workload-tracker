@@ -87,7 +87,7 @@ const MobileSkillsFilterDrawer: React.FC<MobileSkillsFilterDrawerProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search strengths..."
-            className="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--surface)] text-sm focus:border-[var(--focus)] focus:outline-none"
+            className="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--surface)] text-sm focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
           />
           <button
             type="button"

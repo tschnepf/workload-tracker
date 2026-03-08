@@ -95,6 +95,7 @@ const EMPTY_ROLE_MATCHES: RoleMatch[] = [];
 const EMPTY_ROW_INDEX = new Map<string, number>();
 const EMPTY_SAVING_SET = new Set<string>();
 const EMPTY_ROLES_BY_DEPT: Record<number, ProjectRole[]> = {};
+const ROW_VIRTUALIZER_GAP = 4;
 const noop = (_value: string) => {};
 
 const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
@@ -194,7 +195,7 @@ const ProjectsSection: React.FC<ProjectsSectionProps> = (props) => {
     estimateSize: () => 72,
     overscan: 6,
     scrollMargin,
-    gap: 4,
+    gap: ROW_VIRTUALIZER_GAP,
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();

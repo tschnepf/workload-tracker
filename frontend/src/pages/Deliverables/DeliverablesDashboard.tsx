@@ -4,6 +4,8 @@ import { useDeliverablesCalendar, toIsoDate } from '@/hooks/useDeliverablesCalen
 import { assignmentsApi, departmentsApi, deliverablesApi } from '@/services/api';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import type { Assignment, Department } from '@/types/models';
+import { t } from '@/copy';
+import { DELIVERABLE_PHASE_COLOR_TOKENS } from '@/theme/chartPalette';
 
 const UNKNOWN_DEPT_ID = -1;
 
@@ -28,14 +30,14 @@ type DepartmentMeta = {
 };
 
 const DEPT_PALETTE = [
-  '#5ed3c6',
-  '#f29f74',
-  '#f2c46e',
-  '#86b6f5',
-  '#f08fb5',
-  '#6fd39f',
-  '#cbd874',
-  '#9fd0e3',
+  DELIVERABLE_PHASE_COLOR_TOKENS.ifc,
+  DELIVERABLE_PHASE_COLOR_TOKENS.cd,
+  DELIVERABLE_PHASE_COLOR_TOKENS.sd,
+  DELIVERABLE_PHASE_COLOR_TOKENS.dd,
+  DELIVERABLE_PHASE_COLOR_TOKENS.ifp,
+  DELIVERABLE_PHASE_COLOR_TOKENS.bulletin,
+  DELIVERABLE_PHASE_COLOR_TOKENS.masterplan,
+  DELIVERABLE_PHASE_COLOR_TOKENS.milestone,
 ];
 
 function hashString(value: string): number {
@@ -54,18 +56,18 @@ function getDeptColor(seed: string): string {
 
 function formatDaysLabel(daysUntil: number): { label: string; urgency: 'urgent' | 'soon' | 'normal' } {
   if (daysUntil < 0) {
-    return { label: `${Math.abs(daysUntil)}d overdue`, urgency: 'urgent' };
+    return { label: t('deliverables.overdue', { days: Math.abs(daysUntil) }), urgency: 'urgent' };
   }
   if (daysUntil === 0) {
-    return { label: 'Today', urgency: 'urgent' };
+    return { label: t('deliverables.today'), urgency: 'urgent' };
   }
   if (daysUntil === 1) {
-    return { label: 'Tomorrow', urgency: 'soon' };
+    return { label: t('deliverables.tomorrow'), urgency: 'soon' };
   }
   if (daysUntil <= 3) {
-    return { label: `In ${daysUntil} days`, urgency: 'soon' };
+    return { label: t('deliverables.inDays', { days: daysUntil }), urgency: 'soon' };
   }
-  return { label: `In ${daysUntil} days`, urgency: 'normal' };
+  return { label: t('deliverables.inDays', { days: daysUntil }), urgency: 'normal' };
 }
 
 function stripNotes(value: string | null | undefined): string | null {
@@ -504,7 +506,7 @@ const DeliverablesDashboard: React.FC = () => {
 
   const updatedAtLabel = useMemo(() => {
     const ts = deliverablesQuery.dataUpdatedAt;
-    if (!ts) return 'Updating';
+    if (!ts) return t('deliverables.updating');
     return new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -521,43 +523,43 @@ const DeliverablesDashboard: React.FC = () => {
       <div className="dd-shell">
         <header className="dd-header">
           <div>
-            <div className="dd-title">Upcoming Deliverables</div>
-            <div className="dd-subtitle">Next 14 Days - {totalDeliverables} Deliverables - {totalProjects} Projects</div>
+            <div className="dd-title">{t('deliverables.title')}</div>
+            <div className="dd-subtitle">{t('deliverables.subtitle', { deliverables: totalDeliverables, projects: totalProjects })}</div>
           </div>
           <div className="dd-clock">
             <div className="dd-clock-date">{headerDate}</div>
             <div className="dd-clock-time">{headerTime}</div>
             <button type="button" className="dd-fullscreen-btn" onClick={toggleFullscreen}>
-              {isFullscreen ? 'Exit Full Screen' : 'Enter Full Screen'}
+              {isFullscreen ? t('deliverables.exitFullscreen') : t('deliverables.enterFullscreen')}
             </button>
           </div>
         </header>
 
         <section className="dd-table" aria-live="polite" ref={tableRef}>
           <div className="dd-table-header" ref={tableHeaderRef}>
-            <div>Due Date</div>
-            <div>Project</div>
+            <div>{t('deliverables.col.dueDate')}</div>
+            <div>{t('deliverables.col.project')}</div>
             <div></div>
-            <div>Deliverable</div>
-            <div>Departments and Leads</div>
+            <div>{t('deliverables.col.deliverable')}</div>
+            <div>{t('deliverables.col.departmentsLeads')}</div>
           </div>
 
           <div className="dd-page" key={`page-${pageIndex}-${rowsPerPage}-${deliverables.length}`} ref={pageRef}>
             {deliverablesQuery.isLoading && (
               <div className="dd-row">
-                <div className="dd-empty">Loading deliverables...</div>
+                <div className="dd-empty">{t('deliverables.loading')}</div>
               </div>
             )}
 
             {deliverablesQuery.isError && (
               <div className="dd-row">
-                <div className="dd-empty">Deliverables unavailable right now.</div>
+                <div className="dd-empty">{t('deliverables.unavailable')}</div>
               </div>
             )}
 
             {!deliverablesQuery.isLoading && !deliverablesQuery.isError && deliverables.length === 0 && (
               <div className="dd-row">
-                <div className="dd-empty">No deliverables scheduled in the next 14 days.</div>
+                <div className="dd-empty">{t('deliverables.noneUpcoming')}</div>
               </div>
             )}
 
@@ -598,13 +600,13 @@ const DeliverablesDashboard: React.FC = () => {
                   {item.notes && <div className="dd-deliverable-notes">{item.notes}</div>}
                   <div className="dd-deliverable-meta">
                     {item.percentage != null && <span className="dd-pill">{Math.round(item.percentage)}%</span>}
-                    {item.isCompleted && <span className="dd-pill">Completed</span>}
+                    {item.isCompleted && <span className="dd-pill">{t('deliverables.completed')}</span>}
                   </div>
                 </div>
 
                 <div>
                   {leadCoverageLoading ? (
-                    <div className="dd-empty">Loading lead coverage...</div>
+                    <div className="dd-empty">{t('deliverables.loadingCoverage')}</div>
                   ) : departmentsForProject.length > 0 ? (
                     <div className="dd-dept-list">
                       {departmentsForProject.map((dept) => (
@@ -618,7 +620,7 @@ const DeliverablesDashboard: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="dd-empty">No department leads mapped</div>
+                    <div className="dd-empty">{t('deliverables.noLeadsMapped')}</div>
                   )}
                 </div>
               </div>
@@ -630,10 +632,10 @@ const DeliverablesDashboard: React.FC = () => {
         <footer className="dd-footer">
           <div className="dd-status">
             <span className="dd-status-dot" />
-            Updated {updatedAtLabel}
+            {t('deliverables.updatedAt', { time: updatedAtLabel })}
           </div>
           <div className="dd-footer-meta">
-            <div className="dd-page-indicator">Page {Math.min(pageIndex + 1, pages.length || 1)} of {pages.length || 1}</div>
+            <div className="dd-page-indicator">{t('deliverables.pageOf', { current: Math.min(pageIndex + 1, pages.length || 1), total: pages.length || 1 })}</div>
             {pages.length > 1 && (
               <div className="dd-timer" style={{ ['--dd-timer-duration' as any]: '20s' }}>
                 <div className="dd-timer-ring" key={`timer-${pageIndex}`}>
@@ -642,12 +644,12 @@ const DeliverablesDashboard: React.FC = () => {
                     <circle className="dd-timer-progress" cx="18" cy="18" r="14" />
                   </svg>
                 </div>
-                <div className="dd-timer-text">Next in {secondsRemaining}s</div>
+                <div className="dd-timer-text">{t('deliverables.nextIn', { seconds: secondsRemaining })}</div>
               </div>
             )}
           </div>
           <div>
-            {leadCoverageLoading && 'Refreshing coverage'}
+            {leadCoverageLoading && t('deliverables.refreshingCoverage')}
             {!leadCoverageLoading && fallbackAssignmentsError && fallbackAssignmentsError}
             {!leadCoverageLoading && !fallbackAssignmentsError && departmentError && departmentError}
           </div>

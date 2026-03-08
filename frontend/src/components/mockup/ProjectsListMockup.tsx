@@ -190,7 +190,7 @@ const ProjectsListMockup: React.FC = () => {
     if (sortBy !== column) return null;
     
     return (
-      <span className="ml-1 text-[#007acc]">
+      <span className="ml-1 text-[var(--color-action-primary)]">
         {sortDirection === 'asc' ? '▲' : '▼'}
       </span>
     );
@@ -198,22 +198,22 @@ const ProjectsListMockup: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#1e1e1e] flex">
-      <div className="w-16 bg-[#2d2d30] border-r border-[#3e3e42] flex-shrink-0">
+      <div className="w-16 bg-[#2d2d30] border-r border-[var(--color-border)] flex-shrink-0">
         {/* Minimal sidebar placeholder */}
         <div className="p-2">
-          <div className="w-8 h-8 bg-[#007acc] rounded flex items-center justify-center text-white text-xs font-bold">W</div>
+          <div className="w-8 h-8 bg-[var(--color-action-primary)] rounded flex items-center justify-center text-white text-xs font-bold">W</div>
         </div>
       </div>
       <div className="flex-1 flex h-screen bg-[#1e1e1e]">
         
         {/* Left Panel - Projects List */}
-        <div className="w-1/2 border-r border-[#3e3e42] flex flex-col min-w-0">
+        <div className="w-1/2 border-r border-[var(--color-border)] flex flex-col min-w-0">
           
           {/* Header */}
-          <div className="p-3 border-b border-[#3e3e42]">
+          <div className="p-3 border-b border-[var(--color-border)]">
             <div className="flex justify-between items-center mb-2">
               <h1 className="text-lg font-semibold text-[#cccccc]">Projects</h1>
-              <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
+              <button className="px-2 py-0.5 text-xs rounded border bg-[var(--color-border)] border-[var(--color-border)] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
                 + New
               </button>
             </div>
@@ -222,7 +222,7 @@ const ProjectsListMockup: React.FC = () => {
             <div className="space-y-2">
               {/* Status Filter */}
               <div>
-                <label className="text-xs text-[#969696] mb-1 block">Filter by Status:</label>
+                <label className="text-xs text-[var(--color-text-secondary)] mb-1 block">Filter by Status:</label>
                 <div className="flex flex-wrap gap-1">
                   {statusOptions.map((status) => (
                     <button
@@ -230,8 +230,8 @@ const ProjectsListMockup: React.FC = () => {
                       onClick={() => setStatusFilter(status)}
                       className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                         statusFilter === status
-                          ? 'bg-[#007acc] border-[#007acc] text-white'
-                          : 'bg-[#3e3e42] border-[#3e3e42] text-[#969696] hover:text-[#cccccc]'
+                          ? 'bg-[var(--color-action-primary)] border-[var(--color-action-primary)] text-white'
+                          : 'bg-[var(--color-border)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[#cccccc]'
                       }`}
                     >
                       {status}
@@ -247,7 +247,7 @@ const ProjectsListMockup: React.FC = () => {
                   placeholder="Search projects"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm bg-[#3e3e42] border border-[#3e3e42] rounded text-[#cccccc] placeholder-[#969696] focus:border-[#007acc] focus:outline-none"
+                  className="w-full px-3 py-1.5 text-sm bg-[var(--color-border)] border border-[var(--color-border)] rounded text-[#cccccc] placeholder-[var(--color-text-secondary)] focus:border-[var(--color-action-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                 />
               </div>
             </div>
@@ -256,7 +256,7 @@ const ProjectsListMockup: React.FC = () => {
           {/* Projects Table */}
           <div className="flex-1 overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[#969696] font-medium border-b border-[#3e3e42] bg-[#2d2d30]">
+            <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs text-[var(--color-text-secondary)] font-medium border-b border-[var(--color-border)] bg-[#2d2d30]">
               <div className="col-span-2 cursor-pointer hover:text-[#cccccc] transition-colors flex items-center" onClick={() => handleSort('client')}>
                 CLIENT<SortIcon column="client" />
               </div>
@@ -280,24 +280,24 @@ const ProjectsListMockup: React.FC = () => {
                 <div
                   key={project.id}
                   onClick={() => handleProjectClick(project, index)}
-                  className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[#3e3e42] cursor-pointer hover:bg-[#3e3e42]/50 transition-colors focus:outline-none ${
-                    selectedProject?.id === project.id ? 'bg-[#007acc]/20 border-[#007acc]' : ''
+                  className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-border)]/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
+                    selectedProject?.id === project.id ? 'bg-[var(--color-action-primary)]/20 border-[var(--color-action-primary)]' : ''
                   }`}
                   tabIndex={0}
                 >
                   {/* Client */}
-                  <div className="col-span-2 text-[#969696] text-xs">
+                  <div className="col-span-2 text-[var(--color-text-secondary)] text-xs">
                     {project.client}
                   </div>
                   
                   {/* Project Name & Number */}
                   <div className="col-span-3">
                     <div className="text-[#cccccc] font-medium leading-tight">{project.name}</div>
-                    <div className="text-[#969696] text-xs leading-tight">{project.projectNumber}</div>
+                    <div className="text-[var(--color-text-secondary)] text-xs leading-tight">{project.projectNumber}</div>
                   </div>
                   
                   {/* Type */}
-                  <div className="col-span-2 text-[#969696] text-xs">
+                  <div className="col-span-2 text-[var(--color-text-secondary)] text-xs">
                     {project.type}
                   </div>
                   
@@ -313,7 +313,7 @@ const ProjectsListMockup: React.FC = () => {
                     {project.nextDeliverable && (
                       <>
                         <div className="text-[#cccccc] text-xs leading-tight">{project.nextDeliverable}</div>
-                        <div className="text-[#969696] text-xs leading-tight">{project.deliverableType}</div>
+                        <div className="text-[var(--color-text-secondary)] text-xs leading-tight">{project.deliverableType}</div>
                       </>
                     )}
                   </div>
@@ -328,7 +328,7 @@ const ProjectsListMockup: React.FC = () => {
           {selectedProject ? (
             <>
               {/* Project Header */}
-              <div className="p-4 border-b border-[#3e3e42]">
+              <div className="p-4 border-b border-[var(--color-border)]">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h2 className="text-xl font-bold text-[#cccccc] mb-2">
@@ -336,24 +336,24 @@ const ProjectsListMockup: React.FC = () => {
                     </h2>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <div className="text-[#969696] text-xs">Client:</div>
+                        <div className="text-[var(--color-text-secondary)] text-xs">Client:</div>
                         <div className="text-[#cccccc]">ADC</div>
                       </div>
                       <div>
-                        <div className="text-[#969696] text-xs">Status:</div>
+                        <div className="text-[var(--color-text-secondary)] text-xs">Status:</div>
                         <div style={{ color: getStatusColor(selectedProject.status) }}>Active</div>
                       </div>
                       <div>
-                        <div className="text-[#969696] text-xs">Project Number:</div>
+                        <div className="text-[var(--color-text-secondary)] text-xs">Project Number:</div>
                         <div className="text-[#cccccc]">25.005</div>
                       </div>
                       <div>
-                        <div className="text-[#969696] text-xs">Location:</div>
+                        <div className="text-[var(--color-text-secondary)] text-xs">Location:</div>
                         <div className="text-[#cccccc]">Cornsville, OH</div>
                       </div>
                     </div>
                   </div>
-                  <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
+                  <button className="px-2 py-0.5 text-xs rounded border bg-[var(--color-border)] border-[var(--color-border)] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
                     Edit Project
                   </button>
                 </div>
@@ -361,12 +361,12 @@ const ProjectsListMockup: React.FC = () => {
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* Assignments Section */}
-                <div className="pb-4 border-b border-[#3e3e42]">
+                <div className="pb-4 border-b border-[var(--color-border)]">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="text-base font-semibold text-[#cccccc]">
                       Assignments
                     </h3>
-                    <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
+                    <button className="px-2 py-0.5 text-xs rounded border bg-[var(--color-border)] border-[var(--color-border)] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
                       + Add Assignment
                     </button>
                   </div>
@@ -380,10 +380,10 @@ const ProjectsListMockup: React.FC = () => {
                           {mockAssignments
                             .filter(a => a.department === dept)
                             .map((assignment, index) => (
-                              <div key={index} className="flex justify-between items-center p-1.5 bg-[#3e3e42]/30 rounded text-xs">
+                              <div key={index} className="flex justify-between items-center p-1.5 bg-[var(--color-border)]/30 rounded text-xs">
                                 <div className="flex-1">
                                   {index === 0 && (
-                                    <div className="grid grid-cols-3 gap-4 text-[#969696] text-xs uppercase font-medium mb-1">
+                                    <div className="grid grid-cols-3 gap-4 text-[var(--color-text-secondary)] text-xs uppercase font-medium mb-1">
                                       <div>PERSON</div>
                                       <div>ROLE</div>
                                       <div>HOURS</div>
@@ -391,12 +391,12 @@ const ProjectsListMockup: React.FC = () => {
                                   )}
                                   <div className="grid grid-cols-3 gap-4">
                                     <div className="text-[#cccccc]">{assignment.person}</div>
-                                    <div className="text-[#969696]">{assignment.role}</div>
-                                    <div className="text-[#969696]">{assignment.hours}</div>
+                                    <div className="text-[var(--color-text-secondary)]">{assignment.role}</div>
+                                    <div className="text-[var(--color-text-secondary)]">{assignment.hours}</div>
                                   </div>
                                 </div>
                                 <div className="flex gap-1">
-                                  <button className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[#3e3e42] hover:border-[#3e3e42] transition-colors">Edit</button>
+                                  <button className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[var(--color-border)] hover:border-[var(--color-border)] transition-colors">Edit</button>
                                   <button className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 hover:bg-red-500/20 hover:border-red-500/30 transition-colors">Delete</button>
                                 </div>
                               </div>
@@ -404,7 +404,7 @@ const ProjectsListMockup: React.FC = () => {
                         </div>
                       </div>
                     ))}
-                    <div className="text-xs text-[#969696] mt-1">
+                    <div className="text-xs text-[var(--color-text-secondary)] mt-1">
                       Summary: 6 assignments • 0h total planned
                     </div>
                   </div>
@@ -416,7 +416,7 @@ const ProjectsListMockup: React.FC = () => {
                     <h3 className="text-base font-semibold text-[#cccccc]">
                       Deliverables
                     </h3>
-                    <button className="px-2 py-0.5 text-xs rounded border bg-[#3e3e42] border-[#3e3e42] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
+                    <button className="px-2 py-0.5 text-xs rounded border bg-[var(--color-border)] border-[var(--color-border)] text-[#cccccc] hover:bg-[#4e4e52] hover:text-[#cccccc] transition-colors">
                       + Add Deliverable
                     </button>
                   </div>
@@ -424,10 +424,10 @@ const ProjectsListMockup: React.FC = () => {
                   {/* Deliverables List */}
                   <div className="space-y-1">
                     {mockDeliverables.map((deliverable) => (
-                      <div key={deliverable.id} className="flex justify-between items-center p-2 bg-[#3e3e42]/30 rounded">
+                      <div key={deliverable.id} className="flex justify-between items-center p-2 bg-[var(--color-border)]/30 rounded">
                         <div>
                           <div className="text-[#cccccc] font-medium text-sm">{deliverable.description}</div>
-                          <div className="text-xs text-[#969696]">
+                          <div className="text-xs text-[var(--color-text-secondary)]">
                             Type: {deliverable.type} • Phase: {deliverable.phase} • Hours: {deliverable.hours}
                             {deliverable.dueDate && (
                               <> • Due: {deliverable.dueDate}</>
@@ -435,7 +435,7 @@ const ProjectsListMockup: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          <button className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[#3e3e42] hover:border-[#3e3e42] transition-colors">Edit</button>
+                          <button className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-[#cccccc] hover:bg-[var(--color-border)] hover:border-[var(--color-border)] transition-colors">Edit</button>
                           <button className="text-xs px-1 py-0.5 rounded border bg-transparent border-transparent text-red-400 hover:bg-red-500/20 hover:border-red-500/30 transition-colors">Delete</button>
                         </div>
                       </div>
@@ -446,7 +446,7 @@ const ProjectsListMockup: React.FC = () => {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-[#969696]">
+              <div className="text-center text-[var(--color-text-secondary)]">
                 <div className="text-lg mb-2">Select a project</div>
                 <div className="text-sm">Choose a project from the list to view details</div>
               </div>

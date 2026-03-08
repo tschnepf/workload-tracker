@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
@@ -337,7 +337,7 @@ const TeamForecastPage: React.FC = () => {
                     const value = e.target.value ? Number(e.target.value) : null;
                     setPendingDeptId(value);
                   }}
-                  className="mt-1 w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                  className="mt-1 w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                 >
                   <option value="">All Departments</option>
                   {depts.map(d => (
@@ -350,7 +350,7 @@ const TeamForecastPage: React.FC = () => {
                 <select
                   value={pendingProjectId}
                   onChange={(e)=> setPendingProjectId(e.target.value ? Number(e.target.value) : '')}
-                  className="mt-1 w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+                  className="mt-1 w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                 >
                   <option value="">All projects</option>
                   {projects.map(p => (
@@ -420,7 +420,7 @@ const TeamForecastPage: React.FC = () => {
               <select
                 value={selectedProject}
                 onChange={(e)=> setSelectedProject(e.target.value? Number(e.target.value):'')}
-                className="hidden md:inline-block px-2 py-1 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none min-w-[220px]"
+                className="hidden md:inline-block px-2 py-1 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] min-w-[220px]"
               >
                 <option value="">Select a project...</option>
                 {projects.map(p => (
@@ -455,7 +455,7 @@ const ProjectTimeline: React.FC<{ weeks:number; weekStarts:string[]; weeklyTotal
   return (
     <div className="space-y-2">
       <div style={{ overflowX:'auto' }}>
-        <div className="grid" style={{ gridTemplateColumns:`repeat(${weekStarts.length}, 56px)`, gap: '8px' }}>
+        <div className="grid" style={{ gridTemplateColumns:`repeat(${weekStarts.length}, 56px)`, gap: 'var(--space-2)' }}>
           {weeklyTotals.map((v,i)=> {
             const h = Math.max(2, Math.round((v/max)*120));
             return (

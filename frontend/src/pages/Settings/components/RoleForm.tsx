@@ -235,7 +235,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
                   setShowNameAutocomplete(false);
                 }, 150);
               }}
-              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent ${
+              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent ${
                 validationErrors.name ? 'border-red-500' : 'border-[var(--border)]'
               }`}
               placeholder="e.g., Senior Engineer, Product Manager"
@@ -281,7 +281,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
                   setValidationErrors(prev => ({ ...prev, description: '' }));
                 }
               }}
-              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent resize-none ${
+              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent resize-none ${
                 validationErrors.description ? 'border-red-500' : 'border-[var(--border)]'
               }`}
               placeholder="Describe the role's responsibilities and requirements"
@@ -314,7 +314,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ role, onSave, onCancel }) => {
                   setValidationErrors(prev => ({ ...prev, overheadHoursPerWeek: '' }));
                 }
               }}
-              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent ${
+              className={`w-full px-3 py-2 bg-[var(--card)] border rounded text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent ${
                 validationErrors.overheadHoursPerWeek ? 'border-red-500' : 'border-[var(--border)]'
               }`}
               placeholder="0"

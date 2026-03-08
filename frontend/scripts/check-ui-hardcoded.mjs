@@ -1,15 +1,19 @@
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, extname, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { extname, join, relative } from 'node:path';
 
 const ROOT = process.cwd();
 const TARGET_DIRS = [
   join(ROOT, 'src', 'pages'),
   join(ROOT, 'src', 'components'),
+  join(ROOT, 'src', 'features'),
 ];
-const BASELINE_PATH = join(ROOT, 'scripts', 'ui-hardcoded-baseline.json');
-const UPDATE_BASELINE = process.argv.includes('--update-baseline');
+const ALLOWLIST_PATH = join(ROOT, 'scripts', 'ui-hardcoded-allowlist.json');
+const REPORT_MODE = process.argv.includes('--report');
 
 const FILE_EXTS = new Set(['.ts', '.tsx', '.css']);
+const EXCLUDED_RELATIVE_PATHS = new Set([
+  'src/features/fullcalendar/fullcalendar-base.css',
+]);
 
 const RULES = [
   {
@@ -19,33 +23,48 @@ const RULES = [
   },
   {
     id: 'inline-box-shadow',
-    regex: /boxShadow\s*:\s*['"`][^'"`]+['"`]/g,
+    regex: /boxShadow\s*:\s*['"`](?!var\(--elevation-)[^'"`]+['"`]/g,
     message: 'Inline boxShadow found; use elevation tokens.',
+    fileTypes: new Set(['.ts', '.tsx']),
   },
   {
     id: 'inline-radius',
     regex: /borderRadius\s*:\s*['"`]?[0-9.]+(px|rem)?['"`]?/g,
     message: 'Inline borderRadius found; use radius tokens.',
+    fileTypes: new Set(['.ts', '.tsx']),
   },
   {
     id: 'inline-spacing',
     regex: /\b(padding|margin|gap|rowGap|columnGap)\s*:\s*['"`]?[0-9.]+(px|rem)?['"`]?/g,
     message: 'Inline spacing value found; use spacing tokens/utilities.',
+    fileTypes: new Set(['.ts', '.tsx']),
   },
   {
     id: 'tailwind-arbitrary-shadow',
-    regex: /shadow-\[[^\]]+\]/g,
+    // Allow tokenized shadows, block ad hoc values.
+    regex: /shadow-\[(?!var\(--elevation-)[^\]]+\]/g,
     message: 'Arbitrary shadow utility found; use elevation token class.',
+    fileTypes: new Set(['.ts', '.tsx']),
   },
   {
     id: 'tailwind-arbitrary-radius',
-    regex: /rounded-\[[^\]]+\]/g,
+    // Allow tokenized radii, block ad hoc values.
+    regex: /rounded-\[(?!var\(--radius-)[^\]]+\]/g,
     message: 'Arbitrary radius utility found; use radius token class.',
+    fileTypes: new Set(['.ts', '.tsx']),
   },
   {
     id: 'tailwind-arbitrary-spacing',
-    regex: /\b(?:p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap)-\[[^\]]+\]/g,
+    // Allow tokenized spacing vars, block ad hoc values.
+    regex: /\b(?:p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap)-\[(?!var\(--space-)[^\]]+\]/g,
     message: 'Arbitrary spacing utility found; use spacing scale tokens.',
+    fileTypes: new Set(['.ts', '.tsx']),
+  },
+  {
+    id: 'focus-outline-none',
+    regex: /focus:outline-none/g,
+    message: 'focus:outline-none found without tokenized visible focus guidance.',
+    fileTypes: new Set(['.ts', '.tsx']),
   },
 ];
 
@@ -78,23 +97,83 @@ function shouldIgnoreLine(line) {
   return line.includes('ui-hardcoded: allow');
 }
 
+function hasTokenizedVisibleFocusNearMatch(text, index) {
+  const snippet = text.slice(Math.max(0, index - 220), index + 220);
+  if (snippet.includes('focus-visible:ring-[var(--color-focus-ring)]')) return true;
+  if (snippet.includes('focus-visible:border-[var(--color-focus-ring)]')) return true;
+  if (snippet.includes('focus-visible:outline-[var(--color-focus-ring)]')) return true;
+  if (snippet.includes('focus:ring-[var(--color-focus-ring)]')) return true;
+  if (snippet.includes('focus:border-[var(--color-focus-ring)]')) return true;
+  if (snippet.includes('focus-visible:ring-2')) return true;
+  return false;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+}
+
+function wildcardToRegex(pattern) {
+  const escaped = pattern.split('*').map(escapeRegex).join('.*');
+  return new RegExp(`^${escaped}$`);
+}
+
+function loadAllowlist() {
+  if (!existsSync(ALLOWLIST_PATH)) {
+    return [];
+  }
+  const raw = JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8'));
+  const entries = Array.isArray(raw.entries) ? raw.entries : [];
+  return entries.map((entry) => {
+    const fileMatcher = entry.file
+      ? (file) => file === entry.file
+      : entry.filePattern
+        ? (file) => wildcardToRegex(entry.filePattern).test(file)
+        : () => true;
+    const sampleMatcher = entry.sample
+      ? (sample) => sample === entry.sample
+      : entry.samplePattern
+        ? (sample) => new RegExp(entry.samplePattern).test(sample)
+        : () => true;
+    return {
+      id: String(entry.id || ''),
+      rule: entry.rule ? String(entry.rule) : null,
+      fileMatcher,
+      sampleMatcher,
+      reason: String(entry.reason || ''),
+    };
+  });
+}
+
+function makeStableKey(v) {
+  return `${v.file}:${v.rule}:${v.sample}`;
+}
+
 const files = TARGET_DIRS.flatMap((d) => walk(d));
+const allowlist = loadAllowlist();
 const violations = [];
 
 for (const file of files) {
   const rel = relative(ROOT, file);
+  if (EXCLUDED_RELATIVE_PATHS.has(rel)) continue;
+  const ext = extname(file);
   const text = readFileSync(file, 'utf8');
   const lines = text.split(/\r?\n/);
 
   for (const rule of RULES) {
+    if (rule.fileTypes && !rule.fileTypes.has(ext)) continue;
     const regex = new RegExp(rule.regex.source, rule.regex.flags);
     let m;
     while ((m = regex.exec(text)) !== null) {
       const line = lineOfIndex(text, m.index);
       const lineText = lines[line - 1] || '';
       if (shouldIgnoreLine(lineText)) continue;
+
+      if (rule.id === 'focus-outline-none' && hasTokenizedVisibleFocusNearMatch(text, m.index)) {
+        continue;
+      }
+
       violations.push({
-        key: `${rel}:${line}:${rule.id}:${m[0]}`,
+        key: makeStableKey({ file: rel, rule: rule.id, sample: m[0] }),
         file: rel,
         line,
         rule: rule.id,
@@ -107,30 +186,32 @@ for (const file of files) {
 
 violations.sort((a, b) => a.key.localeCompare(b.key));
 
-if (UPDATE_BASELINE) {
-  writeFileSync(BASELINE_PATH, JSON.stringify({ generatedAt: new Date().toISOString(), entries: violations.map((v) => v.key) }, null, 2) + '\n');
-  console.log(`Updated baseline with ${violations.length} entries: scripts/ui-hardcoded-baseline.json`);
-  process.exit(0);
+const nonAllowlisted = violations.filter((v) => {
+  return !allowlist.some((entry) => {
+    if (entry.rule && entry.rule !== v.rule) return false;
+    if (!entry.fileMatcher(v.file)) return false;
+    if (!entry.sampleMatcher(v.sample)) return false;
+    return true;
+  });
+});
+
+if (REPORT_MODE) {
+  console.log(`UI hardcoded report: ${violations.length} total, ${nonAllowlisted.length} non-allowlisted.`);
+  for (const v of violations.slice(0, 500)) {
+    const allowed = nonAllowlisted.find((n) => n.key === v.key) ? 'BLOCK' : 'ALLOW';
+    console.log(`${allowed} ${v.file}:${v.line} [${v.rule}] ${v.sample}`);
+  }
 }
 
-if (!existsSync(BASELINE_PATH)) {
-  console.error('Missing scripts/ui-hardcoded-baseline.json. Run: node scripts/check-ui-hardcoded.mjs --update-baseline');
-  process.exit(1);
-}
-
-const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
-const baselineSet = new Set(Array.isArray(baseline.entries) ? baseline.entries : []);
-const newViolations = violations.filter((v) => !baselineSet.has(v.key));
-
-if (newViolations.length > 0) {
-  console.error(`UI hardcoded check failed: ${newViolations.length} new violation(s).`);
-  for (const v of newViolations.slice(0, 200)) {
+if (nonAllowlisted.length > 0) {
+  console.error(`UI hardcoded check failed: ${nonAllowlisted.length} non-allowlisted violation(s).`);
+  for (const v of nonAllowlisted.slice(0, 300)) {
     console.error(` - ${v.file}:${v.line} [${v.rule}] ${v.sample}`);
   }
-  if (newViolations.length > 200) {
-    console.error(` ... and ${newViolations.length - 200} more`);
+  if (nonAllowlisted.length > 300) {
+    console.error(` ... and ${nonAllowlisted.length - 300} more`);
   }
   process.exit(1);
 }
 
-console.log(`UI hardcoded check passed (${violations.length} tracked baseline violations, 0 new).`);
+console.log(`UI hardcoded check passed (${violations.length} findings, all allowlisted or compliant).`);

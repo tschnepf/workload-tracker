@@ -265,7 +265,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <button
                 type="button"
                 aria-label="Close navigation"
-                className="absolute -right-10 top-2 inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+                className="absolute -right-10 top-2 inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--text)] hover:text-white hover:bg-[var(--surfaceHover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--focus)]"
                 onClick={() => setMobileSidebarOpen(false)}
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -320,7 +320,7 @@ const TopBarInner: React.FC<{
           <button
             type="button"
             aria-label="Open navigation"
-            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]"
+            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-focus-ring)]"
             onClick={onOpenSidebar}
             ref={hamburgerRef}
           >

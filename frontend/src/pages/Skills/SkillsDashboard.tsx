@@ -1517,7 +1517,7 @@ const SkillsDashboard: React.FC = () => {
                                   aria-expanded={isAddSkillsSearchOpen}
                                   aria-haspopup="listbox"
                                   aria-owns={person.id ? `person-skill-search-results-${person.id}` : undefined}
-                                  className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                                  className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                                   ref={addSkillsInputRef}
                                   autoFocus
                                 />

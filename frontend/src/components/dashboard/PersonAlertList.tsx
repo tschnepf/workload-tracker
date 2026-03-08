@@ -64,14 +64,14 @@ const PersonAlertList: React.FC<PersonAlertListProps> = ({
   const visibleItems = filteredItems.slice(0, maxItems);
 
   return (
-    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] h-full min-h-0 ${className ?? ''}`}>
+    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--elevation-3)] h-full min-h-0 ${className ?? ''}`}>
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-[var(--text)]">{title}</h3>
           <div className="flex items-center gap-2">
             {filters.length > 0 ? (
               <select
-                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--primary)]"
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:border-[var(--primary)]"
                 value={activeFilter}
                 onChange={(e) => setActiveFilter(e.target.value)}
               >

@@ -48,7 +48,7 @@ const WorkPlanningSearchBar: React.FC<Props> = ({
       <div className={`flex items-stretch bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden ${compact ? '' : 'h-10'}`}>
         <div className={`flex items-center border-r border-[var(--border)] bg-[var(--surface)] ${compact ? 'px-1.5' : 'px-2'}`}>
           <select
-            className={`bg-transparent uppercase tracking-wide text-[var(--muted)] focus:outline-none ${compact ? 'text-[10px]' : 'text-[11px]'}`}
+            className={`bg-transparent uppercase tracking-wide text-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)] ${compact ? 'text-[10px]' : 'text-[11px]'}`}
             value={activeToken?.op ?? searchOp}
             onChange={(e) => onSearchOpChange(e.target.value as WorkPlanningSearchOp)}
             aria-label={activeToken ? 'Set operator for selected filter' : 'Set operator for new filter'}
@@ -82,7 +82,7 @@ const WorkPlanningSearchBar: React.FC<Props> = ({
                   isActive
                     ? 'border-[var(--primary)] bg-[var(--surfaceHover)] text-[var(--text)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
+                } focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]`}
                 title={`${token.op.toUpperCase()} ${token.term}`}
               >
                 <span className="text-[10px] uppercase tracking-wide">{token.op}</span>
@@ -111,7 +111,7 @@ const WorkPlanningSearchBar: React.FC<Props> = ({
             }}
             onKeyDown={onInputKeyDown}
             placeholder={placeholder}
-            className={`flex-1 ${compact ? 'min-w-[120px]' : 'min-w-[140px]'} px-1 ${compact ? 'py-0.5 text-xs' : 'text-base lg:text-sm'} bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none`}
+            className={`flex-1 ${compact ? 'min-w-[120px]' : 'min-w-[140px]'} px-1 ${compact ? 'py-0.5 text-xs' : 'text-base lg:text-sm'} bg-transparent text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]`}
           />
         </div>
       </div>

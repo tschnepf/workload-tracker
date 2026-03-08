@@ -25,7 +25,7 @@ const sortColorRanges = (ranges: TaskProgressColorRange[]): TaskProgressColorRan
 
 const normalizeColorInputValue = (rawValue: string): string => {
   const value = String(rawValue || '').trim();
-  if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) return '#3B82F6';
+  if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) return 'var(--color-state-info)';
   if (value.length === 4) {
     return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`.toUpperCase();
   }
@@ -76,7 +76,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
       setColorRanges((colorSettings.ranges || []).map((range) => ({
         minPercent: Number(range.minPercent ?? 0),
         maxPercent: Number(range.maxPercent ?? 0),
-        colorHex: String(range.colorHex || '#3B82F6'),
+        colorHex: String(range.colorHex || 'var(--color-state-info)'),
         label: String(range.label || ''),
       })));
       setColorDirty(false);
@@ -164,7 +164,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
     setColorRanges((prev) => {
       if (prev.length === 0) {
         setColorDirty(true);
-        return [{ minPercent: 0, maxPercent: 100, colorHex: '#3B82F6', label: '0-100%' }];
+        return [{ minPercent: 0, maxPercent: 100, colorHex: 'var(--color-state-info)', label: '0-100%' }];
       }
       const sorted = sortColorRanges(prev);
       let widestIndex = 0;
@@ -448,7 +448,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
   return (
     <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-4">
       <div className="flex gap-4 items-start">
-        <aside className="w-56 shrink-0 rounded border border-[var(--color-border)] bg-[#252526] p-2">
+        <aside className="w-56 shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
           <div className="text-[var(--color-text-primary)] font-semibold text-sm px-2 py-1">Verticals</div>
           <div className="text-[var(--color-text-secondary)] text-[11px] px-2 pb-2">Select a vertical, then a department to manage templates.</div>
           <div className="space-y-1">
@@ -466,7 +466,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                   className={`rounded border px-2 py-1.5 ${
                     isSelected
                       ? 'border-[var(--primary)] bg-[var(--primary)]/10'
-                      : 'border-[var(--color-border)] bg-[#1f1f1f]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -474,7 +474,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setExpandedVerticalIds((prev) => ({ ...prev, [verticalId]: !isExpanded }))}
-                        className="h-5 w-5 shrink-0 rounded border border-[var(--color-border)] text-[#a9acb3] hover:text-white hover:border-[#5a5f68] text-[11px]"
+                        className="h-5 w-5 shrink-0 rounded border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-white hover:border-[var(--color-border-subtle)] text-[11px]"
                         aria-label={isExpanded ? `Collapse ${vertical.name}` : `Expand ${vertical.name}`}
                       >
                         {isExpanded ? '▾' : '▸'}
@@ -485,7 +485,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                           setVerticalFilter(verticalId);
                           if (!isExpanded) setExpandedVerticalIds((prev) => ({ ...prev, [verticalId]: true }));
                         }}
-                        className="min-w-0 text-left text-xs text-[#d4d4d4] truncate hover:text-white"
+                        className="min-w-0 text-left text-xs text-[var(--color-text-secondary)] truncate hover:text-white"
                       >
                         {vertical.name}
                       </button>
@@ -504,7 +504,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                   {isExpanded ? (
                     <div className="mt-1.5 pl-4 space-y-1">
                       {verticalDepartments.length === 0 ? (
-                        <div className="text-[10px] text-[#7f7f88]">No departments for this vertical.</div>
+                        <div className="text-[10px] text-[var(--color-text-secondary)]">No departments for this vertical.</div>
                       ) : (
                         verticalDepartments.map((department) => {
                           const departmentId = department.id;
@@ -521,8 +521,8 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                               }}
                               className={`block w-full text-left text-[11px] rounded px-2 py-1 border ${
                                 isDepartmentSelected
-                                  ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[#e5f0ff]'
-                                  : 'border-transparent text-[#b9b9c0] hover:border-[var(--color-border)] hover:bg-[#252526]'
+                                  ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--color-text-primary)]'
+                                  : 'border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]'
                               }`}
                             >
                               {department.name}
@@ -552,7 +552,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
               <select
                 value={scopeFilter}
                 onChange={(e) => setScopeFilter(e.currentTarget.value as 'all' | 'project' | 'deliverable')}
-                className="bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                className="bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
               >
                 <option value="all">All Scopes</option>
                 <option value="project">Project</option>
@@ -603,7 +603,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
-                <thead className="text-[#cbd5e1]">
+                <thead className="text-[var(--color-text-secondary)]">
                   <tr>
                     <th className="py-1.5 pr-4 text-left">Scope</th>
                     <th className="py-1.5 pr-4 text-left">Completion Type</th>
@@ -613,13 +613,13 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                     <th className="py-1.5 pr-2 text-left">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="text-[#e5e7eb]">
+                <tbody className="text-[var(--color-text-primary)]">
                   {rows.map((row) => (
-                    <tr key={row._key} className="border-t border-[#2a2a2f]">
+                    <tr key={row._key} className="border-t border-[var(--color-surface-elevated)]">
                       <td className="py-1.5 pr-4">
                         <select
                           value={row.scope}
-                          className="h-7 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
+                          className="h-7 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
                           onChange={(e) => updateRow(row._key, { scope: e.currentTarget.value as 'project' | 'deliverable' })}
                         >
                           {scopeOptions.map((opt) => (
@@ -630,7 +630,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       <td className="py-1.5 pr-4">
                         <select
                           value={(row.completionMode as 'percent' | 'binary') || 'percent'}
-                          className="h-7 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
+                          className="h-7 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
                           onChange={(e) => updateRow(row._key, { completionMode: e.currentTarget.value as 'percent' | 'binary' })}
                         >
                           {completionModeOptions.map((opt) => (
@@ -642,7 +642,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                         <input
                           type="text"
                           value={row.name || ''}
-                          className="h-7 w-40 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
+                          className="h-7 w-40 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
                           onChange={(e) => updateRow(row._key, { name: e.currentTarget.value })}
                         />
                       </td>
@@ -650,7 +650,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                         <input
                           type="text"
                           value={row.description || ''}
-                          className="h-7 w-48 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
+                          className="h-7 w-48 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 text-xs"
                           onChange={(e) => updateRow(row._key, { description: e.currentTarget.value })}
                         />
                       </td>
@@ -676,7 +676,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
               </table>
             </div>
           )}
-          <div className="mt-4 rounded border border-[var(--color-border)] bg-[#252526] p-3">
+          <div className="mt-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <div className="text-[var(--color-text-primary)] font-semibold">Task Progress Colors</div>
@@ -696,9 +696,9 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
             ) : (
               <div className="mt-2 text-[11px] text-[var(--color-text-secondary)]">Ranges must be continuous and fully cover 0% through 100%.</div>
             )}
-            <div className="mt-2 rounded border border-[var(--color-border)] bg-[#1f1f1f] overflow-x-auto">
+            <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] overflow-x-auto">
               <div className="min-w-[760px]">
-                <div className="grid grid-cols-[88px_88px_170px_1fr_auto] gap-2 items-center px-3 py-1 border-b border-[#2a2a2f] text-[11px] text-[var(--color-text-secondary)]">
+                <div className="grid grid-cols-[88px_88px_170px_1fr_auto] gap-2 items-center px-3 py-1 border-b border-[var(--color-surface-elevated)] text-[11px] text-[var(--color-text-secondary)]">
                   <div>Min %</div>
                   <div>Max %</div>
                   <div>Color</div>
@@ -708,7 +708,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                 {sortedColorRanges.map((range, index) => (
                   <div
                     key={`${index}-${range.minPercent}-${range.maxPercent}`}
-                    className="grid grid-cols-[88px_88px_170px_1fr_auto] gap-2 items-center px-3 py-1 border-b border-[#2a2a2f] last:border-b-0"
+                    className="grid grid-cols-[88px_88px_170px_1fr_auto] gap-2 items-center px-3 py-1 border-b border-[var(--color-surface-elevated)] last:border-b-0"
                   >
                     <input
                       type="number"
@@ -717,7 +717,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       step={1}
                       value={range.minPercent}
                       onChange={(e) => updateColorRange(index, { minPercent: Number(e.currentTarget.value) })}
-                      className="h-7 w-full bg-[#171717] border border-[var(--color-border)] text-[#e5e7eb] rounded px-2 py-1 text-xs appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                      className="h-7 w-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                     />
                     <input
                       type="number"
@@ -726,7 +726,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       step={1}
                       value={range.maxPercent}
                       onChange={(e) => updateColorRange(index, { maxPercent: Number(e.currentTarget.value) })}
-                      className="h-7 w-full bg-[#171717] border border-[var(--color-border)] text-[#e5e7eb] rounded px-2 py-1 text-xs appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                      className="h-7 w-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                     />
                     <div className="flex items-center gap-2">
                       <input
@@ -739,7 +739,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                         type="text"
                         value={range.colorHex}
                         onChange={(e) => updateColorRange(index, { colorHex: e.currentTarget.value })}
-                        className="h-7 w-full bg-[#171717] border border-[var(--color-border)] text-[#e5e7eb] rounded px-2 py-1 text-xs"
+                        className="h-7 w-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                       />
                     </div>
                     <input
@@ -747,7 +747,7 @@ const DeliverableTaskTemplatesEditor: React.FC = () => {
                       value={range.label || ''}
                       onChange={(e) => updateColorRange(index, { label: e.currentTarget.value })}
                       placeholder={`${range.minPercent}-${range.maxPercent}%`}
-                      className="h-7 w-full bg-[#171717] border border-[var(--color-border)] text-[#e5e7eb] rounded px-2 py-1 text-xs"
+                      className="h-7 w-full bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                     />
                     <button
                       type="button"

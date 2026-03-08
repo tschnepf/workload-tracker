@@ -104,7 +104,7 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
           value={editingValue}
           onChange={(e) => onEditValueChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] font-medium border border-[var(--primary)] rounded focus:outline-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
+          className="w-full h-8 px-1 text-xs bg-[var(--bg)] text-[var(--text)] font-medium border border-[var(--primary)] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] [appearance:textfield] text-center"
         />
       ) : (
         <div className="h-8 flex items-center justify-center text-xs text-[var(--text)] font-medium">
@@ -112,7 +112,7 @@ export const WeekCell: React.FC<WeekCellProps> = React.memo((props) => {
         </div>
       )}
       {entries.length > 0 && (
-        <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
+        <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-0.5 pointer-events-none">
           {entries.slice(0, 3).map((e, idx) => (
             <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || 'var(--primary)' }} />
           ))}

@@ -65,7 +65,7 @@ const AddAssignmentRow: React.FC<AddAssignmentRowProps> = ({
 
   return (
     <div className="grid gap-px p-1 bg-[var(--card)] border border-[var(--border)]" style={{ gridTemplateColumns: gridTemplate }}>
-      <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2 relative">
+      <div className="col-span-2 flex items-center py-1 pl-14 pr-2 relative">
         <input
           type="text"
           value={newProjectName}
@@ -96,7 +96,7 @@ const AddAssignmentRow: React.FC<AddAssignmentRowProps> = ({
             }
           }}
           placeholder="Search projects (name, client, number)..."
-          className="w-full px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
+          className="w-full px-2 py-1 text-xs bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
           autoFocus
           ref={searchInputRef}
         />

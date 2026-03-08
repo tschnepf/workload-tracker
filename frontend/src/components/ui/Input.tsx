@@ -30,7 +30,7 @@ const Input: React.FC<InputProps> = ({
     w-full rounded-[var(--radius-md)] border transition-colors
     bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)]
     placeholder-[var(--color-text-secondary)] focus:border-[var(--color-border)]
-    focus:outline-none focus:ring-0 motion-reduce:transition-none
+    focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 motion-reduce:transition-none
     focus-visible:border-[var(--color-focus-ring)] focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]
     ${sizeStyles[uiSize]}
   `;

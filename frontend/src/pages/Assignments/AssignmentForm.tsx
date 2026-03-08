@@ -615,13 +615,13 @@ const AssignmentForm: React.FC = () => {
           Person <span className="text-red-400">*</span>
         </label>
         {deptState.selectedDepartmentId != null && (
-          <div className="mb-2 flex items-center gap-2 text-xs text-[#cbd5e1]">
+          <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={!showAllDepartments}
                 onChange={(e) => setShowAllDepartments(!e.target.checked)}
-                className="w-3 h-3 text-[#007acc] bg-[#3e3e42] border-[var(--color-border)] rounded focus:ring-[#007acc] focus:ring-1"
+                className="w-3 h-3 text-[var(--color-action-primary)] bg-[var(--color-surface)] border-[var(--color-border)] rounded focus:ring-[var(--color-focus-ring)] focus:ring-1"
               />
               Limit to current department
             </label>
@@ -636,7 +636,7 @@ const AssignmentForm: React.FC = () => {
             setTimeout(() => setShowPersonDropdown(false), 200);
           }}
           placeholder="Type to search people..."
-          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[var(--color-text-secondary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
         />
         {validationErrors.person && (
           <p className="text-sm text-red-400 mt-1">{validationErrors.person}</p>
@@ -660,7 +660,7 @@ const AssignmentForm: React.FC = () => {
               return (
                 <div
                   key={person.id}
-                  className="px-3 py-2 cursor-pointer hover:bg-[#3e3e42] text-[var(--color-text-primary)] text-sm"
+                  className="px-3 py-2 cursor-pointer hover:bg-[var(--color-surface)] text-[var(--color-text-primary)] text-sm"
                   onClick={() => selectPerson(person)}
                 >
                   <div className="font-medium">
@@ -683,7 +683,7 @@ const AssignmentForm: React.FC = () => {
         <select
           value={formData.project}
           onChange={(e) => handleChange('project', e.target.value)}
-          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] min-h-[44px]"
         >
           <option value="">Select a project...</option>
           {projects.map((project) => (
@@ -745,7 +745,7 @@ const AssignmentForm: React.FC = () => {
           value={skillsInput}
           onChange={(e) => setSkillsInput(e.target.value)}
           placeholder="e.g., React, Python, Project Management, Heat Calculations"
-          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
         />
         <p className="text-[var(--color-text-secondary)] text-sm mt-1">
           Enter skills needed for this assignment (comma-separated). This helps match the best person for the job.
@@ -776,7 +776,7 @@ const AssignmentForm: React.FC = () => {
 
             return (
               <>
-                <div className="p-3 bg-[#3e3e42]/30 rounded border border-[var(--color-border)]">
+                <div className="p-3 bg-[var(--color-surface)]/30 rounded border border-[var(--color-border)]">
                   <div className="text-sm">
                     <div className="text-[var(--color-text-primary)] font-medium mb-1">
                       📊 Assignment Insights
@@ -859,7 +859,7 @@ const AssignmentForm: React.FC = () => {
 
   const renderWeeksStep = () => (
     <div className="space-y-5">
-      <div className="bg-[#3e3e42]/50 p-4 rounded-lg border border-[var(--color-border)]">
+      <div className="bg-[var(--color-surface)]/50 p-4 rounded-lg border border-[var(--color-border)]">
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
           Quick Set All Weeks
         </label>
@@ -870,7 +870,7 @@ const AssignmentForm: React.FC = () => {
             step="1"
             value={bulkHours}
             onChange={(e) => setBulkHours(Math.max(0, Math.ceil(parseFloat(e.target.value) || 0)))}
-            className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none w-24"
+            className="px-3 py-1 rounded border text-sm bg-slate-600 border-slate-500 text-[var(--color-text-primary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] w-24"
             placeholder="0"
           />
           <span className="text-slate-300 text-sm">hours per week</span>
@@ -907,10 +907,10 @@ const AssignmentForm: React.FC = () => {
                   <div
                     key={weekKey}
                     className={`flex-shrink-0 w-36 p-3 rounded-xl border ${
-                      isOverCapacity ? 'bg-red-500/20 border-red-500/50' : 'bg-[#3e3e42] border-[var(--color-border)]'
+                      isOverCapacity ? 'bg-red-500/20 border-red-500/50' : 'bg-[var(--color-surface)] border-[var(--color-border)]'
                     }`}
                   >
-                    <div className="text-xs font-medium text-slate-200 sticky top-0 bg-[#3e3e42] pb-1">
+                    <div className="text-xs font-medium text-slate-200 sticky top-0 bg-[var(--color-surface)] pb-1">
                       {formatWeekDisplay(weekKey)}
                     </div>
                     <div className="mt-2 flex items-center gap-1">
@@ -924,7 +924,7 @@ const AssignmentForm: React.FC = () => {
                           isOverCapacity
                             ? 'bg-red-900/50 border-red-500 text-red-300'
                             : 'bg-slate-600 border-slate-500 text-[var(--color-text-primary)]'
-                        } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
+                        } focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]`}
                         placeholder="0"
                       />
                       <span className="text-xs text-[var(--color-text-secondary)]">h</span>
@@ -951,7 +951,7 @@ const AssignmentForm: React.FC = () => {
     return (
       <div className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[#3e3e42]/40">
+          <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/40">
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-secondary)] mb-1">Person</div>
             <div className="text-lg font-semibold text-[var(--color-text-primary)]">
               {selectedPerson ? selectedPerson.name : 'Not selected'}
@@ -962,7 +962,7 @@ const AssignmentForm: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[#3e3e42]/40">
+          <div className="p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/40">
             <div className="text-xs uppercase tracking-wide text-[var(--color-text-secondary)] mb-1">Project</div>
             <div className="text-lg font-semibold text-[var(--color-text-primary)]">
               {selectedProject ? selectedProject.name : 'Not selected'}
@@ -982,7 +982,7 @@ const AssignmentForm: React.FC = () => {
           <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm font-medium text-[var(--color-text-primary)]">
             Weekly Breakdown
           </div>
-          <div className="divide-y divide-[#3e3e42]">
+          <div className="divide-y divide-[var(--color-border)]">
             {availableWeeks.map((weekKey) => (
               <div key={weekKey} className="px-4 py-2 text-sm flex items-center justify-between text-[var(--color-text-primary)]">
                 <span>{formatWeekDisplay(weekKey)}</span>
@@ -1034,13 +1034,13 @@ const AssignmentForm: React.FC = () => {
                 {index + 1}
               </button>
               <div className="min-w-[140px]">
-                <div className={`text-sm font-medium ${isActive ? 'text-[#f3f4f6]' : 'text-[#cbd5e1]'}`}>
+                <div className={`text-sm font-medium ${isActive ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
                   {step.title}
                 </div>
-                <div className="text-xs text-[#8b93a7]">{step.description}</div>
+                <div className="text-xs text-[var(--color-text-secondary)]">{step.description}</div>
               </div>
               {index < STEP_SEQUENCE.length - 1 && (
-                <div className="hidden md:block w-8 h-px bg-[#3e3e42]" />
+                <div className="hidden md:block w-8 h-px bg-[var(--color-surface)]" />
               )}
             </div>
           );
@@ -1061,8 +1061,8 @@ const AssignmentForm: React.FC = () => {
           </p>
           {deptState.selectedDepartmentId != null && (
             <div className="mt-2 flex items-center gap-2 text-xs">
-              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[#3e3e42] text-[#cbd5e1] border border-[var(--color-border)]">
-                Filtered by: <strong className="text-[#e5e7eb]">
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
+                Filtered by: <strong className="text-[var(--color-text-primary)]">
                   {(() => {
                     const d = departments.find(d => d.id === deptState.selectedDepartmentId);
                     return d?.name || `Dept ${deptState.selectedDepartmentId}`;

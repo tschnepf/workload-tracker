@@ -73,7 +73,7 @@ const PeopleListTable: React.FC<Props> = ({
                 key={person.id ?? index}
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}
                 onClick={bulkMode ? undefined : () => onRowClick(person, index)}
-                className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
+                className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
                   bulkMode
                     ? 'hover:bg-[var(--surfaceHover)]'
                     : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}`
@@ -113,7 +113,7 @@ const PeopleListTable: React.FC<Props> = ({
           <div
             key={person.id}
             onClick={bulkMode ? undefined : () => onRowClick(person, index)}
-            className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none ${
+            className={`grid grid-cols-12 gap-2 px-2 py-1.5 text-sm border-b border-[var(--border)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
               bulkMode
                 ? 'hover:bg-[var(--surfaceHover)]'
                 : `cursor-pointer hover:bg-[var(--surfaceHover)] ${selectedPersonId === person.id ? 'bg-[var(--surfaceHover)] border-[var(--primary)]' : ''}`

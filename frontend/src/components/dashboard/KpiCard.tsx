@@ -35,7 +35,7 @@ const KpiCard: React.FC<KpiCardProps> = ({ label, value, accent = 'neutral', sub
   const accentStyle = accentStyles[accent];
   return (
     <Card
-      className={`rounded-2xl border ${accentStyle.ring} bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] ${className ?? ''}`}
+      className={`rounded-2xl border ${accentStyle.ring} bg-[var(--card)] p-5 shadow-[var(--elevation-3)] ${className ?? ''}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-xs uppercase tracking-wide text-[var(--muted)]">{label}</div>

@@ -62,7 +62,7 @@ const BarListCard: React.FC<BarListCardProps> = ({
   const secondarySlices = slices.filter((slice) => slice.key !== primarySlice?.key);
 
   return (
-    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_10px_28px_rgba(0,0,0,0.25)] ${className ?? ''}`}>
+    <Card className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-[var(--elevation-3)] ${className ?? ''}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-[var(--text)]">{title}</h3>

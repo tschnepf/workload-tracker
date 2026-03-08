@@ -67,7 +67,7 @@ export default function FiltersPanel(props: FiltersPanelProps) {
         placeholder="Search people (name, role, department, location, notes)"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
+        className="w-full px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
       />
 
       {/* Department Multi-Select Filter */}
@@ -255,7 +255,7 @@ export default function FiltersPanel(props: FiltersPanelProps) {
         />
         <span
           aria-hidden
-          className="inline-flex w-4 h-4 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] transition-colors peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--focus)] peer-checked:bg-[var(--primary)] peer-checked:border-[var(--primary)]"
+          className="inline-flex w-4 h-4 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] transition-colors peer-focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] peer-focus:ring-2 peer-focus:ring-[var(--focus)] peer-checked:bg-[var(--primary)] peer-checked:border-[var(--primary)]"
         >
           <svg className="w-3 h-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />

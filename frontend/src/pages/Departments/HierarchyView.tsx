@@ -229,7 +229,7 @@ const HierarchyView: React.FC = () => {
             <div className="text-red-400">Error: {error}</div>
             <button
               onClick={loadData}
-              className="mt-2 text-sm text-[#007acc] hover:text-[#1e90ff]"
+              className="mt-2 text-sm text-[var(--color-action-primary)] hover:text-[var(--color-action-primary-hover)]"
             >
               Retry
             </button>

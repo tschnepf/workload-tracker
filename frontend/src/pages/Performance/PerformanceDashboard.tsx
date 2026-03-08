@@ -90,7 +90,7 @@ const PerformanceDashboard: React.FC = () => {
       case 'good': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'warning': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
       case 'poor': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      default: return 'bg-[#3e3e42]/20 text-[var(--color-text-secondary)] border-[var(--color-border)]/30';
+      default: return 'bg-[var(--color-border)]/20 text-[var(--color-text-secondary)] border-[var(--color-border)]/30';
     }
   };
 
@@ -184,7 +184,7 @@ const PerformanceDashboard: React.FC = () => {
             const latestMetric = summary.byMetric[metricName];
             
             return (
-              <div key={metricName} className="text-center p-4 bg-[#3e3e42]/50 rounded-lg">
+              <div key={metricName} className="text-center p-4 bg-[var(--color-border)]/50 rounded-lg">
                 <div className="text-sm font-medium text-[var(--color-text-primary)] mb-2">{metricName}</div>
                 
                 {latestMetric ? (

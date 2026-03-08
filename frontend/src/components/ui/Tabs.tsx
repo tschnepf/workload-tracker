@@ -28,7 +28,7 @@ const Tabs: React.FC<TabsProps> = ({ items, value, onChange, className = '' }) =
           onClick={() => onChange(item.key)}
           className={[
             'rounded-[var(--radius-sm)] px-3 py-1.5 text-xs transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-focus-ring)]',
             active
               ? 'bg-[var(--color-action-primary)] text-white'
               : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surfaceHover)]',

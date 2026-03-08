@@ -36,6 +36,8 @@
   --color-surface: var(--surface);
   --color-surface-elevated: var(--card);
   --color-surface-overlay: var(--surfaceOverlay);
+  --color-surface-hover: var(--surfaceHover);
+  --color-card-hover: var(--cardHover);
   --color-border: var(--border);
   --color-border-subtle: var(--borderSubtle);
   --color-border-overlay: var(--borderOverlay);
@@ -75,6 +77,14 @@
   --chart-accent-a: #60a5fa;
   --chart-accent-b: #22c55e;
   --chart-accent-c: #f43f5e;
+  --chart-phase-bulletin: var(--chart-person);
+  --chart-phase-cd: var(--chart-client);
+  --chart-phase-dd: var(--chart-accent-a);
+  --chart-phase-ifc: var(--color-state-info);
+  --chart-phase-ifp: var(--chart-accent-c);
+  --chart-phase-masterplan: var(--chart-accent-a);
+  --chart-phase-sd: var(--color-state-warning);
+  --chart-phase-milestone: var(--chart-neutral);
 }
 
 .theme-default {

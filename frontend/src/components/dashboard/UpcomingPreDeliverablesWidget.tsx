@@ -74,7 +74,7 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
       <div className="p-4 h-full min-h-0 flex flex-col">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[var(--color-text-primary)] font-semibold">My Upcoming Pre-Deliverables</div>
-          <div className="text-xs text-[#94a3b8]">{items.length}</div>
+          <div className="text-xs text-[var(--chart-neutral)]">{items.length}</div>
         </div>
         {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -85,10 +85,10 @@ const UpcomingPreDeliverablesWidget: React.FC<{ className?: string }> = ({ class
           ) : (
             <div className="space-y-2">
               {items.map(it => (
-                <div key={it.id} className={`flex items-center justify-between px-3 py-2 rounded ${it.isOverdue ? 'bg-red-500/10 border border-red-500/30' : 'bg-[#1f1f24] border border-[var(--color-border)]'}`}>
-                  <div className="text-sm text-[#e5e7eb] min-w-0">
+                <div key={it.id} className={`flex items-center justify-between px-3 py-2 rounded ${it.isOverdue ? 'bg-red-500/10 border border-red-500/30' : 'bg-[var(--color-surface-elevated)] border border-[var(--color-border)]'}`}>
+                  <div className="text-sm text-[var(--color-text-primary)] min-w-0">
                     <div className="font-medium truncate">{it.preDeliverableType || 'Pre-Deliverable'}{it.parentDeliverable?.description ? ` – ${it.parentDeliverable.description}` : ''}</div>
-                    <div className="text-[#94a3b8] text-xs truncate">Due {it.generatedDate}{it.projectName ? ` • ${it.projectName}` : ''}{it.projectClient ? ` • ${it.projectClient}` : ''}</div>
+                    <div className="text-[var(--chart-neutral)] text-xs truncate">Due {it.generatedDate}{it.projectName ? ` • ${it.projectName}` : ''}{it.projectClient ? ` • ${it.projectClient}` : ''}</div>
                   </div>
                   {!it.isCompleted && (
                     <Button onClick={() => markComplete(it.id)} size="sm">Complete</Button>

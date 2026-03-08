@@ -48,7 +48,7 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
       <div className="p-4 h-full min-h-0 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-[var(--text)]">My Projects</h3>
-          <div className="text-xs text-[#94a3b8]">{filtered.length}</div>
+          <div className="text-xs text-[var(--chart-neutral)]">{filtered.length}</div>
         </div>
         {/* Status filters */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -80,7 +80,7 @@ const MyProjectsCard: React.FC<{ projects: ProjectItem[]; className?: string }> 
             <ul className="space-y-4 text-sm">
               {Array.from(groupedByClient.entries()).map(([clientName, clientProjects]) => (
                 <li key={clientName} className="space-y-2">
-                  <div className="text-xs font-semibold uppercase text-[#94a3b8] tracking-wide">{clientName}</div>
+                  <div className="text-xs font-semibold uppercase text-[var(--chart-neutral)] tracking-wide">{clientName}</div>
                   <ul className="space-y-1">
                     {clientProjects.map((p) => (
                       <li key={p.id} className="flex items-center justify-between gap-3 pl-4">

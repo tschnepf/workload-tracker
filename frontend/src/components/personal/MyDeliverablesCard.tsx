@@ -13,7 +13,7 @@ const MyDeliverablesCard: React.FC<{ deliverables: DeliverableItem[]; className?
       <div className="p-4 h-full min-h-0 flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-[var(--text)]">My Deliverables</h3>
-          <div className="text-xs text-[#94a3b8]">{upcoming.length}</div>
+          <div className="text-xs text-[var(--chart-neutral)]">{upcoming.length}</div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {upcoming.length === 0 ? (
@@ -22,8 +22,8 @@ const MyDeliverablesCard: React.FC<{ deliverables: DeliverableItem[]; className?
             <ul className="space-y-2 text-sm">
               {upcoming.map(d => (
                 <li key={d.id} className="flex items-center justify-between gap-2">
-                  <div className="text-[var(--text)] min-w-0 truncate">{d.title}{d.projectName ? <span className="text-[#94a3b8]"> · {d.projectName}</span> : null}</div>
-                  <div className="text-[#94a3b8] shrink-0">{d.date || '—'}</div>
+                  <div className="text-[var(--text)] min-w-0 truncate">{d.title}{d.projectName ? <span className="text-[var(--chart-neutral)]"> · {d.projectName}</span> : null}</div>
+                  <div className="text-[var(--chart-neutral)] shrink-0">{d.date || '—'}</div>
                 </li>
               ))}
             </ul>

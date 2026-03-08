@@ -64,7 +64,7 @@ const QaAssignmentEditor: React.FC<QaAssignmentEditorProps> = ({
           }
         }}
         placeholder="Search QA (min 2 chars)"
-        className="w-full bg-transparent border-none p-0 m-0 text-xs text-[var(--text)] placeholder-[var(--muted)] outline-none focus:outline-none focus:ring-0"
+        className="w-full bg-transparent border-none p-0 m-0 text-xs text-[var(--text)] placeholder-[var(--muted)] outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0"
       />
       {showDropdown ? (
         <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">

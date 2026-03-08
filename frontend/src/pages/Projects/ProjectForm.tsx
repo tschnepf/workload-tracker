@@ -62,7 +62,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
     return [...out, {
       key: current,
       label: formatStatus(current, definitionMap),
-      colorHex: '#64748b',
+      colorHex: 'var(--chart-neutral)',
       includeInAnalytics: false,
       treatAsCaWhenNoDeliverable: false,
       isSystem: false,
@@ -374,7 +374,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 placeholder="e.g., Website Redesign, Mobile App"
                 required
                 error={validationErrors.name}
-                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
+                className="bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
             </div>
 
@@ -399,7 +399,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 aria-activedescendant={highlightedClientId}
                 placeholder="e.g., Acme Corp, Internal"
                 autoComplete="off"
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[var(--color-text-secondary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
               />
               {validationErrors.client && (
                 <p className="text-red-400 text-xs mt-1">{validationErrors.client}</p>
@@ -425,7 +425,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                             selectClient(client);
                           }}
                           className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
-                            isActive ? 'bg-blue-600/40 text-white' : 'text-[var(--color-text-primary)] hover:bg-[#3e3e42]'
+                            isActive ? 'bg-[var(--color-action-primary)]/40 text-white' : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
                           }`}
                         >
                           {client}
@@ -445,7 +445,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
               <select
                 value={formData.vertical || ''}
                 onChange={(e) => handleChange('vertical', e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] min-h-[44px]"
                 disabled={verticalsLoading}
               >
                 <option value="">{verticalsLoading ? 'Loading verticals...' : 'Select vertical'}</option>
@@ -468,7 +468,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
               <select
                 value={formData.status || 'active'}
                 onChange={(e) => handleChange('status', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] min-h-[44px]"
               >
                 {statusSelectOptions.map((status) => (
                   <option key={status.key} value={status.key}>
@@ -487,7 +487,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.description || ''}
                 onChange={(e) => handleChange('description', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[#969696] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
+                className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] placeholder-[var(--color-text-secondary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] resize-none"
                 placeholder="Brief description of the project"
               />
             </div>
@@ -500,7 +500,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.startDate || ''}
                 onChange={(nextValue) => handleChange('startDate', nextValue)}
                 placeholder="Select start date"
-                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
+                className="bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
               <p className="text-[var(--color-text-secondary)] text-sm mt-1">
                 Leave blank if project start date is not yet determined
@@ -518,7 +518,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.estimatedHours || ''}
                 onChange={(e) => handleChange('estimatedHours', e.target.value ? parseInt(e.target.value) : undefined)}
                 placeholder="Total project hours"
-                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
+                className="bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
             </div>
 
@@ -530,7 +530,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 <select
                   value={formData.autoHoursTemplateId ?? ''}
                   onChange={(e) => handleChange('autoHoursTemplateId', e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none min-h-[44px]"
+                  className="w-full px-3 py-2 rounded-md border text-sm transition-colors bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)] focus:border-[var(--color-focus-ring)] focus:ring-1 focus:ring-[var(--color-focus-ring)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] min-h-[44px]"
                   disabled={autoHoursTemplatesLoading}
                 >
                   <option value="">Global default</option>
@@ -552,7 +552,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
                 value={formData.projectNumber || ''}
                 onChange={(e) => handleChange('projectNumber', e.target.value)}
                 placeholder="e.g., PRJ-2024-001"
-                className="bg-[#3e3e42] border-[var(--color-border)] text-[var(--color-text-primary)]"
+                className="bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-primary)]"
               />
             </div>
 
@@ -585,7 +585,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ embedded = false, onCancel, o
           </Card>
         )}
         </div>
-      <div className={embedded ? 'border-t border-[var(--color-border)] bg-[#1f1f23] px-4 py-3' : 'sticky bottom-0 left-0 right-0 bg-[#1f1f23] border-t border-[var(--color-border)] px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.35)]'}>
+      <div className={embedded ? 'border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3' : 'sticky bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] px-4 py-3 shadow-[var(--elevation-2)]'}>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Button
             type="button"

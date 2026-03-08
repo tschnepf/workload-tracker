@@ -80,7 +80,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
-            <thead className="text-[#cbd5e1]">
+            <thead className="text-[var(--color-text-secondary)]">
               <tr>
                 <th className="py-2 pr-4 text-left">Type</th>
                 <th className="py-2 pr-4 text-left">Enabled</th>
@@ -88,7 +88,7 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
                 <th className="py-2 pr-4 text-left">Source</th>
               </tr>
             </thead>
-            <tbody className="text-[#e5e7eb]">
+            <tbody className="text-[var(--color-text-primary)]">
               {settings.map((row, idx) => (
                 <tr key={row.typeId} className="border-t border-[var(--color-border)]">
                   <td className="py-2 pr-4">{row.typeName}</td>
@@ -105,11 +105,11 @@ const ProjectPreDeliverableSettings: React.FC<Props> = ({ projectId }) => {
                       min={0}
                       max={60}
                       value={row.daysBefore ?? 0}
-                      className="w-24 bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
+                      className="w-24 bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-2 py-1 text-xs"
                       onChange={e => updateRow(idx, { daysBefore: Math.max(0, Math.min(60, Number(e.currentTarget.value))) })}
                     />
                   </td>
-                  <td className="py-2 pr-4 text-[#94a3b8]">{row.source}</td>
+                  <td className="py-2 pr-4 text-[var(--chart-neutral)]">{row.source}</td>
                 </tr>
               ))}
             </tbody>

@@ -47,7 +47,7 @@ const AddAssignmentCard: React.FC<AddAssignmentCardProps> = ({
               aria-haspopup="listbox"
               aria-owns="person-search-results"
               aria-describedby="person-search-help"
-              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+              className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
               autoFocus
               ref={personSearchInputRef}
             />

@@ -7,6 +7,7 @@ import { usePersonExperienceProfile, usePersonProjectTimeline } from '@/hooks/us
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subscribeAssignmentsRefresh } from '@/lib/assignmentsRefreshBus';
 import { subscribeProjectsRefresh } from '@/lib/projectsRefreshBus';
+import { t } from '@/copy';
 
 function addMonths(d: Date, months: number) {
   const copy = new Date(d.getTime());
@@ -92,17 +93,17 @@ export default function PersonExperienceReport() {
     <div className="p-4 space-y-4">
       <div className="text-xl font-semibold">Person Experience Report</div>
 
-      <section className="bg-[#111314] border border-[#2a2d2f] rounded p-3 space-y-3">
+      <section className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded p-3 space-y-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-[#e5e7eb]">Filters</div>
+          <div className="text-sm font-semibold text-[var(--color-text-primary)]">{t('section.filters')}</div>
           {isMobile && (
             <button
               type="button"
               onClick={() => setFiltersOpen((open) => !open)}
-              className="text-xs px-2 py-1 rounded border border-[#2a2d2f] bg-[#0c0e0f] text-[#e5e7eb] hover:bg-[#1a1d1f]"
+              className="text-xs px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-overlay)]"
               aria-expanded={filtersOpen}
             >
-              {filtersOpen ? 'Hide' : 'Show'}
+              {filtersOpen ? t('button.hide') : t('button.show')}
             </button>
           )}
         </div>
@@ -110,21 +111,21 @@ export default function PersonExperienceReport() {
           <div>
             <label className="block text-sm mb-1">Search Person</label>
             <input
-              className="w-full rounded bg-[#0c0e0f] border border-[#2a2d2f] px-2 py-1"
+              className="w-full rounded bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1"
               placeholder="Type at least 2 characters"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
             {debounced.trim().length >= 2 && (
-              <div className="mt-2 max-h-48 overflow-auto border border-[#2a2d2f] rounded">
-                {loadingPeople && <div className="px-2 py-1 text-sm text-[#9aa0a6]">Searching...</div>}
+              <div className="mt-2 max-h-48 overflow-auto border border-[var(--color-border)] rounded">
+                {loadingPeople && <div className="px-2 py-1 text-sm text-[var(--color-text-secondary)]">Searching...</div>}
                 {!loadingPeople && people.length === 0 && (
-                  <div className="px-2 py-1 text-sm text-[#9aa0a6]">No matches</div>
+                  <div className="px-2 py-1 text-sm text-[var(--color-text-secondary)]">No matches</div>
                 )}
                 {!loadingPeople && people.map(p => (
                   <button
                     key={p.id}
-                    className={`w-full text-left px-2 py-1 hover:bg-[#1a1d1f] ${selectedPersonId === p.id ? 'bg-[#1a1d1f]' : ''}`}
+                    className={`w-full text-left px-2 py-1 hover:bg-[var(--color-surface-overlay)] ${selectedPersonId === p.id ? 'bg-[var(--color-surface-overlay)]' : ''}`}
                     onClick={() => { setSelectedPersonId(p.id); }}
                   >
                     {p.name}
@@ -137,7 +138,7 @@ export default function PersonExperienceReport() {
           <div>
             <label className="block text-sm mb-1">Interval Type</label>
             <select
-              className="w-full rounded bg-[#0c0e0f] border border-[#2a2d2f] px-2 py-1"
+              className="w-full rounded bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1"
               value={intervalType}
               onChange={e => setIntervalType(e.target.value as any)}
             >
@@ -151,28 +152,28 @@ export default function PersonExperienceReport() {
             <input
               type="number"
               min={1}
-              className="w-full rounded bg-[#0c0e0f] border border-[#2a2d2f] px-2 py-1"
+              className="w-full rounded bg-[var(--color-bg)] border border-[var(--color-border)] px-2 py-1"
               value={intervalCount}
               onChange={e => setIntervalCount(Math.max(1, Number(e.target.value || 1)))}
             />
-            <div className="mt-1 text-xs text-[#9aa0a6]">Window: {start} to {end}</div>
+            <div className="mt-1 text-xs text-[var(--color-text-secondary)]">{t('msg.windowRange', { start, end })}</div>
           </div>
         </div>
       </section>
 
       {selectedPersonId == null && (
-        <div className="text-[#9aa0a6]">Select a person to see project experience.</div>
+        <div className="text-[var(--color-text-secondary)]">{t('state.selectPersonPrompt')}</div>
       )}
 
       {selectedPersonId != null && (
-        <section className="bg-[#111314] border border-[#2a2d2f] rounded p-3">
-          <div className="text-sm text-[#9aa0a6] mb-2">Showing {intervalType === 'months' ? `${intervalCount} month` : `${intervalCount} year`}{intervalCount > 1 ? 's' : ''} ending {end}</div>
-          {loading && <div className="text-[#9aa0a6]">Loading...</div>}
+        <section className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded p-3">
+          <div className="text-sm text-[var(--color-text-secondary)] mb-2">{t('msg.showingWindow', { count: intervalCount, unit: `${intervalType === 'months' ? 'month' : 'year'}${intervalCount > 1 ? 's' : ''}`, end })}</div>
+          {loading && <div className="text-[var(--color-text-secondary)]">{t('common.loading')}</div>}
           {error && <div className="text-red-400">{String(error)}</div>}
           {!loading && !error && (
             <div className="space-y-3">
               {(data?.byProject || []).length === 0 && (
-                <div className="text-[#9aa0a6]">No projects in this window.</div>
+                <div className="text-[var(--color-text-secondary)]">{t('state.noProjectsWindow')}</div>
               )}
               {(data?.byProject || []).map(prj => {
                 const avg = prj.weeks > 0 ? prj.hours / prj.weeks : 0;
@@ -181,44 +182,44 @@ export default function PersonExperienceReport() {
                 const roleMap = (data as any)?.roleNamesById || {};
                 const roles = Object.values(prj.roles || {}).sort((a: any, b: any) => (b.weeks - a.weeks));
                 return (
-                  <div key={prj.projectId} className="border border-[#2a2d2f] rounded p-2">
+                  <div key={prj.projectId} className="border border-[var(--color-border)] rounded p-2">
                     <div className="flex items-center justify-between">
                       <div className="font-medium">{prj.projectName}</div>
-                      <div className="text-xs text-[#9aa0a6]">{prj.client}</div>
+                      <div className="text-xs text-[var(--color-text-secondary)]">{prj.client}</div>
                     </div>
                     <div className="mt-1 grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
                       <div>
-                        <div className="text-[#9aa0a6]">Weeks</div>
+                        <div className="text-[var(--color-text-secondary)]">Weeks</div>
                         <div>{prj.weeks}</div>
                       </div>
                       <div>
-                        <div className="text-[#9aa0a6]">Total Hours</div>
+                        <div className="text-[var(--color-text-secondary)]">Total Hours</div>
                         <div>{prj.hours.toFixed(1)}</div>
                       </div>
                       <div>
-                        <div className="text-[#9aa0a6]">Avg Weekly Hours</div>
+                        <div className="text-[var(--color-text-secondary)]">Avg Weekly Hours</div>
                         <div className="flex items-center gap-2">
-                          <div className="w-36 h-2 bg-[#1a1d1f] rounded">
-                            <div className="h-2 bg-[#3b82f6] rounded" style={{ width: `${barPct}%` }} />
+                          <div className="w-36 h-2 bg-[var(--color-surface-overlay)] rounded">
+                            <div className="h-2 bg-[var(--color-action-primary)] rounded" style={{ width: `${barPct}%` }} />
                           </div>
                           <div className="text-xs">{avg.toFixed(1)} h</div>
                         </div>
                       </div>
                       <div>
-                        <div className="text-[#9aa0a6]">Role(s)</div>
+                        <div className="text-[var(--color-text-secondary)]">Role(s)</div>
                         <div className="flex flex-wrap gap-1">
                           {roles.slice(0,3).map((r: any) => {
                             const label = roleMap?.[r.roleId] || `Role ${r.roleId}`;
-                            return <span key={r.roleId} className="px-2 py-0.5 rounded bg-[#1a1d1f] text-xs">{label} - {r.weeks}w</span>
+                            return <span key={r.roleId} className="px-2 py-0.5 rounded bg-[var(--color-surface-overlay)] text-xs">{label} - {r.weeks}w</span>
                           })}
                         </div>
                       </div>
                     </div>
                     <div className="mt-2">
-                      <div className="text-[#9aa0a6] text-sm mb-1">Phases</div>
+                      <div className="text-[var(--color-text-secondary)] text-sm mb-1">Phases</div>
                       <div className="flex flex-wrap gap-1">
                         {phases.slice(0,6).map((ph: any) => (
-                          <span key={ph.phase} className="px-2 py-0.5 rounded bg-[#1a1d1f] text-xs">{ph.phase} - {ph.weeks}w</span>
+                          <span key={ph.phase} className="px-2 py-0.5 rounded bg-[var(--color-surface-overlay)] text-xs">{ph.phase} - {ph.weeks}w</span>
                         ))}
                       </div>
                     </div>
@@ -240,7 +241,7 @@ function ProjectHoursSparkline({ personId, projectId, start, end }: { personId: 
   const weeks = React.useMemo(() => Object.keys(data?.weeklyHours || {}).sort(), [data]);
   const values = weeks.map(w => (data?.weeklyHours as any)?.[w] || 0);
   const max = Math.max(1, ...values);
-  if (loading) return <div className="mt-2 text-xs text-[#9aa0a6]">Loading series...</div>;
+  if (loading) return <div className="mt-2 text-xs text-[var(--color-text-secondary)]">{t('common.loadingData')}</div>;
   if (error) return null;
   if (!values.length) return null;
   const step = 24;
@@ -256,7 +257,7 @@ function ProjectHoursSparkline({ personId, projectId, start, end }: { personId: 
     : 'Weekly hours timeline';
   return (
     <div className="mt-2 overflow-x-auto">
-      <div className="text-[#9aa0a6] text-xs mb-1">Weekly hours</div>
+      <div className="text-[var(--color-text-secondary)] text-xs mb-1">Weekly hours</div>
       <svg
         width={width}
         height={height}
@@ -264,7 +265,7 @@ function ProjectHoursSparkline({ personId, projectId, start, end }: { personId: 
         role="img"
         aria-label={ariaLabel}
       >
-        <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={points} />
+        <polyline fill="none" stroke="var(--color-action-primary)" strokeWidth="2" points={points} />
       </svg>
     </div>
   );

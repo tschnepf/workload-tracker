@@ -7,9 +7,9 @@ import { taskProgressColorsApi } from '@/services/api';
 import type { ProjectTask, TaskProgressColorRange } from '@/types/models';
 
 const DEFAULT_TASK_PROGRESS_COLORS: TaskProgressColorRange[] = [
-  { minPercent: 0, maxPercent: 25, colorHex: '#F59E0B', label: '0-25%' },
-  { minPercent: 26, maxPercent: 75, colorHex: '#3B82F6', label: '26-75%' },
-  { minPercent: 76, maxPercent: 100, colorHex: '#EF4444', label: '76-100%' },
+  { minPercent: 0, maxPercent: 25, colorHex: 'var(--color-state-warning)', label: '0-25%' },
+  { minPercent: 26, maxPercent: 75, colorHex: 'var(--color-state-info)', label: '26-75%' },
+  { minPercent: 76, maxPercent: 100, colorHex: 'var(--color-state-danger)', label: '76-100%' },
 ];
 
 const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
@@ -75,7 +75,7 @@ const ProjectAssignmentsColumn: React.FC<ProjectAssignmentsColumnProps> = ({
       .map((range) => ({
         minPercent: Number(range.minPercent ?? 0),
         maxPercent: Number(range.maxPercent ?? 100),
-        colorHex: String(range.colorHex || '#3B82F6'),
+        colorHex: String(range.colorHex || 'var(--color-state-info)'),
         label: range.label || '',
       }))
       .sort((a, b) => (a.minPercent - b.minPercent) || (a.maxPercent - b.maxPercent));

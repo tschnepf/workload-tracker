@@ -106,9 +106,21 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
   const [focusClient, setFocusClient] = React.useState<string | null>(null);
 
   const PALETTE = React.useMemo(() => [
-    '#34d399', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#22d3ee',
-    '#f472b6', '#10b981', '#93c5fd', '#fbbf24', '#f87171', '#38bdf8',
-    '#c084fc', '#2dd4bf', '#fb7185',
+    'var(--color-state-success)',
+    'var(--chart-accent-a)',
+    'var(--color-state-warning)',
+    'var(--color-state-danger)',
+    'var(--chart-phase-masterplan)',
+    'var(--chart-project)',
+    'var(--chart-phase-ifp)',
+    'var(--chart-accent-b)',
+    'var(--chart-person)',
+    'var(--chart-client)',
+    'var(--chart-accent-c)',
+    'var(--color-state-info)',
+    'var(--chart-phase-dd)',
+    'var(--chart-phase-ifc)',
+    'var(--chart-phase-milestone)',
   ], []);
 
   const [drilldownLoading, setDrilldownLoading] = React.useState(false);
@@ -200,7 +212,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
           {loading ? (
             <div className="text-[var(--muted)]">Calculating hours...</div>
           ) : error ? (
-            <div className="text-red-400">Error: {error}</div>
+            <div className="text-[var(--color-state-danger)]">Error: {error}</div>
           ) : total <= 0 ? (
             <div className="text-[var(--muted)]">No upcoming assigned hours</div>
           ) : (
@@ -242,7 +254,7 @@ const AssignedHoursByClientCard: React.FC<Props> = ({
                       <div className="text-[var(--muted)] text-xs">Loading projects…</div>
                     )}
                     {drilldownError && (
-                      <div className="text-red-400 text-xs">{drilldownError}</div>
+                      <div className="text-[var(--color-state-danger)] text-xs">{drilldownError}</div>
                     )}
                     {!drilldownLoading && !drilldownError && drilldown.map((s) => (
                       <div key={s.key} className="flex items-center gap-2 w-full">

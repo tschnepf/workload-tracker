@@ -1,13 +1,14 @@
 import type { ProjectStatusDefinition } from '@/types/models';
+import { PROJECT_STATUS_COLOR_TOKENS } from '@/theme/chartPalette';
 
 export const FALLBACK_PROJECT_STATUS_DEFINITIONS: ProjectStatusDefinition[] = [
-  { key: 'planning', label: 'Planning', colorHex: '#60a5fa', includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 10, canDelete: false, inUseCount: 0 },
-  { key: 'active', label: 'Active', colorHex: '#34d399', includeInAnalytics: true, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 20, canDelete: false, inUseCount: 0 },
-  { key: 'active_ca', label: 'Active CA', colorHex: '#60a5fa', includeInAnalytics: true, treatAsCaWhenNoDeliverable: true, isSystem: true, isActive: true, sortOrder: 30, canDelete: false, inUseCount: 0 },
-  { key: 'on_hold', label: 'On Hold', colorHex: '#f59e0b', includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 40, canDelete: false, inUseCount: 0 },
-  { key: 'completed', label: 'Completed', colorHex: '#9ca3af', includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 50, canDelete: false, inUseCount: 0 },
-  { key: 'cancelled', label: 'Cancelled', colorHex: '#ef4444', includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 60, canDelete: false, inUseCount: 0 },
-  { key: 'inactive', label: 'Inactive', colorHex: '#64748b', includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 70, canDelete: false, inUseCount: 0 },
+  { key: 'planning', label: 'Planning', colorHex: PROJECT_STATUS_COLOR_TOKENS.planning, includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 10, canDelete: false, inUseCount: 0 },
+  { key: 'active', label: 'Active', colorHex: PROJECT_STATUS_COLOR_TOKENS.active, includeInAnalytics: true, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 20, canDelete: false, inUseCount: 0 },
+  { key: 'active_ca', label: 'Active CA', colorHex: PROJECT_STATUS_COLOR_TOKENS.activeCa, includeInAnalytics: true, treatAsCaWhenNoDeliverable: true, isSystem: true, isActive: true, sortOrder: 30, canDelete: false, inUseCount: 0 },
+  { key: 'on_hold', label: 'On Hold', colorHex: PROJECT_STATUS_COLOR_TOKENS.onHold, includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 40, canDelete: false, inUseCount: 0 },
+  { key: 'completed', label: 'Completed', colorHex: PROJECT_STATUS_COLOR_TOKENS.completed, includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 50, canDelete: false, inUseCount: 0 },
+  { key: 'cancelled', label: 'Cancelled', colorHex: PROJECT_STATUS_COLOR_TOKENS.cancelled, includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 60, canDelete: false, inUseCount: 0 },
+  { key: 'inactive', label: 'Inactive', colorHex: PROJECT_STATUS_COLOR_TOKENS.inactive, includeInAnalytics: false, treatAsCaWhenNoDeliverable: false, isSystem: true, isActive: true, sortOrder: 70, canDelete: false, inUseCount: 0 },
 ];
 
 export const SPECIAL_PROJECT_STATUS_FILTER_TOKENS = [

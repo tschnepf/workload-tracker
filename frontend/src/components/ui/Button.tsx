@@ -38,7 +38,7 @@ const Button: React.FC<ButtonProps> = ({
   const baseStyles = [
     'inline-flex items-center justify-center gap-1 rounded-[var(--radius-md)] border font-medium',
     'transition-colors motion-reduce:transition-none',
-    'focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]',
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0 focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]',
     'disabled:opacity-50 disabled:pointer-events-none touch-manipulation',
   ].join(' ');
 

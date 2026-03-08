@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Bar: React.FC<{ w?: string; h?: string }>= ({ w = '100%', h = '12px' }) => (
-  <div className="bg-[#3e3e42] rounded animate-pulse" style={{ width: w, height: h }} />
+  <div className="bg-[var(--color-border)] rounded animate-pulse" style={{ width: w, height: h }} />
 );
 
 const AssignmentsSkeleton: React.FC = () => {

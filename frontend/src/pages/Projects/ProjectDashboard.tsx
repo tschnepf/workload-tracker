@@ -38,9 +38,9 @@ type ProjectChangeLogEntry = {
 };
 
 const DEFAULT_TASK_PROGRESS_COLORS: TaskProgressColorRange[] = [
-  { minPercent: 0, maxPercent: 25, colorHex: '#F59E0B', label: '0-25%' },
-  { minPercent: 26, maxPercent: 75, colorHex: '#3B82F6', label: '26-75%' },
-  { minPercent: 76, maxPercent: 100, colorHex: '#EF4444', label: '76-100%' },
+  { minPercent: 0, maxPercent: 25, colorHex: 'var(--color-state-warning)', label: '0-25%' },
+  { minPercent: 26, maxPercent: 75, colorHex: 'var(--color-state-info)', label: '26-75%' },
+  { minPercent: 76, maxPercent: 100, colorHex: 'var(--color-state-danger)', label: '76-100%' },
 ];
 
 const ProjectDashboard: React.FC = () => {
@@ -454,7 +454,7 @@ const ProjectDashboard: React.FC = () => {
       .map((range) => ({
         minPercent: Number(range.minPercent ?? 0),
         maxPercent: Number(range.maxPercent ?? 100),
-        colorHex: String(range.colorHex || '#3B82F6'),
+        colorHex: String(range.colorHex || 'var(--color-state-info)'),
         label: range.label || '',
       }))
       .sort((a, b) => (a.minPercent - b.minPercent) || (a.maxPercent - b.maxPercent));
@@ -928,7 +928,7 @@ const ProjectDashboard: React.FC = () => {
                       <StatusBadge status={project?.status || null} size="xs" definitionMap={definitionMap} />
                     </div>
                   </div>
-                  <div className="border-t border-[#4a4f57]/60 mt-2" />
+                  <div className="border-t border-[var(--color-border-subtle)]/60 mt-2" />
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     <div>
                       <div className="text-[11px] text-[var(--muted)]">Project Title</div>
@@ -975,7 +975,7 @@ const ProjectDashboard: React.FC = () => {
                     +
                   </button>
                 </div>
-                <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
+                <div className="border-t border-[var(--color-border-subtle)]/60 mt-2 mb-2" />
                 {project ? (
                   <DeliverablesSection
                     ref={deliverablesRef}
@@ -993,7 +993,7 @@ const ProjectDashboard: React.FC = () => {
                   <div className="relative flex items-center justify-center">
                     <div className="text-sm font-semibold text-[var(--text)] text-center">Task Tracking</div>
                   </div>
-                  <div className="border-t border-[#4a4f57]/60 mt-2 mb-2" />
+                  <div className="border-t border-[var(--color-border-subtle)]/60 mt-2 mb-2" />
                   {taskTrackingQuery.isLoading ? (
                     <div className="text-[11px] text-[var(--muted)]">Loading tasks…</div>
                   ) : (
@@ -1248,7 +1248,7 @@ const ProjectDashboard: React.FC = () => {
                             setSelectedPerson(null);
                           }}
                           onFocus={() => setPersonDropdownOpen(true)}
-                          className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                          className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                         />
                         {personDropdownOpen && personSearch.trim().length >= 2 && peopleResults.length > 0 && (
                           <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
@@ -1328,7 +1328,7 @@ const ProjectDashboard: React.FC = () => {
                               if (placeholderDeptId) setRoleDropdownOpen(true);
                             }}
                             disabled={!placeholderDeptId}
-                            className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none disabled:opacity-50"
+                            className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] disabled:opacity-50"
                           />
                           {roleDropdownOpen && roleSearch.trim().length >= 1 && (
                             <div className="absolute z-20 mt-1 left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded shadow-lg max-h-40 overflow-auto">
@@ -1370,7 +1370,7 @@ const ProjectDashboard: React.FC = () => {
                 <div className="text-xs text-[var(--muted)]">No assignments yet.</div>
               ) : (
                 <div className="space-y-2">
-                  <div className="border-t border-[#4a4f57]/60 mx-2" />
+                  <div className="border-t border-[var(--color-border-subtle)]/60 mx-2" />
                   {assignmentGroups.map((group, index) => (
                     <div key={group.name} className="rounded bg-transparent">
                       <div className="px-2 py-1 text-xs font-bold text-[var(--text)]">
@@ -1434,7 +1434,7 @@ const ProjectDashboard: React.FC = () => {
                         </ul>
                       </div>
                       {index < assignmentGroups.length - 1 && (
-                        <div className="border-t border-[#4a4f57]/60 mx-2 my-1" />
+                        <div className="border-t border-[var(--color-border-subtle)]/60 mx-2 my-1" />
                       )}
                     </div>
                   ))}
@@ -1467,7 +1467,7 @@ const ProjectDashboard: React.FC = () => {
                     Refresh
                   </button>
                 </div>
-                <div className="border-t border-[#4a4f57]/60 mb-2" />
+                <div className="border-t border-[var(--color-border-subtle)]/60 mb-2" />
 
                 {changeLogQuery.isLoading ? (
                   <div className="text-[11px] text-[var(--muted)]">Loading change log…</div>
@@ -1524,7 +1524,7 @@ const ProjectDashboard: React.FC = () => {
                   {showAddRisk ? '×' : '+'}
                 </button>
               </div>
-              <div className="border-t border-[#4a4f57]/60 mb-1" />
+              <div className="border-t border-[var(--color-border-subtle)]/60 mb-1" />
 
               {showAddRisk && (
                 <div className="mb-2 rounded border border-[var(--border)] bg-[var(--surfaceOverlay)]/40 p-2 space-y-2">
@@ -1534,7 +1534,7 @@ const ProjectDashboard: React.FC = () => {
                       value={riskDescription}
                       onChange={(e) => setRiskDescription(e.target.value)}
                       placeholder="Describe the risk..."
-                      className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
+                      className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
                       rows={2}
                     />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1542,23 +1542,23 @@ const ProjectDashboard: React.FC = () => {
                       <select
                         value={riskPriority}
                         onChange={(e) => setRiskPriority(e.target.value as 'high' | 'medium' | 'low')}
-                        className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                        className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
                           riskPriority === 'high' ? 'text-red-300' : riskPriority === 'low' ? 'text-emerald-300' : 'text-amber-300'
                         }`}
                       >
-                        <option value="high" style={{ color: '#fca5a5' }}>High</option>
-                        <option value="medium" style={{ color: '#fcd34d' }}>Medium</option>
-                        <option value="low" style={{ color: '#6ee7b7' }}>Low</option>
+                        <option value="high" style={{ color: 'var(--color-state-danger)' }}>High</option>
+                        <option value="medium" style={{ color: 'var(--color-state-warning)' }}>Medium</option>
+                        <option value="low" style={{ color: 'var(--color-state-success)' }}>Low</option>
                       </select>
                       <div className="text-[11px] text-[var(--muted)]">Status</div>
                       <select
                         value={riskStatus}
                         onChange={(e) => setRiskStatus(e.target.value as 'open' | 'closed')}
-                        className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                        className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
                           riskStatus === 'open' ? 'text-red-300' : 'text-[var(--muted)]'
                         }`}
                       >
-                        <option value="open" style={{ color: '#fca5a5' }}>Open</option>
+                        <option value="open" style={{ color: 'var(--color-state-danger)' }}>Open</option>
                         <option value="closed" style={{ color: 'var(--muted)' }}>Closed</option>
                       </select>
                       <div className="text-[11px] text-[var(--muted)]">Affected Departments</div>
@@ -1685,22 +1685,22 @@ const ProjectDashboard: React.FC = () => {
                               <select
                                 value={riskEditPriority}
                                 onChange={(e) => setRiskEditPriority(e.target.value as 'high' | 'medium' | 'low')}
-                                className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                                className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
                                   riskEditPriority === 'high' ? 'text-red-300' : riskEditPriority === 'low' ? 'text-emerald-300' : 'text-amber-300'
                                 }`}
                               >
-                                <option value="high" style={{ color: '#fca5a5' }}>High</option>
-                                <option value="medium" style={{ color: '#fcd34d' }}>Medium</option>
-                                <option value="low" style={{ color: '#6ee7b7' }}>Low</option>
+                                <option value="high" style={{ color: 'var(--color-state-danger)' }}>High</option>
+                                <option value="medium" style={{ color: 'var(--color-state-warning)' }}>Medium</option>
+                                <option value="low" style={{ color: 'var(--color-state-success)' }}>Low</option>
                               </select>
                               <select
                                 value={riskEditStatus}
                                 onChange={(e) => setRiskEditStatus(e.target.value as 'open' | 'closed')}
-                                className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none ${
+                                className={`w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded focus:border-[var(--primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] ${
                                   riskEditStatus === 'open' ? 'text-red-300' : 'text-[var(--muted)]'
                                 }`}
                               >
-                                <option value="open" style={{ color: '#fca5a5' }}>Open</option>
+                                <option value="open" style={{ color: 'var(--color-state-danger)' }}>Open</option>
                                 <option value="closed" style={{ color: 'var(--muted)' }}>Closed</option>
                               </select>
                               <div className="text-[11px] text-[var(--muted)]">{byLabel}</div>
@@ -1801,9 +1801,9 @@ const ProjectDashboard: React.FC = () => {
                                           : 'text-amber-300'
                                   }`}
                                 >
-                                  <option value="high" style={{ color: '#fca5a5' }}>High</option>
-                                  <option value="medium" style={{ color: '#fcd34d' }}>Medium</option>
-                                  <option value="low" style={{ color: '#6ee7b7' }}>Low</option>
+                                  <option value="high" style={{ color: 'var(--color-state-danger)' }}>High</option>
+                                  <option value="medium" style={{ color: 'var(--color-state-warning)' }}>Medium</option>
+                                  <option value="low" style={{ color: 'var(--color-state-success)' }}>Low</option>
                                 </select>
                               </div>
                               <div className="text-[11px]">
@@ -1818,7 +1818,7 @@ const ProjectDashboard: React.FC = () => {
                                     risk.status === 'closed' ? 'text-[var(--muted)]' : 'text-red-300'
                                   }`}
                                 >
-                                  <option value="open" style={{ color: '#fca5a5' }}>Open</option>
+                                  <option value="open" style={{ color: 'var(--color-state-danger)' }}>Open</option>
                                   <option value="closed" style={{ color: 'var(--muted)' }}>Closed</option>
                                 </select>
                               </div>

@@ -1731,7 +1731,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     const deptId = (assignment as any).personDepartmentId as number | null | undefined;
     const canSwapPlaceholder = !personId && !!placeholderRole;
     return (
-      <div className="flex items-start pt-0.5 pb-1 pl-[60px] pr-2">
+      <div className="flex items-start pt-0.5 pb-1 pl-14 pr-2">
         <div className="min-w-0 flex-1">
           <div className="text-[var(--text)] text-xs leading-5" title={name}>
             {canSwapPlaceholder ? (
@@ -1877,7 +1877,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           {totalHours > 0 ? `${labelValue}h` : ''}
         </div>
         {hasDeliverable && (
-          <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px] pointer-events-none">
+          <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-0.5 pointer-events-none">
             {entries.slice(0, 3).map((entry, idx) => (
               <div key={idx} className="w-[3px] rounded" style={{ background: colorFor(entry.type) }} />
             ))}
@@ -1901,7 +1901,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       <div key={project.id} className="border-b border-[var(--border)] last:border-b-0">
         <div className="grid gap-px p-2 hover:bg-[var(--surfaceHover)]" style={{ gridTemplateColumns: gridTemplate }}>
           <ProjectGroupHeader project={project} />
-          <div className="flex items-center justify-start pl-[7px]">
+          <div className="flex items-center justify-start pl-2">
             <button
               className="w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] text-[12px] font-medium transition-colors inline-flex items-center justify-center"
               title="Add person"
@@ -1910,7 +1910,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
               +
             </button>
           </div>
-          <div className="flex items-center justify-start pl-[3.5px]">
+          <div className="flex items-center justify-start pl-1">
             {canUseAutoHours ? (
               <AutoHoursActionButtons
                 onReplace={() => void applyAutoHoursForProject(project, 'replace')}
@@ -1934,7 +1934,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
 
         {project.isExpanded && loadingAssignments.has(project.id!) && (
           <div className="grid gap-px p-2" style={{ gridTemplateColumns: gridTemplate }}>
-            <div className="col-span-2 flex items-center py-1 pl-[60px] pr-2">
+            <div className="col-span-2 flex items-center py-1 pl-14 pr-2">
               <div className="text-[var(--muted)] text-xs">Loading assignments...</div>
             </div>
             <div></div>

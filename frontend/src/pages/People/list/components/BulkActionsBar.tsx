@@ -22,7 +22,7 @@ export default function BulkActionsBar(props: BulkActionsBarProps) {
         <select
           value={bulkDepartment}
           onChange={(e) => setBulkDepartment(e.target.value)}
-          className="px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--focus)] focus:outline-none"
+          className="px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)] focus:border-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
         >
           <option value="">Select Department...</option>
           <option value="unassigned">Remove from Department</option>

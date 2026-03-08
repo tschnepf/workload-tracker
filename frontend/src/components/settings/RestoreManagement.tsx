@@ -38,7 +38,7 @@ function PhaseIndicator({ state, message }: { state: string; message?: string | 
       {steps.map((s, i) => (
         <div key={s} className="flex items-center gap-2">
           <span className={`${i <= activeIdx ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>{s}</span>
-          {i < steps.length - 1 && <span className="text-[#3e3e42]">→</span>}
+          {i < steps.length - 1 && <span className="text-[var(--color-border)]">→</span>}
         </div>
       ))}
     </div>
@@ -177,7 +177,7 @@ const RestoreManagement: React.FC = () => {
               max={4}
               value={jobs}
               onChange={(e) => setJobs(Math.max(2, Math.min(4, Number((e.target as HTMLInputElement).value) || 2)))}
-              className="w-full bg-[#1f1f1f] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-3 py-2 min-h-[44px]"
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded px-3 py-2 min-h-[44px]"
             />
             <div className="text-xs text-[var(--color-text-secondary)] mt-1">Use 2–4 threads for most databases. Higher values may not improve performance and can increase load.</div>
           </div>
@@ -228,7 +228,7 @@ const RestoreManagement: React.FC = () => {
 
         {/* Active job status */}
         {activeJob && (
-          <div className="mt-4 p-3 rounded border border-[var(--color-border)] bg-[#252526]">
+          <div className="mt-4 p-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)]">
             <div className="text-sm text-[var(--color-text-primary)] mb-1">Restoring: <span className="font-mono">{activeJob.target || activeJob.jobId}</span></div>
             <div className="text-xs text-[var(--color-text-secondary)] mb-2">State: {activeJob.state}{activeJob.progress != null ? ` (${activeJob.progress}%)` : ''}</div>
             <PhaseIndicator state={activeJob.state} message={activeJob.message} />

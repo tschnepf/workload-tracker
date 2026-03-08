@@ -276,7 +276,7 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({
         className={`
           w-full px-3 py-2 rounded-md border text-sm transition-colors
           bg-[var(--surface)] border-[var(--border)] text-[var(--text)]
-          focus:border-[var(--focus)] focus:ring-1 focus:ring-[var(--focus)] focus:outline-none
+          focus:border-[var(--focus)] focus:ring-1 focus:ring-[var(--focus)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]
           min-h-[44px] flex items-center justify-between
           ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
           ${className}

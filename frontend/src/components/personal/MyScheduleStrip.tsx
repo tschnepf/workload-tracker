@@ -25,7 +25,7 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
             <h3 className="text-lg font-semibold text-[var(--text)]">My Schedule</h3>
             <p className="text-xs text-[var(--muted)]">Weekly personal utilization heatmap</p>
           </div>
-          <div className="text-xs text-[#94a3b8]">Capacity {weeklyCapacity}h</div>
+          <div className="text-xs text-[var(--chart-neutral)]">Capacity {weeklyCapacity}h</div>
         </div>
         <div className="mt-3 min-h-0 flex-1 flex flex-col">
           <div
@@ -37,7 +37,7 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
               {weekKeys.map((wk, idx) => {
                 const hours = weekTotals[wk] || 0;
                 const pill = getUtilizationPill({ hours, capacity: weeklyCapacity || 0, scheme, output: 'token' });
-                const bg = pill.tokens?.bg || '#10b981';
+                const bg = pill.tokens?.bg || 'var(--color-state-success)';
                 return (
                   <div
                     key={wk}
@@ -50,7 +50,7 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
                     </div>
                     <div
                       title={`${wk} · ${Math.round(hours)}h`}
-                      className="h-5 w-5 rounded-[4px] border border-[var(--border)]"
+                      className="h-5 w-5 rounded-[var(--radius-xs)] border border-[var(--border)]"
                       style={{ background: bg, opacity: 0.9 }}
                     />
                     <div className="text-[10px] font-semibold text-[var(--text)]">{Math.round(hours)}h</div>
@@ -60,10 +60,10 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--muted)]">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#60a5fa]" /> 0-70%</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#34d399]" /> 71-85%</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#f59e0b]" /> 86-100%</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#ef4444]" /> 100%+</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[var(--radius-xs)] bg-[var(--color-state-info)]" /> 0-70%</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[var(--radius-xs)] bg-[var(--color-state-success)]" /> 71-85%</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[var(--radius-xs)] bg-[var(--color-state-warning)]" /> 86-100%</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[var(--radius-xs)] bg-[var(--color-state-danger)]" /> 100%+</span>
           </div>
         </div>
       </div>

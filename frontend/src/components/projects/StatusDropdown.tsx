@@ -152,8 +152,9 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
             disabled={disabled}
             className={`
               w-full text-left px-3 py-2 text-xs transition-colors border-0 bg-transparent
-              hover:bg-[#3e3e42] focus:bg-[#3e3e42] focus:outline-none
-              ${isSelected ? 'bg-[var(--color-action-primary)]/20 border-l-2 border-l-[#007acc]' : ''}
+              hover:bg-[var(--color-surface-hover)] focus-visible:bg-[var(--color-surface-hover)]
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-inset
+              ${isSelected ? 'bg-[var(--color-action-primary)]/20 border-l-2 border-l-[var(--color-action-primary)]' : ''}
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
             onClick={(e) => {
@@ -191,7 +192,7 @@ export const StatusDropdown: React.FC<StatusDropdownProps> = ({
               
               {/* Selected indicator */}
               {isSelected && (
-                <svg className="w-3 h-3 ml-auto text-[#007acc]" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-3 h-3 ml-auto text-[var(--color-action-primary)]" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               )}

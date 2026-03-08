@@ -25,7 +25,7 @@ const ProjectTotalsCell: React.FC<ProjectTotalsCellProps> = React.memo(({ hours,
     >
       {hours > 0 ? hours : ''}
       {entries.length > 0 && (
-        <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-[2px]">
+        <div className="absolute right-0 top-1 bottom-1 flex items-stretch gap-0.5 pr-0.5">
           {entries.slice(0, 3).map((e, idx) => (
             <div key={idx} className="w-[3px] rounded" style={{ background: typeColors[e.type] || 'var(--primary)' }} />
           ))}

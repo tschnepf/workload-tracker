@@ -36,7 +36,7 @@ const Select: React.FC<SelectProps> = ({
         className={[
           'w-full rounded-[var(--radius-md)] border border-[var(--color-border)]',
           'bg-[var(--color-surface)] text-[var(--color-text-primary)]',
-          'focus:outline-none focus:ring-0',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)] focus:ring-0',
           'disabled:opacity-60 disabled:cursor-not-allowed',
           sizeMap[size],
           errorStyles,

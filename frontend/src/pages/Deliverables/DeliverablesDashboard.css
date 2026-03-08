@@ -1,24 +1,35 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 .deliverables-dashboard {
-  --dd-bg: #131018;
-  --dd-panel: rgba(20, 18, 26, 0.86);
-  --dd-panel-strong: rgba(30, 26, 36, 0.95);
-  --dd-border: rgba(255, 255, 255, 0.08);
-  --dd-text: #f3efe7;
-  --dd-muted: #c6bfb2;
-  --dd-soft: #8e877d;
-  --dd-accent: #f2b96e;
-  --dd-accent-strong: #ffd19a;
-  --dd-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  --dd-bg: var(--color-bg);
+  --dd-panel: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  --dd-panel-strong: color-mix(in srgb, var(--color-surface-elevated) 96%, transparent);
+  --dd-border: color-mix(in srgb, var(--color-border) 82%, transparent);
+  --dd-text: var(--color-text-primary);
+  --dd-muted: var(--color-text-secondary);
+  --dd-soft: color-mix(in srgb, var(--color-text-secondary) 80%, transparent);
+  --dd-accent: var(--color-state-warning);
+  --dd-accent-strong: color-mix(in srgb, var(--color-state-warning) 85%, white 15%);
+  --dd-shadow: var(--elevation-3);
+  --dd-urgent-bg: color-mix(in srgb, var(--color-state-danger) 20%, transparent);
+  --dd-urgent-border: color-mix(in srgb, var(--color-state-danger) 45%, transparent);
+  --dd-soon-bg: color-mix(in srgb, var(--color-state-warning) 18%, transparent);
+  --dd-soon-border: color-mix(in srgb, var(--color-state-warning) 42%, transparent);
+  --dd-normal-bg: color-mix(in srgb, var(--color-state-info) 16%, transparent);
+  --dd-normal-border: color-mix(in srgb, var(--color-state-info) 40%, transparent);
   min-height: 100vh;
   color: var(--dd-text);
   font-family: 'Space Grotesk', 'IBM Plex Sans', 'Inter', sans-serif;
   background-color: var(--dd-bg);
   background-image:
     radial-gradient(1100px 700px at 10% 10%, rgba(255, 255, 255, 0.08), transparent 60%),
-    radial-gradient(900px 600px at 80% 0%, rgba(242, 185, 110, 0.18), transparent 65%),
-    linear-gradient(135deg, #15131b 0%, #14111a 50%, #101019 100%);
+    radial-gradient(900px 600px at 80% 0%, color-mix(in srgb, var(--dd-accent) 18%, transparent), transparent 65%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--dd-bg) 90%, black 10%) 0%,
+      color-mix(in srgb, var(--dd-bg) 95%, black 5%) 50%,
+      color-mix(in srgb, var(--dd-bg) 98%, black 2%) 100%
+    );
 }
 
 .dd-shell {
@@ -88,6 +99,11 @@
 .dd-fullscreen-btn:hover {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(20, 18, 26, 0.7);
+}
+
+.dd-fullscreen-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .dd-table {
@@ -186,21 +202,21 @@
 }
 
 .dd-badge.is-urgent {
-  background: rgba(255, 124, 82, 0.2);
-  border-color: rgba(255, 124, 82, 0.5);
-  color: #ffd8c9;
+  background: var(--dd-urgent-bg);
+  border-color: var(--dd-urgent-border);
+  color: var(--dd-text);
 }
 
 .dd-badge.is-soon {
-  background: rgba(242, 185, 110, 0.2);
-  border-color: rgba(242, 185, 110, 0.5);
-  color: #ffe4bd;
+  background: var(--dd-soon-bg);
+  border-color: var(--dd-soon-border);
+  color: var(--dd-text);
 }
 
 .dd-badge.is-normal {
-  background: rgba(96, 165, 250, 0.18);
-  border-color: rgba(96, 165, 250, 0.45);
-  color: #d7e9ff;
+  background: var(--dd-normal-bg);
+  border-color: var(--dd-normal-border);
+  color: var(--dd-text);
 }
 
 .dd-project-name {
