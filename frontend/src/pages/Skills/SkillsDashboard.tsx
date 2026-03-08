@@ -218,6 +218,7 @@ const SkillsDashboard: React.FC = () => {
 
   const [strengthAssignments, setStrengthAssignments] = useState<PersonSkill[]>([]);
   const [peopleModeSkills, setPeopleModeSkills] = useState<PersonSkill[]>([]);
+  const lastSkillSaveToastAtRef = useRef(0);
 
   const deptById = useMemo(() => {
     const map = new Map<number, Department>();
@@ -816,6 +817,11 @@ const SkillsDashboard: React.FC = () => {
       setPeopleModeSkills((prev) =>
         prev.map((row) => (row.id === savedSkill.id ? { ...row, ...savedSkill } : row))
       );
+      const now = Date.now();
+      if (now - lastSkillSaveToastAtRef.current > 1200) {
+        showToast('Saved', 'success');
+        lastSkillSaveToastAtRef.current = now;
+      }
     },
   });
 
@@ -1574,8 +1580,8 @@ const SkillsDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="grid h-full min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                <div className="flex h-full min-h-0 flex-col gap-3">
-                  <div className="flex items-center justify-between">
+                <div className="flex h-full min-h-0 flex-col gap-3 rounded border border-[var(--border)] bg-[var(--surface)] p-2">
+                  <div className="flex items-center justify-between rounded border border-[var(--border)] bg-[var(--surfaceHover)] px-2 py-1.5">
                     <h2 className="text-sm font-semibold text-[var(--text)]">People ({selectedDepartmentName})</h2>
                     <div className="text-xs text-[var(--muted)]">{people.length} loaded</div>
                   </div>
@@ -1585,7 +1591,7 @@ const SkillsDashboard: React.FC = () => {
                     placeholder="Search people..."
                   />
 
-                  <div className="flex-1 min-h-0 overflow-auto rounded border border-[var(--border)]">
+                  <div className="flex-1 min-h-0 overflow-auto rounded border border-[var(--border)] bg-[var(--card)]">
                     {people.map((person) => {
                       const personSkills = person.id ? (peopleModeSkillsByPerson.get(person.id) || []) : [];
                       const isSelected = person.id != null && selectedPersonId === person.id;
@@ -1594,8 +1600,8 @@ const SkillsDashboard: React.FC = () => {
                           key={person.id}
                           className={`border-b border-[var(--border)] px-2 py-2 last:border-b-0 ${
                             isSelected
-                              ? 'border-l-2 border-l-[var(--focus)] bg-[var(--surfaceHover)]/80'
-                              : 'border-l-2 border-l-transparent'
+                              ? 'border-l-4 border-l-[var(--focus)] bg-[var(--surfaceHover)]'
+                              : 'border-l-4 border-l-transparent hover:bg-[var(--surfaceHover)]'
                           }`}
                           onClick={() => selectPersonForDetails(person)}
                         >
@@ -1737,7 +1743,7 @@ const SkillsDashboard: React.FC = () => {
                   )}
                 </div>
 
-                <div className="hidden xl:block min-h-0 overflow-y-auto pr-1">
+                <div className="hidden xl:block min-h-0 overflow-y-auto rounded border border-[var(--border)] bg-[var(--surface)] p-2">
                   <PersonSkillDetailPanel
                     person={selectedPerson}
                     groupedSkills={selectedPersonSkillsGrouped}

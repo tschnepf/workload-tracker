@@ -55,6 +55,7 @@ type PersonSkillDetailPanelProps = {
 };
 
 function renderSection(
+  sectionType: PersonSkill['skillType'],
   title: string,
   skills: PersonSkill[],
   getDraftForSkill: PersonSkillDetailPanelProps['getDraftForSkill'],
@@ -65,25 +66,83 @@ function renderSection(
   onRetrySkillSave: PersonSkillDetailPanelProps['onRetrySkillSave'],
   onRemoveSkill: PersonSkillDetailPanelProps['onRemoveSkill'],
   removingSkillId: PersonSkillDetailPanelProps['removingSkillId'],
+  dragOverType: PersonSkill['skillType'] | null,
+  onSkillDragStart: (skill: PersonSkill, event: React.DragEvent<HTMLDivElement>) => void,
+  onSkillDragEnd: () => void,
+  onSectionDragOver: (section: PersonSkill['skillType'], event: React.DragEvent<HTMLElement>) => void,
+  onSectionDragLeave: (section: PersonSkill['skillType']) => void,
+  onSectionDrop: (section: PersonSkill['skillType'], event: React.DragEvent<HTMLElement>) => void,
 ) {
+  const isDragTarget = dragOverType === sectionType;
   return (
-    <section className="rounded border border-[var(--border)] bg-[var(--surface)] p-3">
+    <section
+      className={`rounded border bg-[var(--surface)] p-3 transition-colors ${
+        isDragTarget
+          ? 'border-[var(--focus)] bg-[var(--surfaceHover)]'
+          : 'border-[var(--border)]'
+      }`}
+      data-testid={`skill-section-${sectionType}`}
+      onDragOver={(event) => onSectionDragOver(sectionType, event)}
+      onDragLeave={() => onSectionDragLeave(sectionType)}
+      onDrop={(event) => onSectionDrop(sectionType, event)}
+    >
       <h4 className="mb-2 text-sm font-semibold text-[var(--text)]">{title}</h4>
       {skills.length === 0 ? (
-        <div className="text-xs text-[var(--muted)]">No skills in this section.</div>
+        <div className="text-xs text-[var(--muted)]">
+          No skills in this section.
+          {isDragTarget ? ' Drop here to move.' : ''}
+        </div>
       ) : (
-        <div className="space-y-2">
-          {skills.map((skill) => {
-            const draft = getDraftForSkill(skill);
-            const saveState = getSaveStateForSkill(skill.id);
-            const error = getErrorForSkill(skill.id);
-            return (
-              <div key={skill.id} className="rounded border border-[var(--border)] bg-[var(--card)] p-2">
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-[var(--text)]">{skill.skillTagName || 'Skill'}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
+        <div className="overflow-x-auto rounded border border-[var(--border)] bg-[var(--card)]">
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-[minmax(0,1.25fr)_170px_minmax(0,1.8fr)_auto] items-center gap-2 border-b border-[var(--border)] px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              <div>Skill Name</div>
+              <div>Skill Level</div>
+              <div>Notes</div>
+              <div className="text-right">Actions</div>
+            </div>
+            {skills.map((skill) => {
+              const draft = getDraftForSkill(skill);
+              const saveState = getSaveStateForSkill(skill.id);
+              const error = getErrorForSkill(skill.id);
+              const skillName = skill.skillTagName || 'Skill';
+              return (
+                <div
+                  key={skill.id}
+                  className="grid cursor-grab grid-cols-[minmax(0,1.25fr)_170px_minmax(0,1.8fr)_auto] items-center gap-2 border-b border-[var(--border)] px-2 py-2 last:border-b-0 active:cursor-grabbing"
+                  draggable={Boolean(skill.id)}
+                  onDragStart={(event) => onSkillDragStart(skill, event)}
+                  onDragEnd={onSkillDragEnd}
+                  data-testid={skill.id ? `skill-row-${skill.id}` : undefined}
+                >
+                  <div className="min-w-0 truncate text-sm font-semibold text-[var(--text)]">{skillName}</div>
+                  <select
+                    value={draft.proficiencyLevel || 'beginner'}
+                    aria-label={`Skill level for ${skillName}`}
+                    className="h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
+                    onChange={(event) =>
+                      onSkillDraftChange(skill, {
+                        proficiencyLevel: event.target.value as PersonSkill['proficiencyLevel'],
+                      })
+                    }
+                    onBlur={() => onSkillDraftBlur(skill.id)}
+                  >
+                    {PROFICIENCY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={draft.notes || ''}
+                    aria-label={`Notes for ${skillName}`}
+                    className="h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
+                    placeholder="Add context for this skill..."
+                    onChange={(event) => onSkillDraftChange(skill, { notes: event.target.value })}
+                    onBlur={() => onSkillDraftBlur(skill.id)}
+                  />
+                  <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
                       className="rounded border border-red-400/50 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -92,68 +151,18 @@ function renderSection(
                     >
                       {removingSkillId === skill.id ? 'Removing...' : 'Remove'}
                     </button>
-                    <SaveStateBadge
-                      state={saveState}
-                      message={saveState === 'error' ? (error || 'Save failed') : undefined}
-                      onRetry={saveState === 'error' ? () => onRetrySkillSave(skill.id) : undefined}
-                    />
+                    {saveState !== 'idle' ? (
+                      <SaveStateBadge
+                        state={saveState}
+                        message={saveState === 'error' ? (error || 'Save failed') : undefined}
+                        onRetry={saveState === 'error' ? () => onRetrySkillSave(skill.id) : undefined}
+                      />
+                    ) : null}
                   </div>
                 </div>
-                <div className="grid gap-2 xl:grid-cols-[150px_150px_minmax(0,1fr)] xl:items-end">
-                  <label className="text-xs text-[var(--muted)]">
-                    Skill Type
-                    <select
-                      value={draft.skillType || 'strength'}
-                      className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
-                      onChange={(event) =>
-                        onSkillDraftChange(skill, {
-                          skillType: event.target.value as PersonSkill['skillType'],
-                        })
-                      }
-                      onBlur={() => onSkillDraftBlur(skill.id)}
-                    >
-                      {SKILL_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs text-[var(--muted)]">
-                    Skill Level
-                    <select
-                      value={draft.proficiencyLevel || 'beginner'}
-                      className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
-                      onChange={(event) =>
-                        onSkillDraftChange(skill, {
-                          proficiencyLevel: event.target.value as PersonSkill['proficiencyLevel'],
-                        })
-                      }
-                      onBlur={() => onSkillDraftBlur(skill.id)}
-                    >
-                      {PROFICIENCY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="text-xs text-[var(--muted)]">
-                    Notes
-                    <input
-                      type="text"
-                      value={draft.notes || ''}
-                      className="mt-0.5 h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)]"
-                      placeholder="Add context for this skill..."
-                      onChange={(event) => onSkillDraftChange(skill, { notes: event.target.value })}
-                      onBlur={() => onSkillDraftBlur(skill.id)}
-                    />
-                  </label>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
@@ -180,6 +189,60 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
   onAddSkill,
   addSkillDisabled,
 }) => {
+  const [draggingSkillId, setDraggingSkillId] = React.useState<number | null>(null);
+  const [dragOverType, setDragOverType] = React.useState<PersonSkill['skillType'] | null>(null);
+  const allSkills = React.useMemo(
+    () => [...groupedSkills.strengths, ...groupedSkills.development, ...groupedSkills.learning],
+    [groupedSkills]
+  );
+
+  const onSkillDragStart = React.useCallback((skill: PersonSkill, event: React.DragEvent<HTMLDivElement>) => {
+    if (!skill.id) return;
+    setDraggingSkillId(skill.id);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(skill.id));
+    }
+  }, []);
+
+  const onSkillDragEnd = React.useCallback(() => {
+    setDraggingSkillId(null);
+    setDragOverType(null);
+  }, []);
+
+  const onSectionDragOver = React.useCallback(
+    (section: PersonSkill['skillType'], event: React.DragEvent<HTMLElement>) => {
+      if (draggingSkillId == null) return;
+      const draggedSkill = allSkills.find((skill) => skill.id === draggingSkillId);
+      if (!draggedSkill || draggedSkill.skillType === section) return;
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move';
+      }
+      setDragOverType(section);
+    },
+    [allSkills, draggingSkillId]
+  );
+
+  const onSectionDragLeave = React.useCallback((section: PersonSkill['skillType']) => {
+    setDragOverType((prev) => (prev === section ? null : prev));
+  }, []);
+
+  const onSectionDrop = React.useCallback(
+    (section: PersonSkill['skillType'], event: React.DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      if (draggingSkillId == null) return;
+      const draggedSkill = allSkills.find((skill) => skill.id === draggingSkillId);
+      if (draggedSkill && draggedSkill.skillType !== section) {
+        onSkillDraftChange(draggedSkill, { skillType: section });
+        onSkillDraftBlur(draggedSkill.id);
+      }
+      setDraggingSkillId(null);
+      setDragOverType(null);
+    },
+    [allSkills, draggingSkillId, onSkillDraftBlur, onSkillDraftChange]
+  );
+
   if (!person) {
     return (
       <div className="rounded border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
@@ -230,6 +293,9 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
             />
           </label>
         </div>
+        <div className="mt-1 text-[11px] text-[var(--muted)]">
+          Drag rows between Strengths, Development, and Learning to change skill type.
+        </div>
         {addSkillQuery.trim().length > 0 ? (
           <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)]">
             {addSkillLoading ? (
@@ -259,6 +325,7 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
       </section>
 
       {renderSection(
+        'strength',
         'Strengths',
         groupedSkills.strengths,
         getDraftForSkill,
@@ -268,9 +335,16 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
         onSkillDraftBlur,
         onRetrySkillSave,
         onRemoveSkill,
-        removingSkillId
+        removingSkillId,
+        dragOverType,
+        onSkillDragStart,
+        onSkillDragEnd,
+        onSectionDragOver,
+        onSectionDragLeave,
+        onSectionDrop
       )}
       {renderSection(
+        'development',
         'Development',
         groupedSkills.development,
         getDraftForSkill,
@@ -280,9 +354,16 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
         onSkillDraftBlur,
         onRetrySkillSave,
         onRemoveSkill,
-        removingSkillId
+        removingSkillId,
+        dragOverType,
+        onSkillDragStart,
+        onSkillDragEnd,
+        onSectionDragOver,
+        onSectionDragLeave,
+        onSectionDrop
       )}
       {renderSection(
+        'learning',
         'Learning',
         groupedSkills.learning,
         getDraftForSkill,
@@ -292,7 +373,13 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
         onSkillDraftBlur,
         onRetrySkillSave,
         onRemoveSkill,
-        removingSkillId
+        removingSkillId,
+        dragOverType,
+        onSkillDragStart,
+        onSkillDragEnd,
+        onSectionDragOver,
+        onSectionDragLeave,
+        onSectionDrop
       )}
     </div>
   );

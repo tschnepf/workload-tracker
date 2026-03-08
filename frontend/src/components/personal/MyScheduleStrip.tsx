@@ -20,21 +20,20 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
   return (
     <Card className={`bg-[var(--card)] border-[var(--border)] h-full min-h-0 ${className || ''}`}>
       <div className="p-4 h-full min-h-0 flex flex-col">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-[var(--text)]">My Schedule</h3>
-            <p className="text-xs text-[var(--muted)]">Scroll sideways to preview upcoming weeks</p>
+            <p className="text-xs text-[var(--muted)]">Weekly personal utilization heatmap</p>
           </div>
           <div className="text-xs text-[#94a3b8]">Capacity {weeklyCapacity}h</div>
         </div>
-        <div className="mt-4 min-h-0 flex-1 flex flex-col">
-          <div className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wide">Weeks</div>
+        <div className="mt-3 min-h-0 flex-1 flex flex-col">
           <div
-            className="mt-2 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pb-2"
+            className="min-h-0 overflow-x-auto overflow-y-hidden pb-1"
             aria-label="Upcoming weeks utilization"
             role="list"
           >
-            <div className="inline-flex min-w-max gap-3 pr-2">
+            <div className="inline-grid min-w-max grid-flow-col auto-cols-[3.125rem] gap-1.5 pr-2">
               {weekKeys.map((wk, idx) => {
                 const hours = weekTotals[wk] || 0;
                 const pill = getUtilizationPill({ hours, capacity: weeklyCapacity || 0, scheme, output: 'token' });
@@ -42,25 +41,29 @@ const MyScheduleStrip: React.FC<Props> = ({ weekKeys, weeklyCapacity, weekTotals
                 return (
                   <div
                     key={wk}
-                    className="w-24 h-36 shrink-0 snap-center flex flex-col items-center justify-between gap-2 border border-[var(--border)] rounded-lg p-2 bg-[var(--surface)]"
+                    className="shrink-0 flex flex-col items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)]/55 px-1.5 py-1.5"
                     role="listitem"
                     aria-label={`Week of ${weekLabels[idx]}: ${Math.round(hours)} hours booked`}
                   >
-                    <div className="text-[11px] text-[var(--muted)] font-medium text-center w-full">
+                    <div className="w-full text-center text-[10px] font-medium text-[var(--muted)]">
                       {weekLabels[idx]}
                     </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="text-sm font-semibold text-[var(--text)]">{Math.round(hours)}h</div>
-                      <div
-                        title={`${wk} · ${Math.round(hours)}h`}
-                        className="w-14 h-14 rounded-lg border border-[var(--border)]"
-                        style={{ background: bg, opacity: 0.9 }}
-                      />
-                    </div>
+                    <div
+                      title={`${wk} · ${Math.round(hours)}h`}
+                      className="h-5 w-5 rounded-[4px] border border-[var(--border)]"
+                      style={{ background: bg, opacity: 0.9 }}
+                    />
+                    <div className="text-[10px] font-semibold text-[var(--text)]">{Math.round(hours)}h</div>
                   </div>
                 );
               })}
             </div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--muted)]">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#60a5fa]" /> 0-70%</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#34d399]" /> 71-85%</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#f59e0b]" /> 86-100%</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-[2px] bg-[#ef4444]" /> 100%+</span>
           </div>
         </div>
       </div>

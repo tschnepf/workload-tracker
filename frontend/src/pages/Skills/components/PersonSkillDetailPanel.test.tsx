@@ -105,15 +105,11 @@ describe('PersonSkillDetailPanel', () => {
       />
     );
 
-    const typeSelect = screen.getByLabelText('Skill Type');
-    fireEvent.change(typeSelect, { target: { value: 'development' } });
-    expect(onSkillDraftChange).toHaveBeenCalledWith(strength, { skillType: 'development' });
-
-    const combo = screen.getByLabelText('Skill Level');
+    const combo = screen.getByRole('combobox', { name: /skill level for heat calc support/i });
     fireEvent.change(combo, { target: { value: 'advanced' } });
     expect(onSkillDraftChange).toHaveBeenCalledWith(strength, { proficiencyLevel: 'advanced' });
 
-    const notes = screen.getByLabelText('Notes');
+    const notes = screen.getByRole('textbox', { name: /notes for heat calc support/i });
     fireEvent.change(notes, { target: { value: 'Updated note' } });
     expect(onSkillDraftChange).toHaveBeenCalledWith(strength, { notes: 'Updated note' });
 
@@ -125,6 +121,43 @@ describe('PersonSkillDetailPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(onRemoveSkill).toHaveBeenCalledWith(strength);
+  });
+
+  it('supports drag/drop between sections to change skill type', () => {
+    const onSkillDraftChange = vi.fn();
+    const onSkillDraftBlur = vi.fn();
+
+    render(
+      <PersonSkillDetailPanel
+        person={person}
+        groupedSkills={{ strengths: [strength], development: [development], learning: [] }}
+        getDraftForSkill={(skill) => ({
+          skillType: skill.skillType,
+          proficiencyLevel: skill.proficiencyLevel,
+          notes: skill.notes || '',
+        })}
+        getSaveStateForSkill={() => 'idle'}
+        getErrorForSkill={() => undefined}
+        onSkillDraftChange={onSkillDraftChange}
+        onSkillDraftBlur={onSkillDraftBlur}
+        onRetrySkillSave={vi.fn()}
+        onRemoveSkill={vi.fn()}
+        addSkillQuery=""
+        addSkillType="strength"
+        addSkillResults={[]}
+        addSkillLoading={false}
+        onAddSkillQueryChange={vi.fn()}
+        onAddSkillTypeChange={vi.fn()}
+        onAddSkill={vi.fn()}
+      />
+    );
+
+    fireEvent.dragStart(screen.getByTestId('skill-row-11'));
+    fireEvent.dragOver(screen.getByTestId('skill-section-development'));
+    fireEvent.drop(screen.getByTestId('skill-section-development'));
+
+    expect(onSkillDraftChange).toHaveBeenCalledWith(strength, { skillType: 'development' });
+    expect(onSkillDraftBlur).toHaveBeenCalledWith(11);
   });
 
   it('renders placeholder when no person is selected', () => {
