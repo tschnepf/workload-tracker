@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import clsx from 'clsx';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -49,8 +51,45 @@ const notificationMatrixRows: Array<{ key: keyof NotificationChannelMatrix; labe
   { key: 'deliverable.date_changed', label: 'Deliverable date changed' },
 ];
 
+type ProfileSectionDefinition = {
+  id: string;
+  title: string;
+};
+
+const PROFILE_SECTION_STORAGE_KEY = 'profile.selectedSection';
+const PROFILE_NAV_COLLAPSED_STORAGE_KEY = 'profile.navCollapsed';
+
+function getInitialProfileSection(
+  sections: ProfileSectionDefinition[],
+  locationSearch: string,
+  locationHash: string,
+): string {
+  const searchParams = new URLSearchParams(locationSearch);
+  const fromQuery = searchParams.get('section');
+  if (fromQuery && sections.some(section => section.id === fromQuery)) {
+    return fromQuery;
+  }
+  if (locationHash) {
+    const hash = locationHash.replace('#', '');
+    if (sections.some(section => section.id === hash)) {
+      return hash;
+    }
+  }
+  try {
+    const fromStorage = window.localStorage.getItem(PROFILE_SECTION_STORAGE_KEY);
+    if (fromStorage && sections.some(section => section.id === fromStorage)) {
+      return fromStorage;
+    }
+  } catch {
+    // ignore storage read failures
+  }
+  return sections[0]?.id || '';
+}
+
 const Profile: React.FC = () => {
   const auth = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [personName, setPersonName] = useState('');
   const [personDept, setPersonDept] = useState<string>('—');
   const [personRole, setPersonRole] = useState<string>('—');
@@ -120,6 +159,33 @@ const Profile: React.FC = () => {
   }), [browserTimezone]);
 
   const accountRole = useMemo(() => auth.user?.accountRole || (auth.user?.is_staff || auth.user?.is_superuser ? 'admin' : 'user'), [auth.user]);
+  const profileSections = useMemo<ProfileSectionDefinition[]>(() => ([
+    { id: 'account', title: 'Account' },
+    { id: 'appearance', title: 'Theme' },
+    { id: 'notifications', title: 'Notifications' },
+    { id: 'name', title: 'Name' },
+    { id: 'password', title: 'Change Password' },
+  ]), []);
+  const [profileFilter, setProfileFilter] = useState('');
+  const [isProfileNavCollapsed, setIsProfileNavCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(PROFILE_NAV_COLLAPSED_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [selectedSectionId, setSelectedSectionId] = useState(() =>
+    getInitialProfileSection(profileSections, location.search, location.hash),
+  );
+  const filteredSections = useMemo(() => {
+    const query = profileFilter.trim().toLowerCase();
+    if (!query) return profileSections;
+    return profileSections.filter(section => section.title.toLowerCase().includes(query));
+  }, [profileFilter, profileSections]);
+  const activeSectionId = useMemo(() => {
+    if (filteredSections.some(section => section.id === selectedSectionId)) return selectedSectionId;
+    return '';
+  }, [filteredSections, selectedSectionId]);
 
   useAuthenticatedEffect(() => {
     const pid = auth.person?.id;
@@ -213,6 +279,43 @@ const Profile: React.FC = () => {
       // best effort refresh on load
     });
   }, [notificationPrefs?.webPushEnabled, pushSupported, pushServerEnabled, vapidPublicKey]);
+
+  useEffect(() => {
+    if (!activeSectionId) return;
+    try {
+      window.localStorage.setItem(PROFILE_SECTION_STORAGE_KEY, activeSectionId);
+    } catch {
+      // ignore storage write failures
+    }
+  }, [activeSectionId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PROFILE_NAV_COLLAPSED_STORAGE_KEY, isProfileNavCollapsed ? '1' : '0');
+    } catch {
+      // ignore storage write failures
+    }
+  }, [isProfileNavCollapsed]);
+
+  useEffect(() => {
+    if (!activeSectionId) return;
+    const params = new URLSearchParams(location.search);
+    const currentSection = params.get('section');
+    if (currentSection === activeSectionId) return;
+    params.set('section', activeSectionId);
+    navigate({ search: params.toString() }, { replace: true });
+  }, [activeSectionId, location.search, navigate]);
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const hashId = location.hash.replace('#', '');
+    if (profileSections.some(section => section.id === hashId)) {
+      setSelectedSectionId(hashId);
+      const params = new URLSearchParams(location.search);
+      params.set('section', hashId);
+      navigate({ search: params.toString(), hash: '' }, { replace: true });
+    }
+  }, [location.hash, location.search, navigate, profileSections]);
 
   const canEditName = !!auth.person?.id;
   const hasGlobalPushEventRestriction = Boolean(
@@ -314,10 +417,78 @@ const Profile: React.FC = () => {
   return (<>
     <Layout>
     <div className="p-6">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <h1 className="text-2xl font-bold text-[var(--text)] mb-6">My Profile</h1>
 
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mb-6">
+        <div
+          className={clsx(
+            'flex flex-col gap-6 min-h-[480px] lg:grid',
+            isProfileNavCollapsed ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[260px_minmax(0,1fr)]',
+          )}
+        >
+          {!isProfileNavCollapsed && (
+            <aside className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4 flex flex-col">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm text-[var(--muted)]">Sections</div>
+                <button
+                  type="button"
+                  className="h-8 px-2 rounded border border-[var(--border)] bg-[var(--surface)] text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                  onClick={() => setIsProfileNavCollapsed(true)}
+                  title="Collapse profile sections"
+                >
+                  Hide
+                </button>
+              </div>
+              <Input
+                label="Search"
+                value={profileFilter}
+                onChange={e => setProfileFilter((e.target as HTMLInputElement).value)}
+                placeholder="Search sections…"
+              />
+              <nav aria-label="Profile sections" className="mt-4 space-y-1 overflow-auto">
+                {filteredSections.map((section) => {
+                  const isActive = section.id === activeSectionId;
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      aria-pressed={isActive}
+                      className={clsx(
+                        'w-full text-left px-3 py-2 rounded border',
+                        isActive
+                          ? 'bg-[var(--surfaceHover)] border-[var(--primary)] text-[var(--text)]'
+                          : 'border-transparent text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]',
+                      )}
+                      onClick={() => setSelectedSectionId(section.id)}
+                    >
+                      {section.title}
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
+          )}
+          <div>
+            {isProfileNavCollapsed && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  className="h-8 px-3 rounded border border-[var(--border)] bg-[var(--surface)] text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                  onClick={() => setIsProfileNavCollapsed(false)}
+                  title="Expand profile sections"
+                >
+                  Show Sections
+                </button>
+              </div>
+            )}
+            {filteredSections.length === 0 ? (
+              <p className="text-[var(--muted)]">No sections match “{profileFilter}”.</p>
+            ) : !activeSectionId ? (
+              <p className="text-[var(--muted)]">Select a profile section to load details.</p>
+            ) : (
+              <>
+        {activeSectionId === 'account' && (
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-[var(--muted)] mb-1">Username</label>
@@ -341,12 +512,14 @@ const Profile: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Appearance: Color Scheme */}
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Appearance</h2>
+        {/* Theme: Color Theme */}
+        {activeSectionId === 'appearance' && (
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Theme</h2>
           <div className="flex items-center gap-3">
-            <label className="text-sm text-[var(--muted)]" htmlFor="color-scheme">Color scheme:</label>
+            <label className="text-sm text-[var(--muted)]" htmlFor="color-scheme">Color Theme:</label>
             <select
               id="color-scheme"
               className="min-w-[180px] bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] rounded px-3 py-2 min-h-[38px]"
@@ -363,8 +536,10 @@ const Profile: React.FC = () => {
             </select>
           </div>
         </div>
+        )}
 
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mb-6">
+        {activeSectionId === 'notifications' && (
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
           <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Notifications</h2>
           {!notificationPrefs ? (
             <div className="text-sm text-[var(--muted)]">Loading notification preferences…</div>
@@ -870,8 +1045,10 @@ const Profile: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6 mb-6">
+        {activeSectionId === 'name' && (
+        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
           <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Name</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="md:col-span-2">
@@ -909,7 +1086,9 @@ const Profile: React.FC = () => {
           </div>
           {nameMsg && <div className="text-sm text-[var(--text)] mt-2">{nameMsg}</div>}
         </div>
+        )}
 
+        {activeSectionId === 'password' && (
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
           <h2 className="text-lg font-semibold text-[var(--text)] mb-4">Change Password</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -950,6 +1129,11 @@ const Profile: React.FC = () => {
             >
               {pwBusy ? 'Changing…' : 'Change Password'}
             </Button>
+          </div>
+        </div>
+        )}
+              </>
+            )}
           </div>
         </div>
       </div>

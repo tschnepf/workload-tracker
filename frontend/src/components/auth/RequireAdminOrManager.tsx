@@ -4,7 +4,12 @@ import Loader from '@/components/ui/Loader';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrManager } from '@/utils/roleAccess';
 
-export const RequireAdminOrManager: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+type RequireAdminOrManagerProps = {
+  children: React.ReactNode;
+  redirectTo?: string;
+};
+
+export const RequireAdminOrManager: React.FC<RequireAdminOrManagerProps> = ({ children, redirectTo = '/dashboard' }) => {
   const auth = useAuth();
   const location = useLocation();
 
@@ -15,9 +20,8 @@ export const RequireAdminOrManager: React.FC<{ children: React.ReactNode }> = ({
   }
 
   if (!isAdminOrManager(auth.user)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <>{children}</>;
 };
-

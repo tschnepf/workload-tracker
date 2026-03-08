@@ -45,7 +45,7 @@ from core.models import (
 from core.serializers import UtilizationSchemeSerializer
 from deliverables.models import Deliverable
 from .services import WorkloadRebalancingService
-from accounts.permissions import is_admin_or_manager
+from accounts.permissions import IsAdminOrManager, is_admin_or_manager
 from accounts.models import UserProfile
 from core.notification_dispatch import dispatch_event_to_users
 from django.conf import settings
@@ -80,6 +80,7 @@ from core.project_visibility import (
     resolve_visibility_scope,
     visibility_cache_token,
 )
+from core.vertical_scope import get_request_enforced_vertical_id
 try:
     from core.tasks import generate_grid_snapshot_async  # type: ignore
 except Exception:
@@ -110,14 +111,28 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     """
     serializer_class = AssignmentSerializer
     queryset = Assignment.objects.all()
+    # Override global role-based write guard: regular users can update assignments.
+    # Lifecycle operations (create/delete) remain manager/admin only.
+    permission_classes = [IsAuthenticated]
     # Allow optional page_size for list endpoints (opt-in via query param)
     class AssignmentsPagination(PageNumberPagination):
         page_size_query_param = 'page_size'
         max_page_size = getattr(api_settings, 'MAX_PAGE_SIZE', 200) or 200
     pagination_class = AssignmentsPagination
-    # Use global default permissions (IsAuthenticated)
     PRE_HIRE_WEEK_LOCKED_CODE = 'PRE_HIRE_WEEK_LOCKED'
     PRE_HIRE_WEEK_LOCKED_MESSAGE = 'Cannot assign hours before employee hire week'
+
+    def get_permissions(self):
+        action = getattr(self, 'action', None)
+        if action in {'create', 'destroy'}:
+            return [IsAuthenticated(), IsAdminOrManager()]
+        return [permission() for permission in self.permission_classes]
+
+    def _effective_vertical_param(self, vertical_param):
+        enforced_vertical = get_request_enforced_vertical_id(getattr(self, 'request', None))
+        if enforced_vertical is not None:
+            return enforced_vertical
+        return vertical_param
 
     def get_queryset(self):
         qs = (
@@ -125,6 +140,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             .select_related('person', 'person__department', 'project', 'department', 'role_on_project_ref')
             .order_by('-created_at')
         )
+        effective_vertical = self._effective_vertical_param(None)
+        if effective_vertical not in (None, ""):
+            try:
+                qs = qs.filter(project__vertical_id=int(effective_vertical))
+            except Exception:
+                pass
         req = getattr(self, 'request', None)
         include_placeholders = False
         if req is not None:
@@ -432,6 +453,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         vertical_param = request.query_params.get('vertical')
         if isinstance(data, dict) and data.get('vertical') is not None:
             vertical_param = data.get('vertical')
+        vertical_param = self._effective_vertical_param(vertical_param)
         if vertical_param not in (None, ""):
             try:
                 queryset = queryset.filter(project__vertical_id=int(vertical_param))
@@ -930,6 +952,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         vertical_param = data.get('vertical') if isinstance(data, dict) else None
         if vertical_param is None:
             vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(vertical_param)
         if vertical_param not in (None, ""):
             try:
                 people_qs = people_qs.filter(department__vertical_id=int(vertical_param))
@@ -1151,7 +1174,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -1728,7 +1751,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 dept_id = int(dept_param)
             except Exception:
                 return Response({'error': 'invalid department'}, status=status.HTTP_400_BAD_REQUEST)
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         vertical_id = None
         if vertical_param not in (None, ""):
             try:
@@ -2367,7 +2390,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         include_placeholders = (request.query_params.get('include_placeholders') or '').lower() in ('1', 'true', 'yes')
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         vertical_id = None
         if vertical_param not in (None, ""):
             try:
@@ -2582,7 +2605,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -2740,7 +2763,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -2902,7 +2925,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -3131,7 +3154,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Department scoping
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         dept_ids = None
         if dept_param not in (None, ""):
             try:
@@ -3440,7 +3463,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             people_qs = Person.objects.filter(is_active=True).select_related('department')
             dept_param = request.query_params.get('department')
             include_children = request.query_params.get('include_children') == '1'
-            vertical_param = request.query_params.get('vertical')
+            vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
             cache_scope = 'all'
             if dept_param not in (None, ""):
                 try:
@@ -3695,7 +3718,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 dept = None
         include_children = 1 if request.query_params.get('include_children') == '1' else 0
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         vertical = None
         if vertical_param not in (None, ""):
             try:
@@ -3978,7 +4001,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             queryset = self.get_queryset().filter(person_id=person_id)
         else:
             queryset = self.get_queryset()
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
         if vertical_param not in (None, ""):
             try:
                 queryset = queryset.filter(project__vertical_id=int(vertical_param))
@@ -4611,7 +4634,9 @@ class AssignmentsPageSnapshotView(APIView):
                     dept_filters = self._parse_department_filters(dept_filters_raw)
                     if dept_filters:
                         people_qs = self._apply_people_department_filters(people_qs, dept_filters)
-                    vertical_param = request.query_params.get('vertical')
+                    vertical_param = get_request_enforced_vertical_id(request)
+                    if vertical_param is None:
+                        vertical_param = request.query_params.get('vertical')
                     vertical_id = None
                     if vertical_param not in (None, ""):
                         try:
@@ -4639,7 +4664,9 @@ class AssignmentsPageSnapshotView(APIView):
         # Departments list (active only)
         try:
             departments_qs = Department.objects.filter(is_active=True).order_by('name')
-            vertical_param = request.query_params.get('vertical')
+            vertical_param = get_request_enforced_vertical_id(request)
+            if vertical_param is None:
+                vertical_param = request.query_params.get('vertical')
             if vertical_param not in (None, ""):
                 try:
                     departments_qs = departments_qs.filter(vertical_id=int(vertical_param))

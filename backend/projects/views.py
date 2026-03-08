@@ -65,6 +65,7 @@ try:
 except Exception:
     export_projects_excel_task = None  # type: ignore
 from .status_definitions import get_status_keys_included_in_analytics, clear_status_definitions_cache
+from core.vertical_scope import get_request_enforced_vertical_id
 
 logger = logging.getLogger(__name__)
 
@@ -229,10 +230,24 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     lookup_value_regex = r'\d+'
     queryset = Project.objects.filter(is_active=True)
     serializer_class = ProjectSerializer
-    # Use global default permissions (IsAuthenticated)
+    # Override global role-based write guard: regular users can edit projects.
+    # Mutating lifecycle operations (create/delete/import) remain manager/admin only.
+    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [OrderingFilter]
     ordering_fields = ['client', 'name', 'status', 'project_number', 'created_at', 'updated_at']
     ordering = ['-created_at', 'name']
+
+    def get_permissions(self):
+        action = getattr(self, 'action', None)
+        if action in {'create', 'destroy', 'import_excel'}:
+            return [permissions.IsAuthenticated(), IsAdminOrManager()]
+        return [permission() for permission in self.permission_classes]
+
+    def _effective_vertical_param(self, vertical_param):
+        enforced_vertical = get_request_enforced_vertical_id(getattr(self, 'request', None))
+        if enforced_vertical is not None:
+            return enforced_vertical
+        return vertical_param
 
     def _log_project_audit(self, action: str, project: Project, extra: dict | None = None) -> None:
         try:
@@ -283,6 +298,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             vertical_param = self.request.query_params.get('vertical') if self.request else None
         except Exception:
             vertical_param = None
+        vertical_param = self._effective_vertical_param(vertical_param)
         if vertical_param not in (None, ""):
             try:
                 qs = qs.filter(vertical_id=int(vertical_param))
@@ -500,6 +516,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'ordering': serializers.CharField(required=False),
                 'vertical': serializers.IntegerField(required=False),
                 'status_in': serializers.CharField(required=False),
+                'mine_only': serializers.BooleanField(required=False),
                 'include_children': serializers.IntegerField(required=False),
                 'workload_week_start': serializers.DateField(required=False),
                 'workload_weeks': serializers.IntegerField(required=False),
@@ -554,11 +571,31 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         vertical_param = data.get('vertical')
         if vertical_param is None:
             vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(vertical_param)
         if vertical_param not in (None, ""):
             try:
                 queryset = queryset.filter(vertical_id=int(vertical_param))
             except Exception:  # nosec B110
                 pass
+
+        mine_only_raw = data.get('mine_only')
+        if mine_only_raw is None:
+            mine_only_raw = request.query_params.get('mine_only')
+        mine_only = str(mine_only_raw or '').strip().lower() in ('1', 'true', 'yes', 'on')
+        if mine_only:
+            try:
+                person_id = getattr(getattr(request.user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id:
+                queryset = queryset.none()
+            else:
+                my_assignment_exists = Assignment.objects.filter(
+                    project_id=OuterRef('pk'),
+                    person_id=person_id,
+                    is_active=True,
+                )
+                queryset = queryset.annotate(is_my_project=Exists(my_assignment_exists)).filter(is_my_project=True)
 
         # Department filters (AND/OR/NOT)
         dept_filters_raw = (
@@ -1211,7 +1248,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         candidates_only = request.query_params.get('candidates_only') == '1'
-        vertical_param = request.query_params.get('vertical')
+        vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
 
         # Build people queryset
         people_qs = (
@@ -1565,6 +1602,21 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         queryset = self.get_queryset()
         query_params = request.query_params
+        mine_only = str(query_params.get('mine_only') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+        if mine_only:
+            try:
+                person_id = getattr(getattr(request.user, 'profile', None), 'person_id', None)
+            except Exception:
+                person_id = None
+            if not person_id:
+                queryset = queryset.none()
+            else:
+                my_assignment_exists = Assignment.objects.filter(
+                    project_id=OuterRef('pk'),
+                    person_id=person_id,
+                    is_active=True,
+                )
+                queryset = queryset.annotate(is_my_project=Exists(my_assignment_exists)).filter(is_my_project=True)
 
         # Department filters (AND/OR/NOT) with backward-compatible single department param
         dept_filters_raw = query_params.get('department_filters') or query_params.get('departmentFilters')
@@ -1759,7 +1811,7 @@ class ProjectViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 key=lambda f: (f['departmentId'], f['op'])
             )
             dept_filters_key = json.dumps(normalized_filters, sort_keys=True, separators=(',', ':'))
-        scope_key = f"dept_filters:{hashlib.sha256(dept_filters_key.encode()).hexdigest()}|children:{1 if include_children else 0}|status:{status_key}|tokens:{hashlib.sha256(tokens_key.encode()).hexdigest()}"
+        scope_key = f"dept_filters:{hashlib.sha256(dept_filters_key.encode()).hexdigest()}|children:{1 if include_children else 0}|status:{status_key}|mine:{1 if mine_only else 0}|tokens:{hashlib.sha256(tokens_key.encode()).hexdigest()}"
         etag_content = f"{proj_aggr.get('total', 0)}-{asn_aggr.get('total', 0)}-{del_aggr.get('total', 0)}-{scope_key}-"
         etag_content += last_modified.isoformat() if last_modified else 'none'
         etag = hashlib.sha256(etag_content.encode()).hexdigest()

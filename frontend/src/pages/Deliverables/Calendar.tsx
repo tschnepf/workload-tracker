@@ -2,6 +2,7 @@ import React from 'react';
 import Layout from '@/components/layout/Layout';
 import Card from '@/components/ui/Card';
 import PageState from '@/components/ui/PageState';
+import { authHeaders } from '@/api/client';
 import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 import { FullCalendarWrapper, mapDeliverableCalendarToEvents, formatDeliverableInlineLabel } from '@/features/fullcalendar';
 import {
@@ -19,6 +20,7 @@ import SearchTokenBar from '@/components/filters/SearchTokenBar';
 import { useDeliverablesSearchIndex } from '@/hooks/useDeliverablesSearchIndex';
 import type { DatesSetArg, EventContentArg, EventClickArg } from '@fullcalendar/core';
 import type { DeliverableEventMeta } from '@/features/fullcalendar';
+import { showToast } from '@/lib/toastBus';
 
 const DEFAULT_WEEKS = 8;
 const WEEK_OPTIONS = [4, 8, 12];
@@ -42,6 +44,9 @@ export const DeliverablesCalendarContent: React.FC = () => {
   } = useSearchTokens();
   const { open } = useProjectQuickViewPopover();
   const { state: verticalState } = useVerticalFilter();
+  const [feedToken, setFeedToken] = React.useState('');
+  const [feedLoading, setFeedLoading] = React.useState(true);
+  const [feedError, setFeedError] = React.useState<string | null>(null);
 
   const calendarQuery = useDeliverablesCalendar(range, { mineOnly: false, vertical: verticalState.selectedVerticalId ?? undefined });
   const { data, isLoading, error, refetch } = calendarQuery;
@@ -60,6 +65,45 @@ export const DeliverablesCalendarContent: React.FC = () => {
     });
     return unsub;
   }, [refetch]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setFeedLoading(true);
+        setFeedError(null);
+        const res = await fetch('/api/core/calendar_feeds/', { headers: authHeaders() });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as { deliverables_token?: string };
+        if (cancelled) return;
+        setFeedToken(data.deliverables_token || '');
+      } catch (e: any) {
+        if (cancelled) return;
+        setFeedError(e?.message || 'Failed to load calendar feed link');
+      } finally {
+        if (!cancelled) setFeedLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const feedUrl = React.useMemo(() => {
+    if (!feedToken) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/calendar/deliverables.ics?key=${encodeURIComponent(feedToken)}`;
+  }, [feedToken]);
+
+  const handleCopyFeedUrl = React.useCallback(async () => {
+    if (!feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      showToast('Calendar link copied', 'success');
+    } catch {
+      showToast('Unable to copy calendar link', 'error');
+    }
+  }, [feedUrl]);
 
   const filteredItems = React.useMemo(() => {
     const items = data ?? [];
@@ -233,6 +277,20 @@ export const DeliverablesCalendarContent: React.FC = () => {
                 </button>
               ))}
             </div>
+            {feedLoading ? (
+              <div className="w-full text-xs text-[var(--muted)]">Loading Outlook calendar link...</div>
+            ) : feedError ? (
+              <div className="w-full text-xs text-red-400">{feedError}</div>
+            ) : (
+              <button
+                type="button"
+                className="w-full text-left text-sm text-[var(--primary)] hover:underline"
+                onClick={() => { void handleCopyFeedUrl(); }}
+                disabled={!feedUrl}
+              >
+                Copy Outlook Calender Link Feed
+              </button>
+            )}
           </div>
         </div>
 

@@ -63,10 +63,10 @@ const PageErrorFallback: React.FC<{ error?: Error; errorId?: string; pageName?: 
           </button>
           
           <button
-            onClick={() => window.location.href = '/dashboard'}
+            onClick={() => window.location.href = '/my-work'}
             className="bg-[var(--color-surface)] hover:bg-[var(--surfaceHover)] text-[var(--color-text-primary)] px-6 py-3 rounded font-medium transition-colors"
           >
-            Go to Dashboard
+            Go to My Work
           </button>
         </div>
 

@@ -18,6 +18,7 @@ type Props = {
   loadingMoreByProject?: Set<number>;
   onLoadMoreAssignments?: (projectId: number) => void;
   canEditAssignments?: boolean;
+  canManageAssignmentLifecycle?: boolean;
 };
 
 const MAX_WEEKS_IN_SPARK = 6;
@@ -34,6 +35,7 @@ const MobileProjectAccordions: React.FC<Props> = ({
   loadingMoreByProject,
   onLoadMoreAssignments,
   canEditAssignments = true,
+  canManageAssignmentLifecycle = true,
 }) => {
   const { open: openProjectDetails } = useProjectDetailsDrawer();
   const [expanded, setExpanded] = React.useState<number | null>(null);
@@ -150,10 +152,10 @@ const MobileProjectAccordions: React.FC<Props> = ({
                   <button
                     type="button"
                     className={`w-full rounded border border-dashed px-3 py-2 text-sm ${
-                      canEditAssignments ? 'text-[var(--primary)] hover:bg-[var(--surfaceHover)]' : 'text-[var(--muted)] opacity-60 cursor-not-allowed'
+                      canManageAssignmentLifecycle ? 'text-[var(--primary)] hover:bg-[var(--surfaceHover)]' : 'text-[var(--muted)] opacity-60 cursor-not-allowed'
                     }`}
-                    onClick={() => canEditAssignments && onAddAssignment?.(project.id!)}
-                    disabled={!canEditAssignments}
+                    onClick={() => canManageAssignmentLifecycle && onAddAssignment?.(project.id!)}
+                    disabled={!canManageAssignmentLifecycle}
                   >
                     {activeAddProjectId === project.id ? 'Choose a person or role...' : 'Add Assignment'}
                   </button>

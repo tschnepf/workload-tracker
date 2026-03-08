@@ -10,6 +10,7 @@ export type ProjectFilterMetadataParams = {
   include_children?: 0 | 1;
   status_in?: string;
   vertical?: number;
+  mine_only?: 0 | 1;
   search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
   department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
 };
@@ -65,6 +66,7 @@ export function buildProjectFilterMetadataKey(params?: ProjectFilterMetadataPara
     include_children: params?.include_children ?? 0,
     status_in: params?.status_in ?? null,
     vertical: params?.vertical ?? null,
+    mine_only: params?.mine_only ?? 0,
     search_tokens: searchTokens,
     department_filters: departmentFilters,
   };

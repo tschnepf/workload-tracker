@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router';
 
 interface Props {
   statusOptions: readonly string[];
@@ -22,6 +23,7 @@ const StatusFilterMenu: React.FC<Props> = ({
   align = 'right',
   className,
 }) => {
+  const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -118,6 +120,18 @@ const StatusFilterMenu: React.FC<Props> = ({
                 </button>
               );
             })}
+          </div>
+          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+            <button
+              type="button"
+              className="w-full text-left px-2 py-1 rounded border text-xs bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+              onClick={() => {
+                setOpen(false);
+                navigate('/help');
+              }}
+            >
+              Open Help Guide
+            </button>
           </div>
         </div>,
         document.body

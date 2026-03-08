@@ -16,6 +16,7 @@ export type ProjectsQueryOptions = {
   searchTokens?: ProjectsSearchToken[];
   departmentFilters?: ProjectsDepartmentFilter[];
   includeChildren?: 0 | 1;
+  mineOnly?: boolean;
   useSearch?: boolean;
   vertical?: number | null;
 };
@@ -71,6 +72,7 @@ export function buildProjectsSearchPayloadBase(options: ProjectsQueryOptions) {
   const ordering = options.ordering ?? null;
   const statusIn = options.statusIn ?? null;
   const includeChildren = options.includeChildren;
+  const mineOnly = Boolean(options.mineOnly);
   const vertical = options.vertical ?? null;
   const searchTokens = normalizeSearchTokens(options.searchTokens);
   const departmentFilters = normalizeDepartmentFilters(options.departmentFilters);
@@ -83,6 +85,7 @@ export function buildProjectsSearchPayloadBase(options: ProjectsQueryOptions) {
   if (searchTokens.length) payload.search_tokens = searchTokens;
   if (departmentFilters.length) payload.department_filters = departmentFilters;
   if (departmentFilters.length && includeChildren != null) payload.include_children = includeChildren;
+  if (mineOnly) payload.mine_only = 1;
   return payload;
 }
 
@@ -106,6 +109,7 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
   const searchTokens = options.searchTokens ?? [];
   const departmentFilters = options.departmentFilters ?? [];
   const includeChildren = options.includeChildren;
+  const mineOnly = Boolean(options.mineOnly);
   const vertical = options.vertical ?? null;
   const searchPayloadBase = useMemo(() => buildProjectsSearchPayloadBase({
     pageSize,
@@ -114,8 +118,9 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
     searchTokens,
     departmentFilters,
     includeChildren,
+    mineOnly,
     vertical,
-  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, vertical]);
+  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, mineOnly, vertical]);
   const queryKey = useMemo(() => buildProjectsQueryKey({
     pageSize,
     ordering,
@@ -123,9 +128,10 @@ export function useProjects(options: ProjectsQueryOptions = {}) {
     searchTokens,
     departmentFilters,
     includeChildren,
+    mineOnly,
     useSearch,
     vertical,
-  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, useSearch, vertical]);
+  }), [pageSize, ordering, statusIn, searchTokens, departmentFilters, includeChildren, mineOnly, useSearch, vertical]);
   const query = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam = 1 }) => {

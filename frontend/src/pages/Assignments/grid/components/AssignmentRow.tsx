@@ -36,6 +36,7 @@ export interface AssignmentRowProps {
   onAutoHoursReplace?: (assignment: Assignment, personId: number) => void;
   onAutoHoursSupplement?: (assignment: Assignment, personId: number) => void;
   firstEligibleWeek?: string | null;
+  canRemoveAssignment?: boolean;
 }
 
 const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
@@ -66,6 +67,7 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
   onAutoHoursReplace,
   onAutoHoursSupplement,
   firstEligibleWeek,
+  canRemoveAssignment = true,
 }) => {
   const isSelected = (week: string) => {
     const inMulti = selectedCells.some(cell =>
@@ -117,7 +119,11 @@ const AssignmentRow: React.FC<AssignmentRowProps> = React.memo(({
       />
 
       <div className="flex items-center justify-center">
-        <RemoveAssignmentButton onClick={() => onRemoveAssignment(assignment.id!)} />
+        {canRemoveAssignment ? (
+          <RemoveAssignmentButton onClick={() => onRemoveAssignment(assignment.id!)} />
+        ) : (
+          <div className="w-6 h-6" />
+        )}
       </div>
 
       <div className="flex items-center justify-center">

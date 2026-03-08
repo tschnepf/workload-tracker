@@ -206,6 +206,7 @@ const AssignmentGrid: React.FC = () => {
   const caps = useCapabilities({ enabled: false });
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
+  const canManageAssignmentLifecycle = isAdminOrManager(auth.user);
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const isNarrowHeaderLayout = useMediaQuery('(max-width: 1700px)');
   const useAbbrevHeaderLabels = !isMobileLayout && isNarrowHeaderLayout;
@@ -3023,6 +3024,7 @@ const AssignmentGrid: React.FC = () => {
             onAssignmentPress={handleMobileAssignmentPress}
             onRemoveAssignment={(pid, aid) => { void removeAssignment(aid, pid); }}
             canEditAssignments={canEditAssignments}
+            canManageAssignmentLifecycle={canManageAssignmentLifecycle}
             onAddAssignment={(pid) => addUI.open(pid)}
             activeAddPersonId={addUI.isAddingFor}
             scheme={scheme}
@@ -3107,14 +3109,16 @@ const AssignmentGrid: React.FC = () => {
                   virtualPaddingLeft={isMobileLayout ? weekPaddingLeft : 0}
                   virtualPaddingRight={isMobileLayout ? weekPaddingRight : 0}
                   renderAddAction={(person) => (
-                    <button
-                      className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      title="Add new assignment"
-                      onClick={() => { addUI.open(person.id!); }}
-                    >
-                      +
-                    </button>
+                    canManageAssignmentLifecycle ? (
+                      <button
+                        className="w-7 h-7 rounded text-white hover:text-[var(--muted)] hover:bg-[var(--surface)] transition-colors text-center text-sm font-medium leading-none font-mono"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Add new assignment"
+                        onClick={() => { addUI.open(person.id!); }}
+                      >
+                        +
+                      </button>
+                    ) : null
                   )}
                   renderAutoHoursAction={(person) => (
                     canUseAutoHours ? (
@@ -3143,7 +3147,8 @@ const AssignmentGrid: React.FC = () => {
                       onCancel={addUI.cancel}
                     />
                   )}
-                  showAddRow={(person) => person.isExpanded && addUI.isAddingFor === person.id}
+                  showAddRow={(person) => canManageAssignmentLifecycle && person.isExpanded && addUI.isAddingFor === person.id}
+                  canRemoveAssignment={canManageAssignmentLifecycle}
                   renderWeekTotals={(p, week) => {
                     const totalHours = getPersonTotalHours(p as any, week.date);
                     const pill = getUtilizationPill({ hours: totalHours, capacity: (p as any).weeklyCapacity!, scheme, output: 'classes' });
@@ -3180,7 +3185,7 @@ const AssignmentGrid: React.FC = () => {
         </div>
       )}
       {isMobileLayout ? (
-        <MobileAddAssignmentSheet addController={addUI} people={people as any} canEditAssignments={canEditAssignments} />
+        <MobileAddAssignmentSheet addController={addUI} people={people as any} canEditAssignments={canManageAssignmentLifecycle} />
       ) : null}
       <MobileAssignmentSheet
         target={mobileEditTarget}

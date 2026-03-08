@@ -14,6 +14,7 @@ from .serializers import DepartmentSerializer
 from people.models import Person
 from people.serializers import PersonSerializer
 from core.cache_keys import build_aggregate_cache_key
+from core.vertical_scope import get_request_enforced_vertical_id
 
 
 @lru_cache(maxsize=1)
@@ -160,6 +161,9 @@ class DepartmentsPageSnapshotView(APIView):
 
         include_inactive = _parse_bool(request.query_params.get('include_inactive'))
         vertical_filter = _parse_int(request.query_params.get('vertical'))
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_filter = enforced_vertical
         department_filter = _parse_int(request.query_params.get('department'))
         include_children = _parse_bool(request.query_params.get('include_children'))
 
@@ -284,6 +288,9 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             vertical_param = self.request.query_params.get('vertical') if self.request else None
         except Exception:
             vertical_param = None
+        enforced_vertical = get_request_enforced_vertical_id(getattr(self, 'request', None))
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         if vertical_param not in (None, ""):
             try:
                 qs = qs.filter(vertical_id=int(vertical_param))

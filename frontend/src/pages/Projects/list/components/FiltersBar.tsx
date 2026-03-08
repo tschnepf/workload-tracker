@@ -3,6 +3,9 @@ import WorkPlanningSearchBar from '@/features/work-planning/search/WorkPlanningS
 import type { WorkPlanningSearchOp, WorkPlanningSearchToken } from '@/features/work-planning/search/useWorkPlanningSearchTokens';
 
 interface Props {
+  myProjectsOnly: boolean;
+  onToggleMyProjectsOnly: () => void;
+  disableMyProjectsOnly?: boolean;
   statusOptions: readonly string[];
   selectedStatusFilters: Set<string>;
   onToggleStatus: (status: string) => void;
@@ -24,6 +27,9 @@ interface Props {
 }
 
 const FiltersBar: React.FC<Props> = ({
+  myProjectsOnly,
+  onToggleMyProjectsOnly,
+  disableMyProjectsOnly = false,
   statusOptions,
   selectedStatusFilters,
   onToggleStatus,
@@ -45,6 +51,23 @@ const FiltersBar: React.FC<Props> = ({
 }) => {
   return (
     <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
+      <div className={`rounded-md border border-[var(--primary)]/40 bg-[var(--primary)]/10 ${compact ? 'p-2' : 'p-3'}`}>
+        <div className={`${compact ? 'text-[10px]' : 'text-xs'} uppercase tracking-wide text-[var(--muted)] mb-2`}>Scope</div>
+        <button
+          type="button"
+          onClick={onToggleMyProjectsOnly}
+          disabled={disableMyProjectsOnly}
+          className={`${compact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded border transition-colors ${
+            myProjectsOnly
+              ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+              : 'bg-[var(--card)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--cardHover)]'
+          } disabled:opacity-60 disabled:cursor-not-allowed`}
+          aria-pressed={myProjectsOnly}
+          aria-label="Toggle my projects filter"
+        >
+          My Projects
+        </button>
+      </div>
       <div>
         <label className={`${compact ? 'sr-only' : 'text-xs text-[var(--muted)] mb-1 block'}`}>Filter by Status:</label>
         <div className={`flex flex-wrap ${compact ? 'gap-0.5' : 'gap-1'}`}>

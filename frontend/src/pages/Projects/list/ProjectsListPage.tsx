@@ -66,6 +66,9 @@ const ProjectsList: React.FC = () => {
   const { state: routeUiState, update: updateRouteUiState } = useRouteUiState('projects');
   const { state: verticalState } = useVerticalFilter();
   const auth = useAuth();
+  const hasLinkedPerson = auth?.person?.id != null;
+  const [myProjectsOnly, setMyProjectsOnly] = useState(false);
+  const canManageProjectLifecycle = isAdminOrManager(auth?.user);
   const canManageTaskTracking = isAdminOrManager(auth?.user);
   const { people } = usePeople({ vertical: verticalState.selectedVerticalId ?? undefined });
   const deleteProjectMutation = useDeleteProject();
@@ -164,10 +167,12 @@ const ProjectsList: React.FC = () => {
       include_children?: 0 | 1;
       status_in?: string;
       vertical?: number;
+      mine_only?: 0 | 1;
       search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
       department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
     } = {};
     if (verticalState.selectedVerticalId != null) params.vertical = Number(verticalState.selectedVerticalId);
+    if (myProjectsOnly) params.mine_only = 1;
     if (departmentFilters.length) params.department_filters = departmentFilters;
     if (deptState.selectedDepartmentId != null) {
       params.department = Number(deptState.selectedDepartmentId);
@@ -176,7 +181,7 @@ const ProjectsList: React.FC = () => {
     if (statusIn) params.status_in = statusIn;
     if (searchTokensForApi.length) params.search_tokens = searchTokensForApi;
     return Object.keys(params).length ? params : undefined;
-  }, [departmentFilters, deptState.selectedDepartmentId, includeChildren, statusIn, searchTokensForApi, verticalState.selectedVerticalId]);
+  }, [departmentFilters, deptState.selectedDepartmentId, includeChildren, myProjectsOnly, statusIn, searchTokensForApi, verticalState.selectedVerticalId]);
 
   // Optimized filter metadata (assignment counts + hasFutureDeliverables)
   const { filterMetadata, loading: filterMetaLoading, error: filterMetaError, invalidate: invalidateFilterMeta, refetch: refetchFilterMeta } = useProjectFilterMetadata(filterMetadataParams);
@@ -197,6 +202,7 @@ const ProjectsList: React.FC = () => {
     searchTokens: searchTokensForApi,
     departmentFilters,
     includeChildren,
+    mineOnly: myProjectsOnly,
     vertical: verticalState.selectedVerticalId ?? undefined,
   });
 
@@ -489,9 +495,20 @@ const ProjectsList: React.FC = () => {
     return sp.get('new') === '1';
   }, [location.search]);
   useEffect(() => {
+    if (!canManageProjectLifecycle) {
+      setCreateDrawerOpen(false);
+      if (openCreateFromQuery) {
+        const sp = new URLSearchParams(location.search || '');
+        sp.delete('new');
+        const nextSearch = sp.toString();
+        navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
+      }
+      return;
+    }
     setCreateDrawerOpen(openCreateFromQuery);
-  }, [openCreateFromQuery]);
+  }, [canManageProjectLifecycle, openCreateFromQuery, location.pathname, location.search, navigate]);
   const openCreateDrawer = useCallback(() => {
+    if (!canManageProjectLifecycle) return;
     setCreateDrawerOpen(true);
     setMobileDetailOpen(false);
     const sp = new URLSearchParams(location.search || '');
@@ -501,7 +518,7 @@ const ProjectsList: React.FC = () => {
     if (nextSearch !== currentSearch) {
       navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '' }, { replace: true });
     }
-  }, [location.pathname, location.search, navigate]);
+  }, [canManageProjectLifecycle, location.pathname, location.search, navigate]);
   const closeCreateDrawer = useCallback(() => {
     setCreateDrawerOpen(false);
     const sp = new URLSearchParams(location.search || '');
@@ -1127,14 +1144,16 @@ const ProjectsList: React.FC = () => {
       >
         {forceRefreshing ? 'Refreshing...' : 'Refresh'}
       </button>
-      <button
-        type="button"
-        className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
-        onClick={openCreateDrawer}
-        title="Create new project"
-      >
-        + New
-      </button>
+      {canManageProjectLifecycle && (
+        <button
+          type="button"
+          className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
+          onClick={openCreateDrawer}
+          title="Create new project"
+        >
+          + New
+        </button>
+      )}
       <button
         type="button"
         className="h-10 inline-flex items-center px-3 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
@@ -1151,6 +1170,20 @@ const ProjectsList: React.FC = () => {
         buttonLabel="Filter"
         buttonTitle="Filter projects"
       />
+      <button
+        type="button"
+        className={`h-10 inline-flex items-center px-3 rounded border text-xs shrink-0 disabled:opacity-60 disabled:cursor-not-allowed ${
+          myProjectsOnly
+            ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--text)]'
+            : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+        }`}
+        onClick={() => setMyProjectsOnly((prev) => !prev)}
+        disabled={!hasLinkedPerson}
+        aria-pressed={myProjectsOnly}
+        title="Show only projects where you are assigned"
+      >
+        My Projects
+      </button>
       <a
         href={buildAssignmentsLink({ weeks: 20, statuses: (Array.from(selectedStatusFilters) || []).filter((s) => s !== 'Show All') })}
         className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
@@ -1249,7 +1282,7 @@ const ProjectsList: React.FC = () => {
               setStatusDropdownOpen={setStatusDropdownOpen}
               onStatusChange={handleStatusChange}
               onProjectRefetch={refetchProjectsSafe}
-              onDeleteProject={handleDeleteProject}
+              onDeleteProject={canManageProjectLifecycle ? handleDeleteProject : undefined}
               assignments={assignments}
               editingAssignmentId={editingAssignment}
               editData={editData}
@@ -1392,13 +1425,15 @@ const ProjectsList: React.FC = () => {
             >
               {forceRefreshing ? 'Refreshing...' : 'Refresh'}
             </button>
-            <button
-              type="button"
-              className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
-              onClick={openCreateDrawer}
-            >
-              + New
-            </button>
+            {canManageProjectLifecycle && (
+              <button
+                type="button"
+                className="px-3 py-1 rounded-full border border-[var(--border)] text-xs text-[var(--text)]"
+                onClick={openCreateDrawer}
+              >
+                + New
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1460,6 +1495,9 @@ const ProjectsList: React.FC = () => {
       {isMobileLayout ? mobileLayout : desktopLayout}
       <MobileFiltersSheet open={isMobileLayout && mobileFiltersOpen} title="Project Filters" onClose={() => setMobileFiltersOpen(false)}>
         <FiltersBar
+          myProjectsOnly={myProjectsOnly}
+          onToggleMyProjectsOnly={() => setMyProjectsOnly((prev) => !prev)}
+          disableMyProjectsOnly={!hasLinkedPerson}
           statusOptions={projectStatusOptions}
           selectedStatusFilters={selectedStatusFilters}
           onToggleStatus={toggleStatusFilter}
@@ -1484,6 +1522,7 @@ const ProjectsList: React.FC = () => {
             onClick={() => {
               forceShowAll();
               clearSearchTokens();
+              setMyProjectsOnly(false);
             }}
           >
             Reset Filters
@@ -1505,7 +1544,7 @@ const ProjectsList: React.FC = () => {
             setStatusDropdownOpen={setStatusDropdownOpen}
             onStatusChange={handleStatusChange}
             onProjectRefetch={refetchProjectsSafe}
-            onDeleteProject={handleDeleteProject}
+            onDeleteProject={canManageProjectLifecycle ? handleDeleteProject : undefined}
             assignments={assignments}
             editingAssignmentId={editingAssignment}
             editData={editData}
@@ -1613,9 +1652,11 @@ const ProjectsList: React.FC = () => {
           <div className="p-4 text-sm text-[var(--muted)]">Select a project to view details</div>
         )}
       </MobileDetailsDrawer>
-      <ProjectCreateDrawer open={createDrawerOpen} onClose={closeCreateDrawer}>
-        <ProjectForm embedded onCancel={closeCreateDrawer} onSuccess={handleProjectCreated} />
-      </ProjectCreateDrawer>
+      {canManageProjectLifecycle && (
+        <ProjectCreateDrawer open={createDrawerOpen} onClose={closeCreateDrawer}>
+          <ProjectForm embedded onCancel={closeCreateDrawer} onSuccess={handleProjectCreated} />
+        </ProjectCreateDrawer>
+      )}
     </Layout>
   );
 };

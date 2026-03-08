@@ -48,6 +48,7 @@ from django.conf import settings as django_settings
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
 from skills.models import PersonSkill, SkillTag
+from core.vertical_scope import get_request_enforced_vertical_id
 try:
     from core.tasks import bulk_skill_matching_async  # type: ignore
 except Exception:
@@ -115,9 +116,16 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             if not include_inactive:
                 qs = qs.filter(is_active=True)
 
+        enforced_vertical = get_request_enforced_vertical_id(getattr(self, 'request', None))
+        if enforced_vertical is not None:
+            qs = qs.filter(department__vertical_id=enforced_vertical)
+
         return qs
 
     def _apply_vertical_filter(self, queryset, vertical_param):
+        enforced_vertical = get_request_enforced_vertical_id(getattr(self, 'request', None))
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         if vertical_param in (None, ""):
             return queryset
         try:
@@ -536,6 +544,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         vertical_param = data.get('vertical') if isinstance(data, dict) else None
         if vertical_param is None:
             vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         queryset = self._apply_vertical_filter(queryset, vertical_param)
 
         # Location filters (Remote substring + Unspecified)
@@ -831,6 +842,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if q:
             qs = qs.filter(name__icontains=q)
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         qs = self._apply_vertical_filter(qs, vertical_param)
         qs = qs[:limit]
         data = [
@@ -894,6 +908,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         if dept_id is not None:
             qs = qs.filter(department_id=dept_id)
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         qs = self._apply_vertical_filter(qs, vertical_param)
         qs = qs[:limit]
         results = [
@@ -927,6 +944,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     def filters_metadata(self, request):
         include_inactive = str(request.query_params.get('include_inactive') or '').lower() in ('1', 'true', 'yes', 'on')
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
 
         people_qs = Person.objects.all()
         if not include_inactive:
@@ -1004,6 +1024,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
 
         as_of_date = week_monday + _td(days=6)
         people_qs = Person.objects.filter(is_active=True).select_related('department', 'role')
@@ -1231,6 +1254,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
 
         # Optional availability week (normalize to Monday)
         week_str = request.query_params.get('week')
@@ -1684,6 +1710,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         department_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         visibility_scope = resolve_visibility_scope(
             request.query_params.get('visibility_scope'),
             default_scope='dashboard.heatmap',
@@ -1886,6 +1915,9 @@ class PersonViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         dept_param = request.query_params.get('department')
         include_children = request.query_params.get('include_children') == '1'
         vertical_param = request.query_params.get('vertical')
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_param = enforced_vertical
         visibility_scope = resolve_visibility_scope(
             request.query_params.get('visibility_scope'),
             default_scope='report.team_forecast',

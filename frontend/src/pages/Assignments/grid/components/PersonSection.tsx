@@ -46,6 +46,7 @@ export interface PersonSectionProps {
   renderWeekTotals?: (person: PersonWithAssignments, week: WeekHeader) => React.ReactNode;
   onAutoHoursReplaceAssignment?: (assignment: Assignment, personId: number) => void;
   onAutoHoursSupplementAssignment?: (assignment: Assignment, personId: number) => void;
+  canRemoveAssignment?: boolean;
 }
 
 const PersonSection: React.FC<PersonSectionProps> = ({
@@ -81,6 +82,7 @@ const PersonSection: React.FC<PersonSectionProps> = ({
   renderWeekTotals,
   onAutoHoursReplaceAssignment,
   onAutoHoursSupplementAssignment,
+  canRemoveAssignment = true,
 }) => {
   const visible = assignments ?? person.assignments ?? [];
   return (
@@ -154,6 +156,7 @@ const PersonSection: React.FC<PersonSectionProps> = ({
           onAutoHoursReplace={onAutoHoursReplaceAssignment}
           onAutoHoursSupplement={onAutoHoursSupplementAssignment}
           firstEligibleWeek={(person as any).firstEligibleWeek ?? null}
+          canRemoveAssignment={canRemoveAssignment}
         />
       ))}
 

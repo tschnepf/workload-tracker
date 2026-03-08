@@ -117,10 +117,10 @@ const DefaultErrorFallback: React.FC<ErrorBoundaryState & { level?: string; onRe
           
           {level === 'page' && (
             <button 
-              onClick={() => window.location.href = '/dashboard'}
+              onClick={() => window.location.href = '/my-work'}
               className="bg-[var(--color-surface)] hover:bg-[var(--surfaceHover)] text-[var(--color-text-primary)] px-4 py-2 rounded text-sm transition-colors"
             >
-              Go to Dashboard
+              Go to My Work
             </button>
           )}
         </div>

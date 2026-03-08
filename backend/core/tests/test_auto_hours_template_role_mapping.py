@@ -158,3 +158,29 @@ class AutoHoursTemplateRoleMappingApiTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, resp.content)
         self.assertTrue(Role.objects.filter(id=self.people_role_a.id).exists())
         self.assertIn('global project-role mapping', str(resp.json().get('error', '')))
+
+
+class AutoHoursTemplatePermissionsTests(TestCase):
+    def setUp(self):
+        suffix = uuid4().hex[:8]
+        self.client = APIClient()
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username=f'template_user_{suffix}', password='pw')
+        self.template = AutoHoursTemplate.objects.create(
+            name=f'Template Visible To Users {suffix}',
+            phase_keys=['sd'],
+            weeks_by_phase={'sd': 6},
+            is_active=True,
+        )
+
+    def test_regular_user_can_list_templates(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/core/project-templates/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        names = {item.get('name') for item in (resp.json() or [])}
+        self.assertIn(self.template.name, names)
+
+    def test_regular_user_cannot_create_template(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.post('/api/core/project-templates/', {'name': f'New Template {uuid4().hex[:8]}'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN, resp.content)

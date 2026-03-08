@@ -87,7 +87,7 @@ const SsoComplete = React.lazy(() => import('./pages/Auth/SsoComplete'))
 const OfflinePage = React.lazy(() => import('./pages/Offline/Offline'))
 const Profile = React.lazy(() => import('./pages/Profile/Profile'))
 const NotificationsPage = React.lazy(() => import('./pages/Notifications/NotificationsPage'))
-const ComingSoon = React.lazy(() => import('./pages/ComingSoon/ComingSoon'))
+const HelpCenter = React.lazy(() => import('./pages/Help/HelpCenter'))
 const PersonalDashboard = React.lazy(() => import('./pages/Personal/PersonalDashboard'))
 
 // Initialize performance monitoring
@@ -108,35 +108,35 @@ const router = createBrowserRouter([
       { index: true, element: <RequireAuth><Navigate to="/my-work" replace /></RequireAuth> },
 
       // Protected routes
-      { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
+      { path: 'dashboard', element: <RequireAdminOrManager redirectTo={getFlag('PERSONAL_DASHBOARD', true) ? '/my-work' : '/projects'}><Dashboard /></RequireAdminOrManager> },
       { path: 'profile', element: <RequireAuth><Profile /></RequireAuth> },
       { path: 'notifications', element: <RequireAuth><NotificationsPage /></RequireAuth> },
-      { path: 'people', element: <RequireAuth><PeopleList /></RequireAuth> },
-      { path: 'people/new', element: <RequireAuth><PersonForm /></RequireAuth> },
-      { path: 'people/:id/edit', element: <RequireAuth><PersonForm /></RequireAuth> },
-      { path: 'departments', element: <RequireAuth><DepartmentsList /></RequireAuth> },
-      { path: 'departments/manager', element: <RequireAuth><ManagerDashboard /></RequireAuth> },
-      { path: 'departments/hierarchy', element: <RequireAuth><HierarchyView /></RequireAuth> },
-      { path: 'departments/reports', element: <RequireAuth><ReportsView /></RequireAuth> },
+      { path: 'people', element: <RequireAdminOrManager><PeopleList /></RequireAdminOrManager> },
+      { path: 'people/new', element: <RequireAdminOrManager><PersonForm /></RequireAdminOrManager> },
+      { path: 'people/:id/edit', element: <RequireAdminOrManager><PersonForm /></RequireAdminOrManager> },
+      { path: 'departments', element: <RequireAdminOrManager><DepartmentsList /></RequireAdminOrManager> },
+      { path: 'departments/manager', element: <RequireAdminOrManager><ManagerDashboard /></RequireAdminOrManager> },
+      { path: 'departments/hierarchy', element: <RequireAdminOrManager><HierarchyView /></RequireAdminOrManager> },
+      { path: 'departments/reports', element: <RequireAdminOrManager><ReportsView /></RequireAdminOrManager> },
       { path: 'reports/role-capacity', element: <RequireAuth><RoleCapacityReport /></RequireAuth> },
       { path: 'assignments', element: <RequireAuth><AssignmentGrid /></RequireAuth> },
       { path: 'project-assignments', element: <RequireAuth><ProjectAssignmentsGrid /></RequireAuth> },
       { path: 'assignments/list', element: <RequireAuth><AssignmentList /></RequireAuth> },
-      { path: 'assignments/new', element: <RequireAuth><AssignmentForm /></RequireAuth> },
+      { path: 'assignments/new', element: <RequireAdminOrManager redirectTo="/assignments"><AssignmentForm /></RequireAdminOrManager> },
       { path: 'assignments/:id/edit', element: <RequireAuth><AssignmentForm /></RequireAuth> },
       { path: 'projects', element: <RequireAuth><Projects /></RequireAuth> },
-      { path: 'projects/new', element: <RequireAuth><LegacyProjectCreateRedirect /></RequireAuth> },
+      { path: 'projects/new', element: <RequireAdminOrManager redirectTo="/projects"><LegacyProjectCreateRedirect /></RequireAdminOrManager> },
       { path: 'projects/:id/dashboard', element: <RequireAuth><ProjectDashboard /></RequireAuth> },
       { path: 'projects/:id/edit', element: <RequireAuth><LegacyProjectEditRedirect /></RequireAuth> },
       { path: 'skills', element: <RequireAdminOrManager><SkillsDashboard /></RequireAdminOrManager> },
       { path: 'performance', element: <RequireAuth><PerformanceDashboard /></RequireAuth> },
-      { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
+      { path: 'settings', element: <RequireAdminOrManager redirectTo="/my-work"><Settings /></RequireAdminOrManager> },
       { path: 'deliverables/calendar', element: <RequireAuth><MilestoneCalendar /></RequireAuth> },
       { path: 'deliverables/dashboard', element: <RequireAuth><DeliverablesDashboard /></RequireAuth> },
       { path: 'reports/forecast', element: <RequireAdminOrManager>{getFlag('FORECAST_PLANNER_V2', true) ? <ForecastPlannerPage /> : <TeamForecastPage />}</RequireAdminOrManager> },
       { path: 'reports/person-report', element: <RequireAdminOrManager><PersonReportPage /></RequireAdminOrManager> },
       { path: 'reports/network', element: <RequireAdminOrManager><NetworkGraphPage /></RequireAdminOrManager> },
-      { path: 'help', element: <RequireAuth><ComingSoon /></RequireAuth> },
+      { path: 'help', element: <RequireAuth><HelpCenter /></RequireAuth> },
       { path: 'my-work', element: (getFlag('PERSONAL_DASHBOARD', true) ? (
         <RequireAuth><PersonalDashboard /></RequireAuth>
       ) : (

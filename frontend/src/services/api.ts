@@ -1177,6 +1177,7 @@ export const projectsApi = {
     department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
     include?: string;
     include_inactive_roles?: boolean;
+    mine_only?: 0 | 1;
   }) => {
     return fetchApi<ProjectsSearchResponse>('/projects/search/', {
       method: 'POST',
@@ -1309,6 +1310,7 @@ export const projectsApi = {
     include_children?: 0 | 1;
     status_in?: string;
     vertical?: number;
+    mine_only?: 0 | 1;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
     department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   }): Promise<ProjectFilterMetadataResponse> => {
@@ -1320,6 +1322,7 @@ export const projectsApi = {
       if (params?.include_children != null) sp.set('include_children', String(params.include_children));
       if (params?.status_in) sp.set('status_in', params.status_in);
       if (params?.vertical != null) sp.set('vertical', String(params.vertical));
+      if (params?.mine_only != null) sp.set('mine_only', String(params.mine_only));
       if (params?.search_tokens && params.search_tokens.length) {
         sp.set('search_tokens', JSON.stringify(params.search_tokens));
       }

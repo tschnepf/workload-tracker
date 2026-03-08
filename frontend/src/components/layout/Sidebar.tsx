@@ -220,8 +220,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { pendingPath: localPendingPath } = useNavFeedback();
   const navigate = useNavigate();
   const auth = useAuth();
+  const canUseTeamDashboard = isAdminOrManager(auth.user);
   const canUseForecast = isAdminOrManager(auth.user);
   const canUseSkills = isAdminOrManager(auth.user);
+  const canUseOrgPages = isAdminOrManager(auth.user);
+  const canUseDepartmentTools = isAdminOrManager(auth.user);
+  const canUseSettings = isAdminOrManager(auth.user);
   const [logoError, setLogoError] = React.useState(false);
 
   const primaryItems = [
@@ -231,12 +235,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'My Work',
       description: 'Your assignments & milestones'
     }] : []),
-    { 
-      path: '/dashboard', 
-      icon: 'dashboard', 
+    ...(canUseTeamDashboard ? [{
+      path: '/dashboard',
+      icon: 'dashboard',
       label: 'Dashboard',
       description: 'Overview and metrics'
-    },
+    }] : []),
     { 
       path: '/deliverables/calendar', 
       icon: 'calendar', 
@@ -267,18 +271,18 @@ const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const orgItems = [
-    { 
-      path: '/departments', 
-      icon: 'departments', 
+    ...(canUseOrgPages ? [{
+      path: '/departments',
+      icon: 'departments',
       label: 'Departments',
       description: 'Organization structure'
-    },
-    { 
-      path: '/people', 
-      icon: 'people', 
+    }] : []),
+    ...(canUseOrgPages ? [{
+      path: '/people',
+      icon: 'people',
       label: 'People',
       description: 'Team management'
-    },
+    }] : []),
     ...(canUseSkills ? [{
       path: '/skills',
       icon: 'skills',
@@ -287,14 +291,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     }] : []),
   ];
 
-  const settingsItems = [
-    { 
-      path: '/settings', 
-      icon: 'settings', 
+  const settingsItems = canUseSettings ? [
+    {
+      path: '/settings',
+      icon: 'settings',
       label: 'Settings',
       description: 'System configuration'
     }
-  ];
+  ] : [];
 
   const adminItems = canUseForecast ? [
     {
@@ -318,7 +322,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   ] : [];
 
   // Advanced department features
-  const departmentItems = [
+  const departmentItems = canUseDepartmentTools ? [
     { 
       path: '/departments/manager', 
       icon: 'manager', 
@@ -337,7 +341,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'Reports',
       description: 'Department analytics and insights'
     }
-  ];
+  ] : [];
 
   const systemItems: Array<{ path: string; icon: string; label: string; description?: string }> = [];
 
@@ -486,15 +490,23 @@ const Sidebar: React.FC<SidebarProps> = ({
           {renderNavItems(orgItems)}
         </div>
 
-        <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
-        <div className="space-y-1 px-3">
-          {renderNavItems(settingsItems)}
-        </div>
+        {settingsItems.length > 0 ? (
+          <>
+            <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
+            <div className="space-y-1 px-3">
+              {renderNavItems(settingsItems)}
+            </div>
+          </>
+        ) : null}
 
-        <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
-        <div className="space-y-1 px-3">
-          {renderNavItems(extraItems)}
-        </div>
+        {extraItems.length > 0 ? (
+          <>
+            <div className="my-4 mx-6 border-t border-[var(--color-border)]" />
+            <div className="space-y-1 px-3">
+              {renderNavItems(extraItems)}
+            </div>
+          </>
+        ) : null}
       </nav>
       </div>
 

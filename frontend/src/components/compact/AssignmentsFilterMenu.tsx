@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router';
 
 interface Props {
   statusOptions: readonly string[];
@@ -22,6 +23,7 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
   className,
   align = 'right',
 }) => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -122,6 +124,18 @@ const AssignmentsFilterMenu: React.FC<Props> = ({
                   );
                 })}
               </div>
+            </div>
+            <div className="pt-2 border-t border-[var(--border)]">
+              <button
+                type="button"
+                className="w-full text-left px-2 py-1 rounded border text-xs bg-[var(--surface)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surfaceHover)]"
+                onClick={() => {
+                  setOpen(false);
+                  navigate('/help');
+                }}
+              >
+                Open Help Guide
+              </button>
             </div>
           </div>
         </div>,

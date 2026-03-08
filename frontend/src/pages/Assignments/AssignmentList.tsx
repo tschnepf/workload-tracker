@@ -17,6 +17,8 @@ import UtilizationBadge from '@/components/ui/UtilizationBadge';
 import { useDepartmentFilter } from '@/hooks/useDepartmentFilter';
 import { useVerticalFilter } from '@/hooks/useVerticalFilter';
 import { confirmAction } from '@/lib/confirmAction';
+import { useAuth } from '@/hooks/useAuth';
+import { isAdminOrManager } from '@/utils/roleAccess';
 
 const AssignmentList: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +28,8 @@ const AssignmentList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { state: deptState } = useDepartmentFilter();
   const { state: verticalState } = useVerticalFilter();
+  const auth = useAuth();
+  const canManageAssignmentLifecycle = isAdminOrManager(auth.user);
 
   const departmentFilters = useMemo(() => (deptState.filters ?? [])
     .map((f) => ({ departmentId: Number(f.departmentId), op: f.op }))
@@ -76,6 +80,7 @@ const AssignmentList: React.FC = () => {
   };
 
   const handleDelete = async (assignment: Assignment) => {
+    if (!canManageAssignmentLifecycle) return;
     const label = assignment.personName
       || (assignment.person != null ? `Person #${assignment.person}` : (assignment.roleName ? `<${assignment.roleName}>` : 'Unassigned'));
     const confirmed = await confirmAction({
@@ -175,12 +180,14 @@ const AssignmentList: React.FC = () => {
               </div>
             )}
           </div>
-          <Button
-            variant="primary"
-            onClick={() => navigate('/assignments/new')}
-          >
-            Create Assignment
-          </Button>
+          {canManageAssignmentLifecycle ? (
+            <Button
+              variant="primary"
+              onClick={() => navigate('/assignments/new')}
+            >
+              Create Assignment
+            </Button>
+          ) : null}
         </div>
 
         {/* Error Message */}
@@ -195,12 +202,14 @@ const AssignmentList: React.FC = () => {
           {assignments.length === 0 ? (
             <div className="p-6 text-center">
               <div className="text-[var(--color-text-secondary)] mb-4">No project assignments yet</div>
-              <Button
-                variant="primary"
-                onClick={() => navigate('/assignments/new')}
-              >
-                Create First Assignment
-              </Button>
+              {canManageAssignmentLifecycle ? (
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/assignments/new')}
+                >
+                  Create First Assignment
+                </Button>
+              ) : null}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -252,13 +261,15 @@ const AssignmentList: React.FC = () => {
                         >
                           Edit
                         </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleDelete(assignment)}
-                        >
-                          Remove
-                        </Button>
+                        {canManageAssignmentLifecycle ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDelete(assignment)}
+                          >
+                            Remove
+                          </Button>
+                        ) : null}
                       </td>
                     </tr>
                   ))}

@@ -85,6 +85,7 @@ from skills.models import SkillTag, PersonSkill
 from skills.serializers import SkillTagSerializer, PersonSkillSerializer, PersonSkillSummarySerializer
 from core.search_tokens import parse_search_tokens, apply_token_filter
 from projects.serializers import ProjectStatusDefinitionSerializer
+from core.vertical_scope import get_request_enforced_vertical_id
 
 AUTO_HOURS_MAX_WEEKS_BEFORE = 17
 AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
@@ -275,6 +276,9 @@ class UiBootstrapView(APIView):
         vertical_filter, vertical_err = self._parse_vertical(request)
         if vertical_err:
             return Response({'error': vertical_err}, status=status.HTTP_400_BAD_REQUEST)
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_filter = enforced_vertical
         include_inactive = self._parse_include_inactive(request)
 
         use_cache = bool(settings.FEATURES.get('SHORT_TTL_AGGREGATES'))
@@ -306,6 +310,8 @@ class UiBootstrapView(APIView):
             verticals_qs = Vertical.objects.order_by('name')
             if not include_inactive:
                 verticals_qs = verticals_qs.filter(is_active=True)
+            if enforced_vertical is not None:
+                verticals_qs = verticals_qs.filter(id=enforced_vertical)
             payload['verticals'] = VerticalSerializer(verticals_qs, many=True).data
 
         if 'capabilities' in include_set:
@@ -846,6 +852,9 @@ class SkillsPageSnapshotView(APIView):
                 vertical_filter = int(vertical_param)
             except Exception:
                 vertical_filter = None
+        enforced_vertical = get_request_enforced_vertical_id(request)
+        if enforced_vertical is not None:
+            vertical_filter = enforced_vertical
         department_param = request.query_params.get('department')
         department_scope_ids = None
         if department_param not in (None, ''):
@@ -1608,7 +1617,7 @@ class AutoHoursRoleSettingsView(APIView):
 
 
 class AutoHoursTemplatesView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    permission_classes = [IsAuthenticated]
 
     def _parse_exclusions(self, data) -> tuple[list[int] | None, list[int] | None, str | None]:
         excluded_roles = None
@@ -1770,6 +1779,8 @@ class AutoHoursTemplatesView(APIView):
         ),
     )
     def post(self, request):
+        if not (is_admin_user(request.user) or is_manager_user(request.user)):
+            return Response({'detail': IsAdminOrManager.message}, status=status.HTTP_403_FORBIDDEN)
         name = (request.data or {}).get('name') or ''
         name = str(name).strip()
         if not name:

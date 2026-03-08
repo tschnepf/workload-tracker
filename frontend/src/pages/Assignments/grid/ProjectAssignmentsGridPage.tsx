@@ -81,6 +81,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const { state: routeUiState, update: updateRouteUiState } = useRouteUiState('project-assignments');
   const auth = useAuth();
   const canUseAutoHours = isAdminOrManager(auth.user);
+  const canManageAssignmentLifecycle = isAdminOrManager(auth.user);
   const canEditAssignments = true;
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
   const isNarrowHeaderLayout = useMediaQuery('(max-width: 1700px)');
@@ -1809,7 +1810,11 @@ const ProjectAssignmentsGrid: React.FC = () => {
         <PersonCell assignment={assignment} />
         <RoleCell assignment={assignment} />
         <div className="flex items-center justify-center">
-          <RemoveAssignmentButton onClick={() => removeAssignment(projectId, assignment.id!)} />
+          {canManageAssignmentLifecycle ? (
+            <RemoveAssignmentButton onClick={() => removeAssignment(projectId, assignment.id!)} />
+          ) : (
+            <div className="w-6 h-6" />
+          )}
         </div>
         <div className="flex items-center justify-center">
             {canUseAutoHours ? (
@@ -1891,6 +1896,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     const visibleAssignments = getVisibleAssignments(project);
     const totals = hoursByProject[project.id!] || {};
     const handleAddPersonClick = () => {
+      if (!canManageAssignmentLifecycle) return;
       if (!project.id) return;
       if (!project.isExpanded) {
         toggleProjectExpanded(project.id);
@@ -1902,13 +1908,17 @@ const ProjectAssignmentsGrid: React.FC = () => {
         <div className="grid gap-px p-2 hover:bg-[var(--surfaceHover)]" style={{ gridTemplateColumns: gridTemplate }}>
           <ProjectGroupHeader project={project} />
           <div className="flex items-center justify-start pl-2">
-            <button
-              className="w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] text-[12px] font-medium transition-colors inline-flex items-center justify-center"
-              title="Add person"
-              onClick={handleAddPersonClick}
-            >
-              +
-            </button>
+            {canManageAssignmentLifecycle ? (
+              <button
+                className="w-[22px] h-[22px] rounded border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surfaceHover)] text-[var(--text)] text-[12px] font-medium transition-colors inline-flex items-center justify-center"
+                title="Add person"
+                onClick={handleAddPersonClick}
+              >
+                +
+              </button>
+            ) : (
+              <div className="w-[22px] h-[22px]" />
+            )}
           </div>
           <div className="flex items-center justify-start pl-1">
             {canUseAutoHours ? (
@@ -1947,7 +1957,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
           </div>
         )}
 
-        {project.isExpanded && addUI.isAddingFor === project.id && (
+        {project.isExpanded && canManageAssignmentLifecycle && addUI.isAddingFor === project.id && (
           <AddPersonRow
             weeks={visibleWeeks}
             gridTemplate={gridTemplate}
@@ -2105,6 +2115,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
             loadingMoreByProject={mobileLoadingMoreByProject}
             onLoadMoreAssignments={(pid) => { void loadMoreProjectAssignments(pid); }}
             canEditAssignments={canEditAssignments}
+            canManageAssignmentLifecycle={canManageAssignmentLifecycle}
           />
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
             <div>
@@ -2153,7 +2164,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         </div>
       )}
       {isMobileLayout ? (
-        <MobileProjectAddAssignmentSheet addController={addUI as any} projects={projectsData} canEditAssignments={canEditAssignments} />
+        <MobileProjectAddAssignmentSheet addController={addUI as any} projects={projectsData} canEditAssignments={canManageAssignmentLifecycle} />
       ) : null}
       <MobileProjectAssignmentSheet
         assignment={mobileAssignmentTarget}

@@ -44,7 +44,7 @@ export const COPY = {
   'status.activeCa': 'Active CA',
 
   'section.filters': 'Filters',
-  'section.appearance': 'Appearance',
+  'section.appearance': 'Theme',
   'section.notifications': 'Notifications',
   'section.projectSettings': 'Project Settings',
 

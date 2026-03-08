@@ -18,6 +18,7 @@ type Props = {
   onAssignmentPress?: (personId: number, assignmentId: number) => void;
   onRemoveAssignment?: (personId: number, assignmentId: number) => void;
   canEditAssignments?: boolean;
+  canManageAssignmentLifecycle?: boolean;
   onAddAssignment?: (personId: number) => void;
   activeAddPersonId?: number | null;
   scheme?: UtilizationScheme;
@@ -37,6 +38,7 @@ const MobilePersonAccordions: React.FC<Props> = ({
   onAssignmentPress,
   onRemoveAssignment,
   canEditAssignments = true,
+  canManageAssignmentLifecycle = true,
   onAddAssignment,
   activeAddPersonId,
   scheme,
@@ -55,11 +57,13 @@ const MobilePersonAccordions: React.FC<Props> = ({
   };
 
   const handleTouchStart = (assignmentId: number, e: React.TouchEvent) => {
+    if (!canManageAssignmentLifecycle) return;
     const touch = e.touches[0];
     touchRef.current = { id: assignmentId, startX: touch.clientX, startY: touch.clientY };
   };
 
   const handleTouchEnd = (assignmentId: number, e: React.TouchEvent) => {
+    if (!canManageAssignmentLifecycle) return;
     const state = touchRef.current;
     touchRef.current = null;
     if (!state || state.id !== assignmentId) return;
@@ -155,19 +159,20 @@ const MobilePersonAccordions: React.FC<Props> = ({
                     {assignments.map((assignment) => (
                       <li key={assignment.id}>
                         <div className="relative overflow-hidden rounded border border-[var(--border)] bg-[var(--surface)]">
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-                            <button
-                              type="button"
-                              className="w-20 h-9 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-500 disabled:opacity-60"
-                              onClick={() => onRemoveAssignment?.(person.id!, assignment.id!)}
-                              disabled={!canEditAssignments}
-                            >
-                              Delete
-                            </button>
-                          </div>
+                          {canManageAssignmentLifecycle ? (
+                            <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+                              <button
+                                type="button"
+                                className="w-20 h-9 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-500"
+                                onClick={() => onRemoveAssignment?.(person.id!, assignment.id!)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
                           <button
                             type="button"
-                            className={`w-full text-left flex flex-col rounded border border-transparent p-3 bg-[var(--surface)] transition-transform ${openDeleteId === assignment.id ? '-translate-x-20' : 'translate-x-0'} ${canEditAssignments ? 'hover:border-[var(--primary)]' : 'opacity-60 cursor-not-allowed'}`}
+                            className={`w-full text-left flex flex-col rounded border border-transparent p-3 bg-[var(--surface)] transition-transform ${canManageAssignmentLifecycle && openDeleteId === assignment.id ? '-translate-x-20' : 'translate-x-0'} ${canEditAssignments ? 'hover:border-[var(--primary)]' : 'opacity-60 cursor-not-allowed'}`}
                             onClick={() => canEditAssignments && handleAssignmentPress(person.id!, assignment.id!)}
                             onTouchStart={(e) => handleTouchStart(assignment.id!, e)}
                             onTouchEnd={(e) => handleTouchEnd(assignment.id!, e)}
@@ -204,10 +209,10 @@ const MobilePersonAccordions: React.FC<Props> = ({
                   <button
                     type="button"
                     className={`w-full rounded border border-dashed px-3 py-2 text-sm ${
-                      canEditAssignments ? 'text-[var(--primary)] hover:bg-[var(--surfaceHover)]' : 'text-[var(--muted)] opacity-60 cursor-not-allowed'
+                      canManageAssignmentLifecycle ? 'text-[var(--primary)] hover:bg-[var(--surfaceHover)]' : 'text-[var(--muted)] opacity-60 cursor-not-allowed'
                     }`}
-                    onClick={() => canEditAssignments && onAddAssignment?.(person.id!)}
-                    disabled={!canEditAssignments}
+                    onClick={() => canManageAssignmentLifecycle && onAddAssignment?.(person.id!)}
+                    disabled={!canManageAssignmentLifecycle}
                   >
                     {activeAddPersonId === person.id ? 'Choose a project...' : 'Add Assignment'}
                   </button>
