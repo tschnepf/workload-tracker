@@ -180,24 +180,19 @@ const SkillsDashboard: React.FC = () => {
   const [peoplePage, setPeoplePage] = useState(1);
   const [peopleHasNext, setPeopleHasNext] = useState(false);
   const [peopleSearch, setPeopleSearch] = useState('');
+  const [selectedSkillId, setSelectedSkillId] = useState<number | null>(null);
+  const [isMobileSkillDetailOpen, setIsMobileSkillDetailOpen] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [isMobilePersonDetailOpen, setIsMobilePersonDetailOpen] = useState(false);
 
-  const [mode, setMode] = useState<AssignmentMode>('skill_to_people');
-  const [expandedSkillIds, setExpandedSkillIds] = useState<Set<number>>(new Set());
+  const [mode, setMode] = useState<AssignmentMode>('people_to_skills');
   const [isAddSkillOpen, setIsAddSkillOpen] = useState(false);
   const [scopePickerSkillId, setScopePickerSkillId] = useState<number | null>(null);
   const [scopeTargetDepartmentId, setScopeTargetDepartmentId] = useState<number | ''>('');
-  const [addPeopleSkillId, setAddPeopleSkillId] = useState<number | null>(null);
-  const [addPeopleQuery, setAddPeopleQuery] = useState('');
-  const [addPeopleResults, setAddPeopleResults] = useState<Person[]>([]);
-  const [addPeopleLoading, setAddPeopleLoading] = useState(false);
-  const [addPeopleSelectedIndex, setAddPeopleSelectedIndex] = useState(-1);
-  const [addPeopleSelectedPerson, setAddPeopleSelectedPerson] = useState<Person | null>(null);
-  const [addPeopleSelectionLocked, setAddPeopleSelectionLocked] = useState(false);
-  const [addPeopleSrAnnouncement, setAddPeopleSrAnnouncement] = useState('');
-  const [addPeopleDropdownAbove, setAddPeopleDropdownAbove] = useState(false);
-  const addPeopleInputRef = useRef<HTMLInputElement | null>(null);
+  const [detailAddPersonQuery, setDetailAddPersonQuery] = useState('');
+  const [detailAddPersonResults, setDetailAddPersonResults] = useState<Person[]>([]);
+  const [detailAddPersonLoading, setDetailAddPersonLoading] = useState(false);
+  const [removingSkillPersonId, setRemovingSkillPersonId] = useState<number | null>(null);
   const [addSkillsPersonId, setAddSkillsPersonId] = useState<number | null>(null);
   const [addSkillsQuery, setAddSkillsQuery] = useState('');
   const [addSkillsResults, setAddSkillsResults] = useState<SkillTag[]>([]);
@@ -383,8 +378,22 @@ const SkillsDashboard: React.FC = () => {
   }, [mode, people]);
 
   useEffect(() => {
+    if (mode !== 'skill_to_people') return;
+    if (skills.length === 0) {
+      setSelectedSkillId(null);
+      setIsMobileSkillDetailOpen(false);
+      return;
+    }
+    setSelectedSkillId((prev) => {
+      if (prev != null && skills.some((skill) => skill.id === prev)) return prev;
+      return skills[0]?.id ?? null;
+    });
+  }, [mode, skills]);
+
+  useEffect(() => {
     if (!isDesktopPeopleDetails) return;
     setIsMobilePersonDetailOpen(false);
+    setIsMobileSkillDetailOpen(false);
   }, [isDesktopPeopleDetails]);
 
   useEffect(() => {
@@ -393,6 +402,12 @@ const SkillsDashboard: React.FC = () => {
     setDetailAddSkillLoading(false);
     setDetailAddSkillType('strength');
   }, [selectedPersonId]);
+
+  useEffect(() => {
+    setDetailAddPersonQuery('');
+    setDetailAddPersonResults([]);
+    setDetailAddPersonLoading(false);
+  }, [selectedSkillId]);
 
   useEffect(() => {
     if (!isAddSkillOpen) return;
@@ -406,13 +421,10 @@ const SkillsDashboard: React.FC = () => {
   useEffect(() => {
     setScopePickerSkillId(null);
     setScopeTargetDepartmentId('');
-    setAddPeopleSkillId(null);
-    setAddPeopleQuery('');
-    setAddPeopleResults([]);
-    setAddPeopleSelectedIndex(-1);
-    setAddPeopleSelectedPerson(null);
-    setAddPeopleSelectionLocked(false);
-    setAddPeopleSrAnnouncement('');
+    setDetailAddPersonQuery('');
+    setDetailAddPersonResults([]);
+    setDetailAddPersonLoading(false);
+    setRemovingSkillPersonId(null);
     setAddSkillsPersonId(null);
     setAddSkillsQuery('');
     setAddSkillsResults([]);
@@ -425,28 +437,8 @@ const SkillsDashboard: React.FC = () => {
     setDetailAddSkillType('strength');
     setRemovingPersonSkillId(null);
     setIsMobilePersonDetailOpen(false);
+    setIsMobileSkillDetailOpen(false);
   }, [selectedDepartmentId, mode]);
-
-  useEffect(() => {
-    setExpandedSkillIds((prev) => {
-      const liveIds = new Set(skills.map((skill) => skill.id).filter((id): id is number => id != null));
-      const next = new Set<number>();
-      prev.forEach((id) => {
-        if (liveIds.has(id)) next.add(id);
-      });
-      return next;
-    });
-    setAddPeopleSkillId((prev) => {
-      if (prev == null || skills.find((skill) => skill.id === prev)) return prev;
-      setAddPeopleQuery('');
-      setAddPeopleResults([]);
-      setAddPeopleSelectedIndex(-1);
-      setAddPeopleSelectedPerson(null);
-      setAddPeopleSelectionLocked(false);
-      setAddPeopleSrAnnouncement('');
-      return null;
-    });
-  }, [skills]);
 
   useEffect(() => {
     setAddSkillsPersonId((prev) => {
@@ -461,30 +453,20 @@ const SkillsDashboard: React.FC = () => {
   }, [people]);
 
   useEffect(() => {
-    if (mode !== 'skill_to_people' || addPeopleSkillId == null) {
-      setAddPeopleResults([]);
-      setAddPeopleLoading(false);
-      setAddPeopleSelectedIndex(-1);
-      setAddPeopleSrAnnouncement('');
+    if (mode !== 'skill_to_people' || selectedSkillId == null) {
+      setDetailAddPersonResults([]);
+      setDetailAddPersonLoading(false);
       return;
     }
-    if (addPeopleSelectionLocked) {
-      setAddPeopleResults([]);
-      setAddPeopleLoading(false);
-      setAddPeopleSelectedIndex(-1);
-      return;
-    }
-    if (!addPeopleQuery.trim()) {
-      setAddPeopleResults([]);
-      setAddPeopleLoading(false);
-      setAddPeopleSelectedIndex(-1);
-      setAddPeopleSrAnnouncement('');
+    if (!detailAddPersonQuery.trim()) {
+      setDetailAddPersonResults([]);
+      setDetailAddPersonLoading(false);
       return;
     }
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
-      setAddPeopleLoading(true);
+      setDetailAddPersonLoading(true);
       try {
         const payload: Parameters<typeof peopleApi.searchList>[0] = {
           page: 1,
@@ -497,24 +479,20 @@ const SkillsDashboard: React.FC = () => {
           payload.department = selectedDepartmentId;
           payload.include_children = 1;
         }
-        if (addPeopleQuery.trim()) {
-          payload.search_tokens = [{ term: addPeopleQuery.trim(), op: 'and' }];
+        if (detailAddPersonQuery.trim()) {
+          payload.search_tokens = [{ term: detailAddPersonQuery.trim(), op: 'and' }];
         }
 
         const res = await peopleApi.searchList(payload);
         if (cancelled) return;
         const nextResults = (res.results || []).filter((person) => person.department != null);
-        setAddPeopleResults(nextResults);
-        setAddPeopleSelectedIndex(nextResults.length > 0 ? 0 : -1);
-        setAddPeopleSrAnnouncement(`Found ${nextResults.length} people matching your search.`);
+        setDetailAddPersonResults(nextResults);
       } catch {
         if (!cancelled) {
-          setAddPeopleResults([]);
-          setAddPeopleSelectedIndex(-1);
-          setAddPeopleSrAnnouncement('');
+          setDetailAddPersonResults([]);
         }
       } finally {
-        if (!cancelled) setAddPeopleLoading(false);
+        if (!cancelled) setDetailAddPersonLoading(false);
       }
     }, 220);
 
@@ -522,7 +500,7 @@ const SkillsDashboard: React.FC = () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [mode, addPeopleSkillId, addPeopleQuery, addPeopleSelectionLocked, selectedDepartmentId, verticalState.selectedVerticalId]);
+  }, [mode, selectedSkillId, detailAddPersonQuery, selectedDepartmentId, verticalState.selectedVerticalId]);
 
   useEffect(() => {
     if (mode !== 'people_to_skills' || addSkillsPersonId == null) {
@@ -633,16 +611,6 @@ const SkillsDashboard: React.FC = () => {
     verticalState.selectedVerticalId,
   ]);
 
-  const isAddPeopleSearchOpen = useMemo(
-    () =>
-      mode === 'skill_to_people'
-      && addPeopleSkillId != null
-      && !addPeopleSelectionLocked
-      && addPeopleQuery.trim().length > 0
-      && addPeopleResults.length > 0,
-    [mode, addPeopleSkillId, addPeopleSelectionLocked, addPeopleQuery, addPeopleResults.length]
-  );
-
   const isAddSkillsSearchOpen = useMemo(
     () =>
       mode === 'people_to_skills'
@@ -651,27 +619,6 @@ const SkillsDashboard: React.FC = () => {
       && addSkillsResults.length > 0,
     [mode, addSkillsPersonId, addSkillsQuery, addSkillsResults.length]
   );
-
-  useEffect(() => {
-    if (!isAddPeopleSearchOpen) return;
-    const updatePlacement = () => {
-      const el = addPeopleInputRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const dropdownHeight = 240;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setAddPeopleDropdownAbove(spaceBelow < dropdownHeight && spaceAbove > spaceBelow);
-    };
-
-    updatePlacement();
-    window.addEventListener('resize', updatePlacement);
-    window.addEventListener('scroll', updatePlacement, true);
-    return () => {
-      window.removeEventListener('resize', updatePlacement);
-      window.removeEventListener('scroll', updatePlacement, true);
-    };
-  }, [isAddPeopleSearchOpen, addPeopleResults.length]);
 
   useEffect(() => {
     if (!isAddSkillsSearchOpen) return;
@@ -771,6 +718,14 @@ const SkillsDashboard: React.FC = () => {
     () => people.find((person) => person.id === selectedPersonId) || null,
     [people, selectedPersonId]
   );
+  const selectedSkill = useMemo(
+    () => skills.find((skill) => skill.id === selectedSkillId) || null,
+    [skills, selectedSkillId]
+  );
+  const selectedSkillPeople = useMemo(() => {
+    if (!selectedSkill?.id) return [] as Person[];
+    return peopleForSkill.get(selectedSkill.id) || [];
+  }, [peopleForSkill, selectedSkill?.id]);
 
   const selectedPersonSkillsGrouped = useMemo(() => {
     const result = {
@@ -795,6 +750,13 @@ const SkillsDashboard: React.FC = () => {
       return !peopleModeAssignmentSet.has(`${selectedPersonId}:${skill.id}:${detailAddSkillType}`);
     });
   }, [detailAddSkillResults, detailAddSkillType, peopleModeAssignmentSet, selectedPersonId]);
+  const detailAddPersonFilteredResults = useMemo(() => {
+    if (selectedSkillId == null) return [] as Person[];
+    return detailAddPersonResults.filter((person) => {
+      if (!person.id) return false;
+      return !assignmentSet.has(`${person.id}:${selectedSkillId}`);
+    });
+  }, [assignmentSet, detailAddPersonResults, selectedSkillId]);
 
   const {
     getDraftForSkill,
@@ -825,50 +787,6 @@ const SkillsDashboard: React.FC = () => {
     },
   });
 
-  const toggleExpandedSkill = (skillId?: number) => {
-    if (!skillId) return;
-    setExpandedSkillIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(skillId)) next.delete(skillId);
-      else next.add(skillId);
-      return next;
-    });
-  };
-
-  const toggleAddPeoplePanel = (skillId?: number) => {
-    if (!skillId) return;
-    setScopePickerSkillId(null);
-    setScopeTargetDepartmentId('');
-    setAddPeopleSkillId((prev) => {
-      if (prev === skillId) {
-        setAddPeopleQuery('');
-        setAddPeopleResults([]);
-        setAddPeopleSelectedIndex(-1);
-        setAddPeopleSelectedPerson(null);
-        setAddPeopleSelectionLocked(false);
-        setAddPeopleSrAnnouncement('');
-        return null;
-      }
-      setAddPeopleQuery('');
-      setAddPeopleResults([]);
-      setAddPeopleSelectedIndex(-1);
-      setAddPeopleSelectedPerson(null);
-      setAddPeopleSelectionLocked(false);
-      setAddPeopleSrAnnouncement('');
-      return skillId;
-    });
-  };
-
-  const closeAddPeoplePanel = () => {
-    setAddPeopleSkillId(null);
-    setAddPeopleQuery('');
-    setAddPeopleResults([]);
-    setAddPeopleSelectedIndex(-1);
-    setAddPeopleSelectedPerson(null);
-    setAddPeopleSelectionLocked(false);
-    setAddPeopleSrAnnouncement('');
-  };
-
   const toggleAddSkillsPanel = (personId?: number) => {
     if (!personId) return;
     setAddSkillsPersonId((prev) => {
@@ -897,52 +815,17 @@ const SkillsDashboard: React.FC = () => {
     }
   };
 
-  const onAddPeopleQueryChange = (value: string) => {
-    setAddPeopleQuery(value);
-    setAddPeopleSelectionLocked(false);
-    setAddPeopleSelectedPerson(null);
-    setAddPeopleSelectedIndex(-1);
+  const selectSkillForDetails = (skill: SkillTag) => {
+    if (!skill.id) return;
+    setSelectedSkillId(skill.id);
+    if (!isDesktopPeopleDetails) {
+      setIsMobileSkillDetailOpen(true);
+    }
   };
 
   const onAddSkillsQueryChange = (value: string) => {
     setAddSkillsQuery(value);
     setAddSkillsSelectedIndex(-1);
-  };
-
-  const selectAddPeoplePerson = (person: Person) => {
-    setAddPeopleSelectedPerson(person);
-    setAddPeopleSelectionLocked(true);
-    setAddPeopleQuery(person.name);
-    setAddPeopleResults([]);
-    setAddPeopleSelectedIndex(-1);
-  };
-
-  const onAddPeopleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!isAddPeopleSearchOpen) return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setAddPeopleSelectedIndex((prev) =>
-        addPeopleResults.length > 0 ? Math.min(prev + 1, addPeopleResults.length - 1) : -1
-      );
-      return;
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setAddPeopleSelectedIndex((prev) => (addPeopleResults.length > 0 ? Math.max(prev - 1, 0) : -1));
-      return;
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      if (addPeopleSelectedIndex >= 0 && addPeopleSelectedIndex < addPeopleResults.length) {
-        selectAddPeoplePerson(addPeopleResults[addPeopleSelectedIndex]);
-      }
-      return;
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      setAddPeopleResults([]);
-      setAddPeopleSelectedIndex(-1);
-    }
   };
 
   const onAddSkillsSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, person: Person) => {
@@ -993,12 +876,8 @@ const SkillsDashboard: React.FC = () => {
       } else {
         showToast(`${person.name} already has ${skill.name}`, 'info');
       }
-      setAddPeopleQuery('');
-      setAddPeopleResults([]);
-      setAddPeopleSelectedIndex(-1);
-      setAddPeopleSelectedPerson(null);
-      setAddPeopleSelectionLocked(false);
-      setAddPeopleSrAnnouncement('');
+      setDetailAddPersonQuery('');
+      setDetailAddPersonResults([]);
     } catch (err: any) {
       showToast(err?.message || 'Failed to add person to skill', 'error');
     } finally {
@@ -1063,6 +942,36 @@ const SkillsDashboard: React.FC = () => {
       showToast(err?.message || 'Failed to remove skill', 'error');
     } finally {
       setRemovingPersonSkillId(null);
+      setBusy(false);
+    }
+  };
+
+  const removePersonFromSkill = async (skill: SkillTag, person: Person) => {
+    if (!skill.id || !person.id) return;
+    const confirmed = await confirmAction({
+      title: 'Remove Person',
+      message: `Remove ${person.name} from "${skill.name}"?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    setRemovingSkillPersonId(person.id);
+    setBusy(true);
+    try {
+      await personSkillsApi.bulkAssign({
+        operation: 'unassign',
+        personIds: [person.id],
+        skillTagIds: [skill.id],
+        skillType: 'strength',
+      });
+      await loadStrengthAssignments();
+      showToast(`Removed ${person.name} from ${skill.name}`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to remove person from skill', 'error');
+    } finally {
+      setRemovingSkillPersonId(null);
       setBusy(false);
     }
   };
@@ -1154,13 +1063,8 @@ const SkillsDashboard: React.FC = () => {
     setBusy(true);
     try {
       await skillTagsApi.delete(skill.id);
-      setExpandedSkillIds((prev) => {
-        const next = new Set(prev);
-        next.delete(skill.id!);
-        return next;
-      });
       setScopePickerSkillId((prev) => (prev === skill.id ? null : prev));
-      setAddPeopleSkillId((prev) => (prev === skill.id ? null : prev));
+      setSelectedSkillId((prev) => (prev === skill.id ? null : prev));
       await loadSkills(1, false);
       await loadStrengthAssignments();
       showToast('Skill deleted', 'success');
@@ -1210,6 +1114,93 @@ const SkillsDashboard: React.FC = () => {
     });
   };
 
+  const skillPeopleDetailPaneContent = !selectedSkill ? (
+    <div className="rounded border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+      Select a skill to view people.
+    </div>
+  ) : (
+    <div className="space-y-3">
+      <div className="rounded border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="text-base font-semibold text-[var(--text)]">{selectedSkill.name}</div>
+        <div className="text-xs text-[var(--muted)]">
+          {selectedSkill.scopeType === 'global' ? 'Global' : (selectedSkill.departmentName || 'Department')}
+        </div>
+        <div className="mt-1 text-xs text-[var(--muted)]">{selectedSkillPeople.length} assigned people</div>
+      </div>
+
+      <section className="rounded border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h4 className="mb-2 text-sm font-semibold text-[var(--text)]">Add Person</h4>
+        <input
+          type="text"
+          value={detailAddPersonQuery}
+          onChange={(event) => setDetailAddPersonQuery(event.target.value)}
+          className="h-8 w-full rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text)] placeholder-[var(--muted)]"
+          placeholder="Type to search and click a person..."
+          disabled={busy}
+        />
+        {detailAddPersonQuery.trim().length > 0 ? (
+          <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)]">
+            {detailAddPersonLoading ? (
+              <div className="px-2 py-2 text-xs text-[var(--muted)]">Searching people...</div>
+            ) : detailAddPersonFilteredResults.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-[var(--muted)]">No people found.</div>
+            ) : (
+              <div className="max-h-56 overflow-y-auto">
+                {detailAddPersonFilteredResults.map((person) => (
+                  <button
+                    key={person.id}
+                    type="button"
+                    className="w-full border-b border-[var(--border)] px-2 py-1 text-left text-xs text-[var(--text)] transition-colors hover:bg-[var(--cardHover)] last:border-b-0"
+                    onClick={() => void addPersonToSkill(selectedSkill, person)}
+                    disabled={busy}
+                  >
+                    <div className="truncate font-medium">{person.name}</div>
+                    <div className="truncate text-[var(--muted)]">
+                      {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h4 className="mb-2 text-sm font-semibold text-[var(--text)]">People</h4>
+        {selectedSkillPeople.length === 0 ? (
+          <div className="text-xs text-[var(--muted)]">
+            No people currently have this skill as a strength.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {selectedSkillPeople.map((person) => (
+              <div
+                key={person.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded border border-[var(--border)] bg-[var(--card)] px-2 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-[var(--text)]">{person.name}</div>
+                  <div className="truncate text-xs text-[var(--muted)]">
+                    {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="rounded border border-red-400/50 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void removePersonFromSkill(selectedSkill, person)}
+                  disabled={busy || removingSkillPersonId === person.id}
+                >
+                  {removingSkillPersonId === person.id ? 'Removing...' : 'Remove'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+
   if (loading) {
     return (
       <Layout>
@@ -1237,7 +1228,7 @@ const SkillsDashboard: React.FC = () => {
             </p>
             <p className="text-xs text-[var(--muted)]">
               {mode === 'skill_to_people'
-                ? 'Mode 1: expand a skill to see people who have it.'
+                ? 'Mode 1: select a skill row to view and manage people in the detail pane.'
                 : 'Mode 2: each person row shows their skill pills.'}
             </p>
           </div>
@@ -1322,261 +1313,141 @@ const SkillsDashboard: React.FC = () => {
 
           <Card className="ux-panel h-full min-h-0 p-3">
             {mode === 'skill_to_people' ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[var(--text)]">
-                    Skills ({selectedDepartmentName})
-                  </h2>
-                  <div className="text-xs text-[var(--muted)]">{skills.length} loaded</div>
-                </div>
-                <Input
-                  value={skillSearch}
-                  onChange={(e) => setSkillSearch(e.target.value)}
-                  placeholder="Search skills..."
-                />
+              <div className="grid h-full min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="flex h-full min-h-0 flex-col gap-3 rounded border border-[var(--border)] bg-[var(--surface)] p-2">
+                  <div className="flex items-center justify-between rounded border border-[var(--border)] bg-[var(--surfaceHover)] px-2 py-1.5">
+                    <h2 className="text-sm font-semibold text-[var(--text)]">Skills ({selectedDepartmentName})</h2>
+                    <div className="text-xs text-[var(--muted)]">{skills.length} loaded</div>
+                  </div>
+                  <Input
+                    value={skillSearch}
+                    onChange={(e) => setSkillSearch(e.target.value)}
+                    placeholder="Search skills..."
+                  />
 
-                <div className="max-h-[620px] overflow-auto rounded border border-[var(--border)]">
-                  {skills.map((skill) => {
-                    const skillId = skill.id;
-                    const expanded = !!skillId && expandedSkillIds.has(skillId);
-                    const assignedPeople = skillId ? (peopleForSkill.get(skillId) || []) : [];
-                    const assignedCount = assignedPeople.length;
-
-                    return (
-                      <div key={skill.id} className="border-b border-[var(--border)] last:border-b-0">
-                        <div className="grid grid-cols-[minmax(0,1fr)_32px_auto] items-center gap-2 px-2 py-2 sm:grid-cols-[340px_32px_auto]">
-                          <button
-                            type="button"
-                            className="flex min-w-0 items-center gap-2 text-left"
-                            onClick={() => toggleExpandedSkill(skillId)}
-                          >
-                            <span className="text-xs text-[var(--muted)]">{expanded ? 'v' : '>'}</span>
+                  <div className="flex-1 min-h-0 overflow-auto rounded border border-[var(--border)] bg-[var(--card)]">
+                    {skills.map((skill) => {
+                      const assignedPeople = skill.id ? (peopleForSkill.get(skill.id) || []) : [];
+                      const isSelected = skill.id != null && selectedSkillId === skill.id;
+                      return (
+                        <div
+                          key={skill.id}
+                          className={`cursor-pointer border-b border-[var(--border)] px-2 py-2 last:border-b-0 ${
+                            isSelected
+                              ? 'border-l-4 border-l-[var(--focus)] bg-[var(--surfaceHover)]'
+                              : 'border-l-4 border-l-transparent hover:bg-[var(--surfaceHover)]'
+                          }`}
+                          onClick={() => selectSkillForDetails(skill)}
+                        >
+                          <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="truncate text-sm text-[var(--text)]">{skill.name}</div>
+                              <div className="truncate text-sm font-semibold text-[var(--text)]">{skill.name}</div>
                               <div className="text-xs text-[var(--muted)]">
-                                {skill.scopeType === 'global'
-                                  ? 'Global'
-                                  : (skill.departmentName || 'Department')} | {assignedCount} people
+                                {skill.scopeType === 'global' ? 'Global' : (skill.departmentName || 'Department')} | {assignedPeople.length} people
                               </div>
                             </div>
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                            onClick={() => toggleAddPeoplePanel(skillId)}
-                            disabled={busy}
-                            aria-label={`Add people to ${skill.name}`}
-                          >
-                            {addPeopleSkillId === skillId ? '-' : '+'}
-                          </button>
-                          <div className="flex w-[250px] sm:w-[380px] items-center justify-end gap-1">
-                            {skill.scopeType === 'global' && selectedDepartmentId == null && scopePickerSkillId === skillId ? (
-                              <>
-                                <select
-                                  className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
-                                  value={scopeTargetDepartmentId}
-                                  onChange={(e) =>
-                                    setScopeTargetDepartmentId(
-                                      e.target.value ? Number(e.target.value) : ''
-                                    )
-                                  }
-                                  disabled={busy}
-                                >
-                                  {departmentOptions.map((dept) => (
-                                    <option key={dept.id} value={dept.id}>
-                                      {dept.name}
-                                    </option>
-                                  ))}
-                                </select>
+                            <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                              {skill.scopeType === 'global' && selectedDepartmentId == null && scopePickerSkillId === skill.id ? (
+                                <>
+                                  <select
+                                    className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)]"
+                                    value={scopeTargetDepartmentId}
+                                    onChange={(e) =>
+                                      setScopeTargetDepartmentId(
+                                        e.target.value ? Number(e.target.value) : ''
+                                      )
+                                    }
+                                    disabled={busy}
+                                  >
+                                    {departmentOptions.map((dept) => (
+                                      <option key={dept.id} value={dept.id}>
+                                        {dept.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                                    onClick={() => void applyScopedDepartment(skill)}
+                                    disabled={busy || scopeTargetDepartmentId === ''}
+                                  >
+                                    Apply
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                                    onClick={() => {
+                                      setScopePickerSkillId(null);
+                                      setScopeTargetDepartmentId('');
+                                    }}
+                                    disabled={busy}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
                                 <button
                                   type="button"
                                   className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                                  onClick={() => void applyScopedDepartment(skill)}
-                                  disabled={busy || scopeTargetDepartmentId === ''}
-                                >
-                                  Apply
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                                  onClick={() => {
-                                    setScopePickerSkillId(null);
-                                    setScopeTargetDepartmentId('');
-                                  }}
+                                  onClick={() => void toggleSkillScope(skill)}
                                   disabled={busy}
                                 >
-                                  Cancel
+                                  {skill.scopeType === 'global' ? 'Scope to Dept' : 'Make Global'}
                                 </button>
-                              </>
-                            ) : (
+                              )}
                               <button
                                 type="button"
-                                className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                                onClick={() => void toggleSkillScope(skill)}
+                                className="rounded border border-red-400/50 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                                onClick={() => void deleteSkill(skill)}
                                 disabled={busy}
                               >
-                                {skill.scopeType === 'global' ? 'Scope to Dept' : 'Make Global'}
+                                Delete
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              className="rounded border border-red-400/50 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                              onClick={() => void deleteSkill(skill)}
-                              disabled={busy}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                        {addPeopleSkillId === skillId && (
-                          <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                            <div className="rounded border border-[var(--border)] bg-[var(--card)] p-2">
-                              <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                                <div className="text-[10px] font-medium uppercase text-[var(--muted)]">Person</div>
-                                <div className="text-[10px] font-medium uppercase text-[var(--muted)]">Actions</div>
-                              </div>
-                              <div className="relative">
-                                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={addPeopleQuery}
-                                    onChange={(e) => onAddPeopleQueryChange(e.target.value)}
-                                    onKeyDown={onAddPeopleSearchKeyDown}
-                                    placeholder="Start typing name..."
-                                    role="combobox"
-                                    aria-expanded={isAddPeopleSearchOpen}
-                                    aria-haspopup="listbox"
-                                    aria-owns={skillId ? `skill-person-search-results-${skillId}` : undefined}
-                                    aria-describedby={skillId ? `skill-person-search-help-${skillId}` : undefined}
-                                    className="w-full px-2 py-1 text-xs bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--primary)] focus:outline-none"
-                                    ref={addPeopleInputRef}
-                                    autoFocus
-                                  />
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      className="px-2 py-1 text-xs rounded border bg-[var(--primary)] border-[var(--primary)] text-white hover:bg-[var(--primaryHover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                      onClick={() => {
-                                        if (!addPeopleSelectedPerson) return;
-                                        void addPersonToSkill(skill, addPeopleSelectedPerson);
-                                      }}
-                                      disabled={
-                                        busy
-                                        || !addPeopleSelectedPerson
-                                        || (
-                                          addPeopleSelectedPerson.id != null
-                                          && skillId != null
-                                          && assignmentSet.has(`${addPeopleSelectedPerson.id}:${skillId}`)
-                                        )
-                                      }
-                                    >
-                                      Add Selected
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="px-2 py-1 text-xs rounded border bg-transparent border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)] transition-colors"
-                                      onClick={closeAddPeoplePanel}
-                                      disabled={busy}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                                <div id={skillId ? `skill-person-search-help-${skillId}` : undefined} className="sr-only">
-                                  Search for people to add to this skill. Use arrow keys to navigate results.
-                                </div>
-                                <div aria-live="polite" aria-atomic="true" className="sr-only">
-                                  {addPeopleSrAnnouncement}
-                                </div>
-                                {isAddPeopleSearchOpen && (
-                                  <div className={`absolute left-0 right-0 z-50 ${addPeopleDropdownAbove ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-                                    <div
-                                      id={skillId ? `skill-person-search-results-${skillId}` : undefined}
-                                      role="listbox"
-                                      className="bg-[var(--surface)] border border-[var(--border)] rounded shadow-lg max-h-56 overflow-y-auto"
-                                    >
-                                      <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                                        People
-                                      </div>
-                                      {addPeopleResults.map((person, index) => {
-                                        const alreadyAssigned =
-                                          person.id != null && skillId != null
-                                            ? assignmentSet.has(`${person.id}:${skillId}`)
-                                            : false;
-                                        return (
-                                          <button
-                                            key={person.id}
-                                            type="button"
-                                            onClick={() => selectAddPeoplePerson(person)}
-                                            className={`w-full text-left px-2 py-1 text-xs hover:bg-[var(--cardHover)] transition-colors text-[var(--text)] border-b border-[var(--border)] last:border-b-0 ${
-                                              addPeopleSelectedIndex === index ? 'bg-[var(--surfaceOverlay)] border-[var(--primary)]' : ''
-                                            }`}
-                                          >
-                                            <div className="flex items-center justify-between">
-                                              <div className="font-medium truncate">{person.name}</div>
-                                              {alreadyAssigned && (
-                                                <span className="text-[10px] px-1 py-0.5 rounded border border-[var(--border)] text-[var(--muted)]">
-                                                  Added
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="truncate text-[var(--muted)]">
-                                              {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
-                                            </div>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="mt-2 min-h-[16px] text-xs text-[var(--muted)]">
-                                {addPeopleLoading
-                                  ? 'Searching people...'
-                                  : addPeopleSelectedPerson
-                                    ? `Selected: ${addPeopleSelectedPerson.name}`
-                                    : addPeopleQuery.trim()
-                                      ? 'Select a person from the results.'
-                                      : 'Type a name to search.'}
-                              </div>
                             </div>
                           </div>
-                        )}
-                        {expanded && (
-                          <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                          <div className="mt-2 flex flex-wrap gap-1">
                             {assignedPeople.length === 0 ? (
-                              <div className="text-xs text-[var(--muted)]">
-                                No people currently have this skill as a strength.
-                              </div>
+                              <span className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                                No people
+                              </span>
                             ) : (
-                              <div className="space-y-1">
-                                {assignedPeople.map((person) => (
-                                  <div key={person.id} className="flex items-center justify-between gap-2 text-sm">
-                                    <span className="truncate text-[var(--text)]">{person.name}</span>
-                                    <span className="text-xs text-[var(--muted)]">
-                                      {deptById.get(person.department || -1)?.name || 'Department'} | {person.roleName || 'No role'}
-                                    </span>
-                                  </div>
+                              <>
+                                {assignedPeople.slice(0, 6).map((person) => (
+                                  <span
+                                    key={person.id}
+                                    className="rounded border border-emerald-500/30 bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-300"
+                                  >
+                                    {person.name}
+                                  </span>
                                 ))}
-                              </div>
+                                {assignedPeople.length > 6 ? (
+                                  <span className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                                    +{assignedPeople.length - 6} more
+                                  </span>
+                                ) : null}
+                              </>
                             )}
                           </div>
-                        )}
+                        </div>
+                      );
+                    })}
+                    {skills.length === 0 && (
+                      <div className="px-3 py-6 text-center text-sm text-[var(--muted)]">
+                        No skills found for this scope.
                       </div>
-                    );
-                  })}
-                  {skills.length === 0 && (
-                    <div className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                      No skills found for this scope.
-                    </div>
+                    )}
+                  </div>
+
+                  {skillsHasNext && (
+                    <Button variant="ghost" onClick={() => void loadSkills(skillsPage + 1, true)}>
+                      Load More Skills
+                    </Button>
                   )}
                 </div>
 
-                {skillsHasNext && (
-                  <Button variant="ghost" onClick={() => void loadSkills(skillsPage + 1, true)}>
-                    Load More Skills
-                  </Button>
-                )}
+                <div className="hidden xl:block min-h-0 overflow-y-auto rounded border border-[var(--border)] bg-[var(--surface)] p-2">
+                  {skillPeopleDetailPaneContent}
+                </div>
               </div>
             ) : (
               <div className="grid h-full min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
@@ -1801,6 +1672,14 @@ const SkillsDashboard: React.FC = () => {
             }}
             addSkillDisabled={busy || !selectedPerson}
           />
+        </PersonDetailsDrawer>
+
+        <PersonDetailsDrawer
+          open={mode === 'skill_to_people' && !isDesktopPeopleDetails && isMobileSkillDetailOpen}
+          onClose={() => setIsMobileSkillDetailOpen(false)}
+          title={selectedSkill?.name ? `${selectedSkill.name} People` : 'Skill People'}
+        >
+          {skillPeopleDetailPaneContent}
         </PersonDetailsDrawer>
 
         <SkillsAddDrawer open={isAddSkillOpen} onClose={() => setIsAddSkillOpen(false)}>
