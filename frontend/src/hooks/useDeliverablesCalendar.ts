@@ -10,6 +10,8 @@ export type DeliverablesCalendarMeta = {
   source: 'bundle' | 'legacy' | 'fallback';
   notesRequested: boolean;
   projectLeadsRequested: boolean;
+  truncated?: boolean;
+  truncatedDetails?: unknown;
 };
 export type DeliverablesCalendarWithMeta = DeliverableCalendarUnion[] & {
   __meta?: DeliverablesCalendarMeta;
@@ -54,12 +56,18 @@ type Options = {
   vertical?: number | null;
   includeNotes?: 'preview' | 'full' | 'none';
   includeProjectLeads?: boolean;
+  refetchIntervalMs?: number;
+  refetchIntervalInBackground?: boolean;
+  staleTimeMs?: number;
+  refetchOnWindowFocus?: boolean;
+  forceRefetchOnMount?: boolean;
 };
 
 export function useDeliverablesCalendar(range: CalendarRange | null, options?: Options) {
   const mineOnly = options?.mineOnly ?? false;
   const personId = options?.personId ?? null;
   const vertical = options?.vertical ?? null;
+  const refetchIntervalMs = options?.refetchIntervalMs ?? 0;
 
   return useQuery<DeliverablesCalendarWithMeta, Error>({
     queryKey: [
@@ -83,7 +91,11 @@ export function useDeliverablesCalendar(range: CalendarRange | null, options?: O
         includeNotes: options?.includeNotes,
         includeProjectLeads: options?.includeProjectLeads,
       }),
-    staleTime: 1000 * 60 * 5,
+    staleTime: options?.staleTimeMs ?? (1000 * 60 * 5),
+    refetchInterval: refetchIntervalMs > 0 ? refetchIntervalMs : false,
+    refetchIntervalInBackground: refetchIntervalMs > 0 ? (options?.refetchIntervalInBackground ?? true) : false,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
+    refetchOnMount: options?.forceRefetchOnMount ? 'always' : true,
     retry: 2,
   });
 }
@@ -118,7 +130,12 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
   try {
     const base = API_BASE_URL.replace(/\/$/, '');
     const url = `${base}/deliverables/calendar_with_pre_items/?${query.toString()}`;
-    const res = await fetch(url, { headers: authHeaders() as Record<string, string> });
+    const headers = {
+      ...(authHeaders() as Record<string, string>),
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    };
+    const res = await fetch(url, { headers, cache: 'no-store' });
     if (!res.ok) throw new Error(`calendar_with_pre_items failed: ${res.status}`);
     const payload = await res.json();
     if (Array.isArray(payload)) {
@@ -126,11 +143,14 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
         source: 'legacy',
         notesRequested,
         projectLeadsRequested,
+        truncated: false,
+        truncatedDetails: null,
       });
     }
     if (payload && Array.isArray((payload as any).items)) {
       const items = (payload as any).items as DeliverableCalendarUnion[];
       const leadsByProject = (payload as any).departmentLeadsByProject || {};
+      const truncatedDetails = (payload as any).truncated ?? null;
       const enriched = items.map((raw: any) => {
         if ((raw?.itemType ?? 'deliverable') !== 'deliverable') return raw;
         const projectId = typeof raw?.project === 'number' ? raw.project : null;
@@ -146,6 +166,8 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
         source: 'bundle',
         notesRequested,
         projectLeadsRequested,
+        truncated: Boolean(truncatedDetails),
+        truncatedDetails,
       });
     }
   } catch {
@@ -156,6 +178,8 @@ async function fetchDeliverableCalendar(range: CalendarRange, options: Options):
     source: 'fallback',
     notesRequested,
     projectLeadsRequested,
+    truncated: false,
+    truncatedDetails: null,
   });
 }
 

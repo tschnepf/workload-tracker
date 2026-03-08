@@ -198,6 +198,16 @@ const IconComponent = ({ type, className = "w-4 h-4", isActive = false }: { type
           <line x1="3" y1="11" x2="21" y2="11"/>
         </svg>
       );
+    case 'tv':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="13" rx="2"/>
+          <line x1="9" y1="21" x2="15" y2="21"/>
+          <line x1="12" y1="18" x2="12" y2="21"/>
+          <line x1="9" y1="2.5" x2="12" y2="5"/>
+          <line x1="15" y1="2.5" x2="12" y2="5"/>
+        </svg>
+      );
     default:
       return (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.5">
@@ -353,6 +363,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   const systemItems: Array<{ path: string; icon: string; label: string; description?: string }> = [];
 
   const extraItems = [
+    {
+      path: '/deliverables/dashboard',
+      icon: 'tv',
+      label: 'TV Dashboard',
+      description: 'Wallboard-ready deliverables display'
+    },
     ...adminItems,
     ...departmentItems,
     ...systemItems

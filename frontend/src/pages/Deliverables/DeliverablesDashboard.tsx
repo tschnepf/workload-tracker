@@ -1,11 +1,14 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import './DeliverablesDashboard.css';
-import { useDeliverablesCalendar, toIsoDate } from '@/hooks/useDeliverablesCalendar';
+import { useDeliverablesCalendar } from '@/hooks/useDeliverablesCalendar';
 import { assignmentsApi, departmentsApi, deliverablesApi } from '@/services/api';
 import { useAuthenticatedEffect } from '@/hooks/useAuthenticatedEffect';
 import type { Assignment, Department } from '@/types/models';
 import { t } from '@/copy';
 import { DELIVERABLE_PHASE_COLOR_TOKENS } from '@/theme/chartPalette';
+import { subscribeDeliverablesRefresh } from '@/lib/deliverablesRefreshBus';
+import { subscribeGridRefresh } from '@/lib/gridRefreshBus';
 
 const UNKNOWN_DEPT_ID = -1;
 
@@ -76,7 +79,26 @@ function stripNotes(value: string | null | undefined): string | null {
   return text || null;
 }
 
+function toLocalIsoDate(date: Date | string): string {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function estimateRowsPerPage(): number {
+  if (typeof window === 'undefined') return 6;
+  const h = window.innerHeight || 900;
+  if (h < 700) return 3;
+  if (h < 860) return 4;
+  if (h < 1040) return 5;
+  return 6;
+}
+
 const DeliverablesDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [now, setNow] = useState(() => new Date());
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentError, setDepartmentError] = useState<string | null>(null);
@@ -84,14 +106,12 @@ const DeliverablesDashboard: React.FC = () => {
   const [fallbackAssignmentsLoading, setFallbackAssignmentsLoading] = useState(false);
   const [fallbackAssignmentsError, setFallbackAssignmentsError] = useState<string | null>(null);
   const [fallbackDeliverableNotesById, setFallbackDeliverableNotesById] = useState<Record<number, string | null>>({});
-  const [rowsPerPage, setRowsPerPage] = useState(6);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(() => estimateRowsPerPage());
   const [pageIndex, setPageIndex] = useState(0);
-  const [pageDeadline, setPageDeadline] = useState<number | null>(null);
-  const [secondsRemaining, setSecondsRemaining] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => Boolean(document.fullscreenElement));
-  const tableRef = useRef<HTMLDivElement | null>(null);
-  const tableHeaderRef = useRef<HTMLDivElement | null>(null);
-  const pageRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement));
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+  const lastPageTurnAtRef = useRef<number>(Date.now());
+  const tableRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60 * 1000);
@@ -102,6 +122,20 @@ const DeliverablesDashboard: React.FC = () => {
     const handler = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  useEffect(() => {
+    const updateRows = () => {
+      const next = estimateRowsPerPage();
+      setRowsPerPage((prev) => (prev === next ? prev : next));
+    };
+    updateRows();
+    window.addEventListener('resize', updateRows);
+    document.addEventListener('fullscreenchange', updateRows);
+    return () => {
+      window.removeEventListener('resize', updateRows);
+      document.removeEventListener('fullscreenchange', updateRows);
+    };
   }, []);
 
   const toggleFullscreen = () => {
@@ -116,22 +150,84 @@ const DeliverablesDashboard: React.FC = () => {
     }
   };
 
-  const todayKey = toIsoDate(now);
+  const handleReturn = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/deliverables/calendar');
+  };
+
+  const todayKey = toLocalIsoDate(now);
   const range = useMemo(() => {
     const start = new Date(`${todayKey}T00:00:00`);
     const end = new Date(start);
     end.setDate(start.getDate() + 13);
-    return { start: toIsoDate(start), end: toIsoDate(end) };
+    return { start: toLocalIsoDate(start), end: toLocalIsoDate(end) };
   }, [todayKey]);
 
   const deliverablesQuery = useDeliverablesCalendar(range, {
     mineOnly: false,
     includeNotes: 'preview',
     includeProjectLeads: true,
+    staleTimeMs: 5000,
+    refetchIntervalMs: 30000,
+    refetchIntervalInBackground: true,
+    forceRefetchOnMount: true,
   });
   const calendarMeta = (deliverablesQuery.data as any)?.__meta as
-    | { source?: 'bundle' | 'legacy' | 'fallback'; notesRequested?: boolean; projectLeadsRequested?: boolean }
+    | { source?: 'bundle' | 'legacy' | 'fallback'; notesRequested?: boolean; projectLeadsRequested?: boolean; truncated?: boolean }
     | undefined;
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      void deliverablesQuery.refetch();
+      window.setTimeout(() => setLayoutEpoch((prev) => prev + 1), 80);
+      window.setTimeout(() => setLayoutEpoch((prev) => prev + 1), 280);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, [deliverablesQuery.refetch]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void deliverablesQuery.refetch();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [deliverablesQuery.refetch]);
+
+  useEffect(() => {
+    const onViewportResize = () => {
+      const next = estimateRowsPerPage();
+      setRowsPerPage((prev) => (prev === next ? prev : next));
+      setLayoutEpoch((prev) => prev + 1);
+    };
+    window.addEventListener('orientationchange', onViewportResize);
+    window.visualViewport?.addEventListener('resize', onViewportResize);
+    return () => {
+      window.removeEventListener('orientationchange', onViewportResize);
+      window.visualViewport?.removeEventListener('resize', onViewportResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubDeliverables = subscribeDeliverablesRefresh(() => {
+      void deliverablesQuery.refetch();
+    });
+    const unsubGrid = subscribeGridRefresh((payload) => {
+      const reason = String(payload?.reason || '').toLowerCase();
+      if (reason.includes('deliverable')) {
+        void deliverablesQuery.refetch();
+      }
+    });
+    return () => {
+      unsubDeliverables();
+      unsubGrid();
+    };
+  }, [deliverablesQuery.refetch]);
 
   const deliverables = useMemo<DeliverablesRow[]>(() => {
     const items = deliverablesQuery.data ?? [];
@@ -140,11 +236,9 @@ const DeliverablesDashboard: React.FC = () => {
     return items
       .filter((item) => {
         const raw = item as any;
-        const itemType = raw.itemType ?? raw.kind;
-        if (itemType && itemType !== 'deliverable') return false;
+        const itemType = raw.itemType ?? raw.kind ?? 'deliverable';
+        if (itemType !== 'deliverable') return false;
         if (raw.preDeliverableType != null || raw.preDeliverableTypeId != null) return false;
-        const title = typeof raw.title === 'string' ? raw.title.trim().toLowerCase() : '';
-        if (!itemType && title.startsWith('pre:')) return false;
         if (!raw.date) return false;
         const date = new Date(`${raw.date}T00:00:00`);
         return date >= startBound && date <= endBound;
@@ -197,8 +291,8 @@ const DeliverablesDashboard: React.FC = () => {
     const items = deliverablesQuery.data ?? [];
     return items.some((item) => {
       const raw = item as any;
-      const itemType = raw.itemType ?? raw.kind;
-      if (itemType && itemType !== 'deliverable') return false;
+      const itemType = raw.itemType ?? raw.kind ?? 'deliverable';
+      if (itemType !== 'deliverable') return false;
       return Object.prototype.hasOwnProperty.call(raw, 'notesPreview') || Object.prototype.hasOwnProperty.call(raw, 'notes');
     });
   }, [deliverablesQuery.data]);
@@ -208,8 +302,8 @@ const DeliverablesDashboard: React.FC = () => {
     const items = deliverablesQuery.data ?? [];
     return items.some((item) => {
       const raw = item as any;
-      const itemType = raw.itemType ?? raw.kind;
-      if (itemType && itemType !== 'deliverable') return false;
+      const itemType = raw.itemType ?? raw.kind ?? 'deliverable';
+      if (itemType !== 'deliverable') return false;
       return Object.prototype.hasOwnProperty.call(raw, 'departmentLeads');
     });
   }, [deliverablesQuery.data]);
@@ -246,8 +340,8 @@ const DeliverablesDashboard: React.FC = () => {
     const items = deliverablesQuery.data ?? [];
     items.forEach((item) => {
       const raw = item as any;
-      const itemType = raw.itemType ?? raw.kind;
-      if (itemType && itemType !== 'deliverable') return;
+      const itemType = raw.itemType ?? raw.kind ?? 'deliverable';
+      if (itemType !== 'deliverable') return;
       const projectId = typeof raw.project === 'number' ? raw.project : null;
       if (projectId == null) return;
       const leadsMap = raw.departmentLeads;
@@ -315,37 +409,6 @@ const DeliverablesDashboard: React.FC = () => {
     };
   }, []);
 
-  useLayoutEffect(() => {
-    const table = tableRef.current;
-    const header = tableHeaderRef.current;
-    const page = pageRef.current;
-    if (!table || !page) return;
-
-    const compute = () => {
-      const tableHeight = table.clientHeight;
-      const headerHeight = header?.clientHeight ?? 0;
-      const available = Math.max(0, tableHeight - headerHeight);
-      const rows = Array.from(page.querySelectorAll<HTMLElement>('.dd-row'));
-      if (!rows.length) return;
-      const maxRowHeight = rows.reduce((max, row) => Math.max(max, row.getBoundingClientRect().height), 0);
-      if (!maxRowHeight) return;
-      const next = Math.max(1, Math.floor(available / maxRowHeight));
-      if (!Number.isFinite(next) || next <= 0) return;
-      setRowsPerPage((prev) => (prev === next ? prev : next));
-    };
-
-    const raf = requestAnimationFrame(compute);
-    if (typeof ResizeObserver === 'undefined') return () => cancelAnimationFrame(raf);
-    const ro = new ResizeObserver(() => compute());
-    ro.observe(table);
-    if (header) ro.observe(header);
-    ro.observe(page);
-    return () => {
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-    };
-  }, [pageIndex, pages.length, deliverables.length, isFullscreen]);
-
   useEffect(() => {
     if (deliverables.length && pageIndex !== 0) {
       setPageIndex(0);
@@ -365,27 +428,32 @@ const DeliverablesDashboard: React.FC = () => {
   }, [pages.length]);
 
   useEffect(() => {
-    if (pages.length <= 1) {
-      setPageDeadline(null);
-      setSecondsRemaining(0);
-      return;
-    }
-    const deadline = Date.now() + 20000;
-    setPageDeadline(deadline);
-    setSecondsRemaining(20);
-  }, [pageIndex, pages.length]);
+    lastPageTurnAtRef.current = Date.now();
+  }, [pageIndex]);
 
   useEffect(() => {
-    if (!pageDeadline) return;
-    const tick = () => {
-      const diffMs = pageDeadline - Date.now();
-      const next = Math.max(0, Math.ceil(diffMs / 1000));
-      setSecondsRemaining(next);
-    };
-    tick();
-    const interval = setInterval(tick, 500);
-    return () => clearInterval(interval);
-  }, [pageDeadline]);
+    const watchdog = setInterval(() => {
+      const nowMs = Date.now();
+      if (pages.length > 1 && nowMs - lastPageTurnAtRef.current > 45000) {
+        setPageIndex((prev) => (prev + 1) % pages.length);
+        lastPageTurnAtRef.current = nowMs;
+        void deliverablesQuery.refetch();
+      }
+      const updatedAt = deliverablesQuery.dataUpdatedAt || 0;
+      if (updatedAt > 0 && nowMs - updatedAt > 120000) {
+        void deliverablesQuery.refetch();
+      }
+      const tableEl = tableRef.current;
+      if (tableEl) {
+        const rect = tableEl.getBoundingClientRect();
+        if (rect.width < 200 || rect.height < 120 || (deliverables.length > 0 && tableEl.scrollHeight <= 2)) {
+          setLayoutEpoch((prev) => prev + 1);
+          void deliverablesQuery.refetch();
+        }
+      }
+    }, 15000);
+    return () => clearInterval(watchdog);
+  }, [pages.length, deliverables.length, deliverablesQuery.dataUpdatedAt, deliverablesQuery.refetch]);
 
   useAuthenticatedEffect(() => {
     let active = true;
@@ -515,8 +583,16 @@ const DeliverablesDashboard: React.FC = () => {
 
   const totalProjects = projectIds.length;
   const totalDeliverables = deliverables.length;
+  const isDataDegraded = calendarMeta?.source === 'fallback' || calendarMeta?.source === 'legacy';
+  const isDataPartial = Boolean(calendarMeta?.truncated);
   const leadCoverageLoading =
-    deliverablesQuery.isLoading || deliverablesQuery.isFetching || fallbackAssignmentsLoading;
+    deliverablesQuery.isLoading || fallbackAssignmentsLoading;
+  const dataModeLabel =
+    calendarMeta?.source === 'fallback'
+      ? t('deliverables.modeFallback')
+      : calendarMeta?.source === 'legacy'
+        ? t('deliverables.modeLegacy')
+        : t('deliverables.modeBundle');
 
   return (
     <div className="deliverables-dashboard">
@@ -529,14 +605,21 @@ const DeliverablesDashboard: React.FC = () => {
           <div className="dd-clock">
             <div className="dd-clock-date">{headerDate}</div>
             <div className="dd-clock-time">{headerTime}</div>
-            <button type="button" className="dd-fullscreen-btn" onClick={toggleFullscreen}>
-              {isFullscreen ? t('deliverables.exitFullscreen') : t('deliverables.enterFullscreen')}
-            </button>
+            <div className="dd-clock-actions">
+              <button type="button" className="dd-fullscreen-btn" onClick={toggleFullscreen}>
+                {isFullscreen ? t('deliverables.exitFullscreen') : t('deliverables.enterFullscreen')}
+              </button>
+              {!isFullscreen ? (
+                <button type="button" className="dd-return-btn" onClick={handleReturn}>
+                  {t('deliverables.return')}
+                </button>
+              ) : null}
+            </div>
           </div>
         </header>
 
-        <section className="dd-table" aria-live="polite" ref={tableRef}>
-          <div className="dd-table-header" ref={tableHeaderRef}>
+        <section className="dd-table" aria-live="polite" key={`dd-table-${layoutEpoch}`} ref={tableRef}>
+          <div className="dd-table-header">
             <div>{t('deliverables.col.dueDate')}</div>
             <div>{t('deliverables.col.project')}</div>
             <div></div>
@@ -544,7 +627,7 @@ const DeliverablesDashboard: React.FC = () => {
             <div>{t('deliverables.col.departmentsLeads')}</div>
           </div>
 
-          <div className="dd-page" key={`page-${pageIndex}-${rowsPerPage}-${deliverables.length}`} ref={pageRef}>
+          <div className="dd-page" key={`page-${pageIndex}-${rowsPerPage}-${deliverables.length}`}>
             {deliverablesQuery.isLoading && (
               <div className="dd-row">
                 <div className="dd-empty">{t('deliverables.loading')}</div>
@@ -563,7 +646,7 @@ const DeliverablesDashboard: React.FC = () => {
               </div>
             )}
 
-            {currentPage.map((item, index) => {
+            {currentPage.map((item) => {
             const dateObj = new Date(`${item.date}T00:00:00`);
             const today = new Date(`${todayKey}T00:00:00`);
             const daysUntil = Math.ceil((dateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -577,7 +660,6 @@ const DeliverablesDashboard: React.FC = () => {
               <div
                 key={item.id}
                 className={`dd-row ${urgencyClass}`}
-                style={{ ['--dd-delay' as any]: `${index * 45}ms` }}
               >
                 <div className="dd-date-block">
                   <div className="dd-date-info">
@@ -633,22 +715,19 @@ const DeliverablesDashboard: React.FC = () => {
           <div className="dd-status">
             <span className="dd-status-dot" />
             {t('deliverables.updatedAt', { time: updatedAtLabel })}
+            <span className="dd-status-mode">{dataModeLabel}</span>
           </div>
           <div className="dd-footer-meta">
             <div className="dd-page-indicator">{t('deliverables.pageOf', { current: Math.min(pageIndex + 1, pages.length || 1), total: pages.length || 1 })}</div>
             {pages.length > 1 && (
-              <div className="dd-timer" style={{ ['--dd-timer-duration' as any]: '20s' }}>
-                <div className="dd-timer-ring" key={`timer-${pageIndex}`}>
-                  <svg viewBox="0 0 36 36" aria-hidden="true">
-                    <circle className="dd-timer-track" cx="18" cy="18" r="14" />
-                    <circle className="dd-timer-progress" cx="18" cy="18" r="14" />
-                  </svg>
-                </div>
-                <div className="dd-timer-text">{t('deliverables.nextIn', { seconds: secondsRemaining })}</div>
+              <div className="dd-timer">
+                <div className="dd-timer-text">{t('deliverables.autoRotate')}</div>
               </div>
             )}
           </div>
-          <div>
+          <div className="dd-system-status">
+            {isDataDegraded && <div className="dd-status-warning">{t('deliverables.degradedWarning')}</div>}
+            {isDataPartial && <div className="dd-status-warning">{t('deliverables.partialWarning')}</div>}
             {leadCoverageLoading && t('deliverables.refreshingCoverage')}
             {!leadCoverageLoading && fallbackAssignmentsError && fallbackAssignmentsError}
             {!leadCoverageLoading && !fallbackAssignmentsError && departmentError && departmentError}
