@@ -121,7 +121,7 @@ class SkillsApiTests(TestCase):
         PersonSkill.objects.create(
             person=self.person_parent,
             skill_tag=self.skill_global,
-            skill_type='development',
+            skill_type='in_progress',
             proficiency_level='advanced',
         )
         self.client.force_authenticate(self.admin)
@@ -148,7 +148,7 @@ class SkillsApiTests(TestCase):
             PersonSkill.objects.filter(
                 person=self.person_parent,
                 skill_tag=self.skill_global,
-                skill_type='development',
+                skill_type='in_progress',
             ).exists()
         )
 

@@ -5910,8 +5910,8 @@ export interface components {
         };
         PersonSkillSummaryGrouped: {
             strengths: components["schemas"]["PersonSkillSummary"][];
-            development: components["schemas"]["PersonSkillSummary"][];
-            learning: components["schemas"]["PersonSkillSummary"][];
+            inProgress: components["schemas"]["PersonSkillSummary"][];
+            goals: components["schemas"]["PersonSkillSummary"][];
         };
         PersonalAlerts: {
             overallocatedNextWeek: boolean;

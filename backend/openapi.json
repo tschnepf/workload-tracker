@@ -20972,13 +20972,13 @@
                             "$ref": "#/components/schemas/PersonSkillSummary"
                         }
                     },
-                    "development": {
+                    "inProgress": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/PersonSkillSummary"
                         }
                     },
-                    "learning": {
+                    "goals": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/PersonSkillSummary"
@@ -20986,8 +20986,8 @@
                     }
                 },
                 "required": [
-                    "development",
-                    "learning",
+                    "inProgress",
+                    "goals",
                     "strengths"
                 ]
             },

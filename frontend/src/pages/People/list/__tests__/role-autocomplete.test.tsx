@@ -71,7 +71,7 @@ describe('PersonDetailsPanel role autocomplete', () => {
         onSkillsEdit={onSkillsEdit}
         onSkillsSave={onSkillsSave}
         onSkillsCancel={onSkillsCancel}
-        skillsData={{ strengths: [], development: [], learning: [] } as any}
+        skillsData={{ strengths: [], inProgress: [], goals: [] } as any}
         updateSkillsByType={updateSkillsByType}
         editingProficiency={null}
         onProficiencyClick={onProficiencyClick}
@@ -146,7 +146,7 @@ describe('PersonDetailsPanel role autocomplete', () => {
           onSkillsEdit={() => {}}
           onSkillsSave={async () => {}}
           onSkillsCancel={() => {}}
-          skillsData={{ strengths: [], development: [], learning: [] } as any}
+          skillsData={{ strengths: [], inProgress: [], goals: [] } as any}
           updateSkillsByType={() => {}}
           editingProficiency={null}
           onProficiencyClick={() => {}}

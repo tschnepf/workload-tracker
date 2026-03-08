@@ -44,8 +44,8 @@ function buildDepartmentTree(departments: Department[]) {
 
 function personSkillPillClass(skillType?: string) {
   if (skillType === 'strength') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-  if (skillType === 'development') return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-  if (skillType === 'learning') return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+  if (skillType === 'in_progress') return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+  if (skillType === 'goals') return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
   return 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)]';
 }
 
@@ -775,15 +775,15 @@ const SkillsDashboard: React.FC = () => {
   const selectedPersonSkillsGrouped = useMemo(() => {
     const result = {
       strengths: [] as PersonSkill[],
-      development: [] as PersonSkill[],
-      learning: [] as PersonSkill[],
+      inProgress: [] as PersonSkill[],
+      goals: [] as PersonSkill[],
     };
     if (selectedPersonId == null) return result;
     const rows = peopleModeSkillsByPerson.get(selectedPersonId) || [];
     rows.forEach((row) => {
       if (row.skillType === 'strength') result.strengths.push(row);
-      else if (row.skillType === 'development') result.development.push(row);
-      else if (row.skillType === 'learning') result.learning.push(row);
+      else if (row.skillType === 'in_progress') result.inProgress.push(row);
+      else if (row.skillType === 'goals') result.goals.push(row);
     });
     return result;
   }, [peopleModeSkillsByPerson, selectedPersonId]);

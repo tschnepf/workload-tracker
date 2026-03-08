@@ -14,14 +14,14 @@ const PROFICIENCY_OPTIONS: Array<{
 
 type GroupedPersonSkills = {
   strengths: PersonSkill[];
-  development: PersonSkill[];
-  learning: PersonSkill[];
+  inProgress: PersonSkill[];
+  goals: PersonSkill[];
 };
 
 const SKILL_TYPE_OPTIONS: Array<{ value: PersonSkill['skillType']; label: string }> = [
   { value: 'strength', label: 'Strength' },
-  { value: 'development', label: 'Development' },
-  { value: 'learning', label: 'Learning' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'goals', label: 'Goals' },
 ];
 
 type PersonSkillDetailPanelProps = {
@@ -192,7 +192,7 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
   const [draggingSkillId, setDraggingSkillId] = React.useState<number | null>(null);
   const [dragOverType, setDragOverType] = React.useState<PersonSkill['skillType'] | null>(null);
   const allSkills = React.useMemo(
-    () => [...groupedSkills.strengths, ...groupedSkills.development, ...groupedSkills.learning],
+    () => [...groupedSkills.strengths, ...groupedSkills.inProgress, ...groupedSkills.goals],
     [groupedSkills]
   );
 
@@ -251,7 +251,7 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
     );
   }
 
-  const totalSkills = groupedSkills.strengths.length + groupedSkills.development.length + groupedSkills.learning.length;
+  const totalSkills = groupedSkills.strengths.length + groupedSkills.inProgress.length + groupedSkills.goals.length;
 
   return (
     <div className="space-y-3">
@@ -294,7 +294,7 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
           </label>
         </div>
         <div className="mt-1 text-[11px] text-[var(--muted)]">
-          Drag rows between Strengths, Development, and Learning to change skill type.
+          Drag rows between Strengths, In Progress, and Goals to change skill type.
         </div>
         {addSkillQuery.trim().length > 0 ? (
           <div className="mt-2 rounded border border-[var(--border)] bg-[var(--card)]">
@@ -344,9 +344,9 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
         onSectionDrop
       )}
       {renderSection(
-        'development',
-        'Development',
-        groupedSkills.development,
+        'in_progress',
+        'In Progress',
+        groupedSkills.inProgress,
         getDraftForSkill,
         getSaveStateForSkill,
         getErrorForSkill,
@@ -363,9 +363,9 @@ const PersonSkillDetailPanel: React.FC<PersonSkillDetailPanelProps> = ({
         onSectionDrop
       )}
       {renderSection(
-        'learning',
-        'Learning',
-        groupedSkills.learning,
+        'goals',
+        'Goals',
+        groupedSkills.goals,
         getDraftForSkill,
         getSaveStateForSkill,
         getErrorForSkill,

@@ -291,7 +291,7 @@ export interface PersonSkill {
   person: number; // Person ID
   skillTagId?: number; // For write operations
   skillTagName?: string; // Read-only skill tag name
-  skillType: 'strength' | 'development' | 'learning';
+  skillType: 'strength' | 'in_progress' | 'goals';
   proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   notes?: string;
   lastUsed?: string | null;

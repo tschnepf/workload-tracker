@@ -1,6 +1,6 @@
 """
 Skills models - Complete schema for skills tagging system
-Supports tagging people with strengths, development areas, and learning goals
+Supports tagging people with strengths, in-progress areas, and goals
 """
 
 from django.db import models
@@ -33,8 +33,8 @@ class PersonSkill(models.Model):
     """Junction table linking people to skills with proficiency and type"""
     SKILL_TYPE_CHOICES = [
         ('strength', 'Strength'),           # Good at this
-        ('development', 'Development'),     # Areas for improvement  
-        ('learning', 'Learning'),          # Currently learning
+        ('in_progress', 'In Progress'),     # Active growth areas
+        ('goals', 'Goals'),                 # Future growth goals
     ]
     
     PROFICIENCY_CHOICES = [
@@ -54,7 +54,7 @@ class PersonSkill(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        # Allow same skill in multiple categories (strengths, development, learning)
+        # Allow same skill in multiple categories (strengths, in progress, goals)
         unique_together = ['person', 'skill_tag', 'skill_type']
         ordering = ['skill_type', 'skill_tag__name']
         verbose_name = 'Person Skill'

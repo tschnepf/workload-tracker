@@ -178,8 +178,8 @@ const AssignmentForm: React.FC = () => {
       .filter(skill => skill.skillType === 'strength')
       .map(skill => skill.skillTagName || '');
     
-    const personDevelopment = personSkills
-      .filter(skill => skill.skillType === 'development')
+    const personInProgress = personSkills
+      .filter(skill => skill.skillType === 'in_progress')
       .map(skill => skill.skillTagName || '');
     
     const matchedSkills = requiredSkills.filter(required => 
@@ -188,9 +188,9 @@ const AssignmentForm: React.FC = () => {
       )
     );
     
-    const developmentMatches = requiredSkills.filter(required => 
-      personDevelopment.some(dev => 
-        dev.toLowerCase().includes(required.toLowerCase()) || required.toLowerCase().includes(dev.toLowerCase())
+    const inProgressMatches = requiredSkills.filter(required => 
+      personInProgress.some(inProgress => 
+        inProgress.toLowerCase().includes(required.toLowerCase()) || required.toLowerCase().includes(inProgress.toLowerCase())
       )
     );
     
@@ -202,8 +202,8 @@ const AssignmentForm: React.FC = () => {
       warnings.push(`⚠️ No skill matches found for: ${requiredSkills.join(', ')}`);
     }
     
-    if (developmentMatches.length > 0) {
-      warnings.push(`📈 Development opportunity: ${person.name} is learning ${developmentMatches.join(', ')}`);
+    if (inProgressMatches.length > 0) {
+      warnings.push(`📈 In Progress match: ${person.name} is currently working on ${inProgressMatches.join(', ')}`);
     }
     
     if (unmatchedSkills.length > 0 && matchedSkills.length > 0) {

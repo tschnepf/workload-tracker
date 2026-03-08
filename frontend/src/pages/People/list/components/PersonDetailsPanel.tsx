@@ -50,13 +50,13 @@ export interface PersonDetailsPanelProps {
   onSkillsCancel: () => void;
   skillsData: {
     strengths: PersonSkill[];
-    development: PersonSkill[];
-    learning: PersonSkill[];
+    inProgress: PersonSkill[];
+    goals: PersonSkill[];
   };
-  updateSkillsByType: (type: 'strengths' | 'development' | 'learning', skills: PersonSkill[]) => void;
+  updateSkillsByType: (type: 'strengths' | 'inProgress' | 'goals', skills: PersonSkill[]) => void;
   editingProficiency: string | null;
   onProficiencyClick: (skill: PersonSkill, skillType: string) => void;
-  onProficiencyChange: (skill: PersonSkill, skillType: 'strengths' | 'development' | 'learning', newLevel: string) => void;
+  onProficiencyChange: (skill: PersonSkill, skillType: 'strengths' | 'inProgress' | 'goals', newLevel: string) => void;
   proficiencyLevels: { value: 'beginner' | 'intermediate' | 'advanced' | 'expert'; label: string }[];
 }
 
@@ -438,36 +438,36 @@ export default function PersonDetailsPanel(props: PersonDetailsPanelProps) {
           </div>
         )}
 
-        {/* Development - display mode */}
+        {/* In Progress - display mode */}
         {!editingSkills && (
           <div className="bg-[var(--surface)]/50 p-4 rounded-lg border border-[var(--border)]">
             <h4 className="text-sm font-medium text-[var(--text)] mb-3 flex items-center gap-2">
               <span className="w-2 h-2 bg-amber-400 rounded-full"></span>
-              Areas for Improvement
+              In Progress
             </h4>
             <div className="flex flex-wrap gap-2">
-              {skillsData.development.map((skill, index) => (
+              {skillsData.inProgress.map((skill, index) => (
                 <span key={index} className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
                   {skill.skillTagName}
                 </span>
               ))}
-              {skillsData.development.length === 0 && <span className="text-[var(--muted)] text-sm">No development areas listed</span>}
+              {skillsData.inProgress.length === 0 && <span className="text-[var(--muted)] text-sm">No in-progress skills listed</span>}
             </div>
           </div>
         )}
 
-        {/* Learning - display mode */}
+        {/* Goals - display mode */}
         {!editingSkills && (
           <div className="bg-[var(--surface)]/50 p-4 rounded-lg border border-[var(--border)]">
             <h4 className="text-sm font-medium text-[var(--text)] mb-3 flex items-center gap-2">
               <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
-              Currently Learning
+              Goals
             </h4>
             <div className="flex flex-wrap gap-2">
-              {skillsData.learning.map((skill, index) => (
+              {skillsData.goals.map((skill, index) => (
                 <span key={index} className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">{skill.skillTagName}</span>
               ))}
-              {skillsData.learning.length === 0 && <span className="text-[var(--muted)] text-sm">No learning goals listed</span>}
+              {skillsData.goals.length === 0 && <span className="text-[var(--muted)] text-sm">No goals listed</span>}
             </div>
           </div>
         )}

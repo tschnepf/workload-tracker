@@ -306,8 +306,8 @@ class PersonSkillViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             name='PersonSkillSummaryGrouped',
             fields={
                 'strengths': serializers.ListField(child=PersonSkillSummarySerializer()),
-                'development': serializers.ListField(child=PersonSkillSummarySerializer()),
-                'learning': serializers.ListField(child=PersonSkillSummarySerializer()),
+                'inProgress': serializers.ListField(child=PersonSkillSummarySerializer()),
+                'goals': serializers.ListField(child=PersonSkillSummarySerializer()),
             },
         ),
     )
@@ -321,8 +321,8 @@ class PersonSkillViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         skills = self.get_queryset().filter(person_id=person_id)
         serializer = PersonSkillSummarySerializer(skills, many=True)
 
-        grouped_skills = {'strengths': [], 'development': [], 'learning': []}
-        bucket_map = {'strength': 'strengths', 'development': 'development', 'learning': 'learning'}
+        grouped_skills = {'strengths': [], 'inProgress': [], 'goals': []}
+        bucket_map = {'strength': 'strengths', 'in_progress': 'inProgress', 'goals': 'goals'}
         for skill in serializer.data:
             skill_type = skill.get('skillType')
             bucket = bucket_map.get(skill_type)

@@ -561,11 +561,15 @@ class PeoplePageSnapshotView(APIView):
             return None
         rows = PersonSkill.objects.filter(person_id=person_id).select_related('skill_tag')
         serialized = PersonSkillSummarySerializer(rows, many=True).data
-        grouped = {'strengths': [], 'development': [], 'learning': []}
+        grouped = {'strengths': [], 'inProgress': [], 'goals': []}
         for row in serialized:
             skill_type = row.get('skillType')
-            if skill_type in grouped:
-                grouped[skill_type].append(row)
+            if skill_type == 'strength':
+                grouped['strengths'].append(row)
+            elif skill_type == 'in_progress':
+                grouped['inProgress'].append(row)
+            elif skill_type == 'goals':
+                grouped['goals'].append(row)
         return grouped
 
     def _apply_payload_guardrails(self, payload: dict):

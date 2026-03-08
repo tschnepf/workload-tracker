@@ -6,10 +6,10 @@ export interface SkillsEditorProps {
   editing: boolean;
   skillsData: {
     strengths: PersonSkill[];
-    development: PersonSkill[];
-    learning: PersonSkill[];
+    inProgress: PersonSkill[];
+    goals: PersonSkill[];
   };
-  onChange: (type: 'strengths' | 'development' | 'learning', skills: PersonSkill[]) => void;
+  onChange: (type: 'strengths' | 'inProgress' | 'goals', skills: PersonSkill[]) => void;
   onSave: () => Promise<void> | void;
   onCancel: () => void;
 }
@@ -35,32 +35,32 @@ export default function SkillsEditor(props: SkillsEditorProps) {
         />
       </div>
 
-      {/* Development */}
+      {/* In Progress */}
       <div className="bg-[var(--surface)]/50 p-4 rounded-lg border border-[var(--border)]">
         <h4 className="text-sm font-medium text-[var(--text)] mb-3 flex items-center gap-2">
           <span className="w-2 h-2 bg-amber-400 rounded-full"></span>
-          Areas for Improvement
+          In Progress
         </h4>
         <SkillsAutocomplete
-          selectedSkills={skillsData.development}
-          onSkillsChange={(skills) => onChange('development', skills)}
-          skillType="development"
-          placeholder="Add development areas..."
+          selectedSkills={skillsData.inProgress}
+          onSkillsChange={(skills) => onChange('inProgress', skills)}
+          skillType="in_progress"
+          placeholder="Add in-progress skills..."
           className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
         />
       </div>
 
-      {/* Learning */}
+      {/* Goals */}
       <div className="bg-[var(--surface)]/50 p-4 rounded-lg border border-[var(--border)]">
         <h4 className="text-sm font-medium text-[var(--text)] mb-3 flex items-center gap-2">
           <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
-          Currently Learning
+          Goals
         </h4>
         <SkillsAutocomplete
-          selectedSkills={skillsData.learning}
-          onSkillsChange={(skills) => onChange('learning', skills)}
-          skillType="learning"
-          placeholder="Add learning goals..."
+          selectedSkills={skillsData.goals}
+          onSkillsChange={(skills) => onChange('goals', skills)}
+          skillType="goals"
+          placeholder="Add goals..."
           className="w-full px-3 py-2 text-sm bg-[var(--card)] border border-[var(--border)] rounded text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--focus)] focus:outline-none"
         />
       </div>

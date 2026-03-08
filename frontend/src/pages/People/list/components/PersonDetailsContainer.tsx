@@ -39,7 +39,7 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
     openProficiencyDropdown,
     closeProficiencyDropdown,
     updateSkillsByType,
-  } = useSkillsEditing({ strengths: [], development: [], learning: [] });
+  } = useSkillsEditing({ strengths: [], inProgress: [], goals: [] });
 
   const {
     showLocationAutocomplete,
@@ -74,7 +74,7 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
       loadPersonSkills(person.id);
     } else {
       setPersonSkills([]);
-      setSkillsData({ strengths: [], development: [], learning: [] });
+      setSkillsData({ strengths: [], inProgress: [], goals: [] });
     }
   }, [person?.id]);
 
@@ -85,8 +85,8 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
       setPersonSkills(skills);
       const grouped = {
         strengths: skills.filter((s) => s.skillType === 'strength'),
-        development: skills.filter((s) => s.skillType === 'development'),
-        learning: skills.filter((s) => s.skillType === 'learning'),
+        inProgress: skills.filter((s) => s.skillType === 'in_progress'),
+        goals: skills.filter((s) => s.skillType === 'goals'),
       };
       setSkillsData(grouped);
     } catch (err) {
@@ -211,8 +211,8 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
       setError(null);
       const desiredSkills: PersonSkill[] = [
         ...skillsData.strengths.map((row) => ({ ...row, skillType: 'strength' as const })),
-        ...skillsData.development.map((row) => ({ ...row, skillType: 'development' as const })),
-        ...skillsData.learning.map((row) => ({ ...row, skillType: 'learning' as const })),
+        ...skillsData.inProgress.map((row) => ({ ...row, skillType: 'in_progress' as const })),
+        ...skillsData.goals.map((row) => ({ ...row, skillType: 'goals' as const })),
       ].filter((row) => !!row.skillTagId);
 
       const existingByKey = new Map<string, PersonSkill>();
@@ -291,11 +291,13 @@ export default function PersonDetailsContainer(props: PersonDetailsContainerProp
 
   const onProficiencyChange = async (
     skill: PersonSkill,
-    skillType: 'strengths' | 'development' | 'learning',
+    skillType: 'strengths' | 'inProgress' | 'goals',
     newProficiency: string
   ) => {
     try {
-      const apiSkillType = skillType === 'strengths' ? 'strength' : skillType.slice(0, -1);
+      const apiSkillType = skillType === 'strengths'
+        ? 'strength'
+        : (skillType === 'inProgress' ? 'in_progress' : 'goals');
       const skillToUpdate = personSkills.find(
         (s) => s.skillTagName === skill.skillTagName && s.skillType === apiSkillType
       );

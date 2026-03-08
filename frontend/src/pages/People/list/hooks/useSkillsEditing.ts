@@ -20,11 +20,11 @@ export interface UseSkillsEditingApi {
 
 export interface SkillsGroups {
   strengths: PersonSkill[];
-  development: PersonSkill[];
-  learning: PersonSkill[];
+  inProgress: PersonSkill[];
+  goals: PersonSkill[];
 }
 
-export function useSkillsEditing(initial: SkillsGroups = { strengths: [], development: [], learning: [] }): UseSkillsEditingApi {
+export function useSkillsEditing(initial: SkillsGroups = { strengths: [], inProgress: [], goals: [] }): UseSkillsEditingApi {
   const [skillsData, setSkillsData] = useState<SkillsGroups>(initial);
   const [editingSkills, setEditingSkills] = useState(false);
   const [editingProficiencyKey, setEditingProficiencyKey] = useState<string | null>(null);

@@ -11,7 +11,7 @@ import { skillTagsApi } from '@/services/api';
 interface SkillsAutocompleteProps {
   selectedSkills: PersonSkill[];
   onSkillsChange: (skills: PersonSkill[]) => void;
-  skillType?: 'strength' | 'development' | 'learning' | 'all';
+  skillType?: 'strength' | 'in_progress' | 'goals' | 'all';
   placeholder?: string;
   className?: string;
 }
@@ -171,8 +171,8 @@ const SkillsAutocomplete: React.FC<SkillsAutocompleteProps> = ({
   const getSkillTypeColor = (type: string) => {
     switch (type) {
       case 'strength': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-      case 'development': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      case 'learning': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'in_progress': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+      case 'goals': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
       default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
   };

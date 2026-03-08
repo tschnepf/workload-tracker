@@ -31,7 +31,7 @@ const skillTagsPayload = {
 const personSkillsPayload = {
   results: [
     { id: 401, person: 201, skillTagName: 'Revit', skillType: 'strength' },
-    { id: 402, person: 201, skillTagName: 'BIM', skillType: 'development' },
+    { id: 402, person: 201, skillTagName: 'BIM', skillType: 'in_progress' },
   ],
 };
 

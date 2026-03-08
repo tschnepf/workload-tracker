@@ -21,12 +21,12 @@ const strength: PersonSkill = {
   notes: 'Needs help determining xyz',
 };
 
-const development: PersonSkill = {
+const inProgress: PersonSkill = {
   id: 12,
   person: 1,
   skillTagId: 91,
   skillTagName: 'Power Modeling',
-  skillType: 'development',
+  skillType: 'in_progress',
   proficiencyLevel: 'beginner',
   notes: '',
 };
@@ -44,7 +44,7 @@ describe('PersonSkillDetailPanel', () => {
     render(
       <PersonSkillDetailPanel
         person={person}
-        groupedSkills={{ strengths: [strength], development: [development], learning: [] }}
+        groupedSkills={{ strengths: [strength], inProgress: [inProgress], goals: [] }}
         getDraftForSkill={(skill) => ({
           skillType: skill.skillType,
           proficiencyLevel: skill.proficiencyLevel,
@@ -68,8 +68,8 @@ describe('PersonSkillDetailPanel', () => {
 
     expect(screen.getByText('Alex')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Strengths' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Development' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Learning' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'In Progress' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Goals' })).toBeInTheDocument();
     expect(screen.getByText('Heat Calc Support')).toBeInTheDocument();
     expect(screen.getByText('Power Modeling')).toBeInTheDocument();
   });
@@ -83,7 +83,7 @@ describe('PersonSkillDetailPanel', () => {
     render(
       <PersonSkillDetailPanel
         person={person}
-        groupedSkills={{ strengths: [strength], development: [], learning: [] }}
+        groupedSkills={{ strengths: [strength], inProgress: [], goals: [] }}
         getDraftForSkill={(skill) => ({
           skillType: skill.skillType,
           proficiencyLevel: skill.proficiencyLevel,
@@ -130,7 +130,7 @@ describe('PersonSkillDetailPanel', () => {
     render(
       <PersonSkillDetailPanel
         person={person}
-        groupedSkills={{ strengths: [strength], development: [development], learning: [] }}
+        groupedSkills={{ strengths: [strength], inProgress: [inProgress], goals: [] }}
         getDraftForSkill={(skill) => ({
           skillType: skill.skillType,
           proficiencyLevel: skill.proficiencyLevel,
@@ -153,10 +153,10 @@ describe('PersonSkillDetailPanel', () => {
     );
 
     fireEvent.dragStart(screen.getByTestId('skill-row-11'));
-    fireEvent.dragOver(screen.getByTestId('skill-section-development'));
-    fireEvent.drop(screen.getByTestId('skill-section-development'));
+    fireEvent.dragOver(screen.getByTestId('skill-section-in_progress'));
+    fireEvent.drop(screen.getByTestId('skill-section-in_progress'));
 
-    expect(onSkillDraftChange).toHaveBeenCalledWith(strength, { skillType: 'development' });
+    expect(onSkillDraftChange).toHaveBeenCalledWith(strength, { skillType: 'in_progress' });
     expect(onSkillDraftBlur).toHaveBeenCalledWith(11);
   });
 
@@ -164,7 +164,7 @@ describe('PersonSkillDetailPanel', () => {
     render(
       <PersonSkillDetailPanel
         person={null}
-        groupedSkills={{ strengths: [], development: [], learning: [] }}
+        groupedSkills={{ strengths: [], inProgress: [], goals: [] }}
         getDraftForSkill={() => ({ skillType: 'strength', proficiencyLevel: 'beginner', notes: '' })}
         getSaveStateForSkill={() => 'idle'}
         getErrorForSkill={() => undefined}

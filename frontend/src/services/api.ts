@@ -2259,15 +2259,15 @@ export const personSkillsApi = {
   summary: (personId: number) =>
     fetchApiCached<{
       strengths: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
-      development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
-      learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+      inProgress: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+      goals: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
     }>(`/skills/person-skills/summary/?person=${personId}`),
 
   bulkAssign: async (payload: {
     operation: 'assign' | 'unassign';
     personIds: number[];
     skillTagIds: number[];
-    skillType?: 'strength' | 'development' | 'learning';
+    skillType?: 'strength' | 'in_progress' | 'goals';
     proficiencyLevel?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   }) => {
     const res = await apiClient.POST('/skills/person-skills/bulk_assign/' as any, {
@@ -2542,8 +2542,8 @@ export type UiPeoplePageSnapshotResponse = {
   people?: PaginatedResponse<Person>;
   selectedPersonSkills?: {
     strengths: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
-    development: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
-    learning: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+    inProgress: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
+    goals: Array<{ skillTagName: string; skillType: string; proficiencyLevel: string }>;
   };
   truncated?: Record<string, unknown>;
 };
