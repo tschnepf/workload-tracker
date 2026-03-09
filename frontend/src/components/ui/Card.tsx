@@ -5,7 +5,7 @@
 
 import React from 'react';
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   title?: string;
@@ -23,6 +23,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(({
   variant = 'default',
   elevation = 'sm',
   padding = 'lg',
+  ...rest
 }, ref) => {
   const variantMap = {
     default: 'bg-[var(--color-surface-elevated)] border-[var(--color-border)]',
@@ -48,6 +49,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(({
       ref={ref}
       className={`rounded-[var(--radius-lg)] border ${variantMap[variant]} ${elevationMap[elevation]} ${paddingMap[padding]} ${className}`}
       onClick={onClick}
+      {...rest}
     >
       {title && (
         <h3 className="mb-4 text-lg font-semibold text-[var(--color-text-primary)]">

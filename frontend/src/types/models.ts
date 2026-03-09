@@ -129,6 +129,42 @@ export interface Department {
   updatedAt?: string;
 }
 
+export interface ReportingGroup {
+  id: number;
+  name: string;
+  managerId?: number | null;
+  card: {
+    x: number;
+    y: number;
+  };
+  memberIds: number[];
+  sortOrder: number;
+  updatedAt?: string | null;
+}
+
+export interface OrgChartWorkspace {
+  featureEnabled: boolean;
+  canEdit: boolean;
+  workspaceVersion: number;
+  departmentCard: {
+    x: number;
+    y: number;
+  };
+  groups: ReportingGroup[];
+  people: Array<{
+    id: number;
+    name: string;
+    roleName?: string | null;
+    departmentId?: number | null;
+  }>;
+  unassignedPersonIds: number[];
+}
+
+export interface FeatureSettings {
+  reportingGroupsEnabled: boolean;
+  updatedAt?: string;
+}
+
 export interface Vertical {
   id?: number;
   name: string;

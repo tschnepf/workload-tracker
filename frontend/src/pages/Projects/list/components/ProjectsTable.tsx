@@ -971,7 +971,7 @@ const ProjectsTable: React.FC<Props> = ({
   }, [projectQaAssignments, qaOverrides.size]);
 
   const nonVirtualBody = (
-    <div ref={parentRef} className="overflow-y-auto h-full pb-12 scrollbar-theme">
+    <div ref={parentRef} className="overflow-y-auto overscroll-contain h-full pb-12 scrollbar-theme">
       {projects.map((project, index) => {
         const prev = index > 0 ? projects[index - 1] : null;
         const sameClientAsPrev = groupClients && prev && (prev.client || '') === (project.client || '');
@@ -1340,7 +1340,7 @@ const ProjectsTable: React.FC<Props> = ({
   );
 
   const virtualBody = (
-    <div ref={parentRef} className="overflow-y-auto h-full relative pb-12 scrollbar-theme">
+    <div ref={parentRef} className="overflow-y-auto overscroll-contain h-full relative pb-12 scrollbar-theme">
       <div style={{ height: totalSize, position: 'relative' }}>
         {items.map((v) => {
           const project = projects[v.index];

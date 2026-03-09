@@ -30,6 +30,7 @@ from .serializers import (
     WebPushVapidKeysStatusSerializer,
     WebPushVapidKeysGenerateSerializer,
     NetworkGraphSettingsSerializer,
+    FeatureToggleSettingsSerializer,
     ProjectVisibilitySettingsSerializer,
     ProjectVisibilitySettingsUpdateSerializer,
     TaskProgressColorSettingsSerializer,
@@ -48,6 +49,7 @@ from .models import (
     NotificationTemplate,
     TaskProgressColorSettings,
     NetworkGraphSettings,
+    FeatureToggleSettings,
     ProjectVisibilitySettings,
     AutoHoursRoleSetting,
     AutoHoursGlobalSettings,
@@ -128,6 +130,9 @@ def _build_capabilities_payload():
             'aggregateTtlSeconds': int(os.getenv('AGGREGATE_CACHE_TTL', '30')),
         },
         'personalDashboard': True,
+        'features': {
+            'reportingGroupsEnabled': False,
+        },
         'pwa': {
             'enabled': bool(getattr(settings, 'PWA_ENABLED', True)),
             'pushEnabled': push_enabled,
@@ -145,6 +150,12 @@ def _build_capabilities_payload():
         caps['integrations'] = {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}
     except Exception:
         caps['integrations'] = {'enabled': False}
+    try:
+        kill_switch = bool(getattr(settings, 'REPORTING_GROUPS_SYSTEM_ENABLED', True))
+        toggle_enabled = bool(FeatureToggleSettings.get_active().reporting_groups_enabled)
+        caps['features']['reportingGroupsEnabled'] = bool(kill_switch and toggle_enabled)
+    except Exception:
+        caps['features']['reportingGroupsEnabled'] = False
     return caps
 
 
@@ -1044,6 +1055,7 @@ class SettingsPageSnapshotView(APIView):
         {'id': 'admin-users', 'title': 'Create User & Admin Users', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'utilization-scheme', 'title': 'Utilization Hours and Color Scheme', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'network-graph-settings', 'title': 'Network Graph Analytics', 'requires_admin': True, 'allow_manager': True, 'integrations_only': False},
+        {'id': 'features', 'title': 'Features', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'deliverable-phase-mapping', 'title': 'Deliverable Phase Mapping', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'backup-restore', 'title': 'Backup & Restore', 'requires_admin': True, 'allow_manager': False, 'integrations_only': False},
         {'id': 'integrations', 'title': 'Integrations Hub', 'requires_admin': True, 'allow_manager': False, 'integrations_only': True},
@@ -1100,6 +1112,11 @@ class SettingsPageSnapshotView(APIView):
                 return {'webPushSettings': None, 'webPushVapidKeys': None}
         if section_id == 'integrations':
             return {'integrations': {'enabled': bool(getattr(settings, 'INTEGRATIONS_ENABLED', False))}}
+        if section_id == 'features':
+            try:
+                return {'featureSettings': FeatureToggleSettingsSerializer(FeatureToggleSettings.get_active()).data}
+            except Exception:
+                return {'featureSettings': {'reportingGroupsEnabled': False}}
         return {}
 
     @extend_schema(
@@ -1157,6 +1174,23 @@ class SettingsPageSnapshotView(APIView):
             except Exception:
                 pass
         return Response(payload)
+
+
+class FeatureToggleSettingsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @extend_schema(responses=FeatureToggleSettingsSerializer)
+    def get(self, request):
+        obj = FeatureToggleSettings.get_active()
+        return Response(FeatureToggleSettingsSerializer(obj).data)
+
+    @extend_schema(request=FeatureToggleSettingsSerializer, responses=FeatureToggleSettingsSerializer)
+    def put(self, request):
+        obj = FeatureToggleSettings.get_active()
+        serializer = FeatureToggleSettingsSerializer(instance=obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(FeatureToggleSettingsSerializer(obj).data)
 
 
 class PreDeliverableGlobalSettingsView(APIView):

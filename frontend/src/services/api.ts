@@ -44,6 +44,9 @@ import {
   NetworkGraphResponse,
   NetworkGraphBootstrapResponse,
   NetworkGraphDefaults,
+  FeatureSettings,
+  OrgChartWorkspace,
+  ReportingGroup,
 } from '@/types/models';
 import type { BackupAutomationSettings, BackupListResponse, BackupStatus } from '@/types/backup';
 import { getAccessToken } from '@/utils/auth';
@@ -111,6 +114,9 @@ export type SystemCapabilities = {
     enabled: boolean;
     providers?: Array<{ key: string; displayName: string }>;
     details?: Record<string, unknown>;
+  };
+  features?: {
+    reportingGroupsEnabled: boolean;
   };
 };
 
@@ -939,6 +945,102 @@ export const networkGraphSettingsApi = {
       throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
     }
     return res.data as unknown as NetworkGraphSettings;
+  },
+};
+
+export const featureSettingsApi = {
+  get: async (): Promise<FeatureSettings> => {
+    const res = await apiClient.GET('/core/feature_settings/' as any, { headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as FeatureSettings;
+  },
+  update: async (payload: Pick<FeatureSettings, 'reportingGroupsEnabled'>): Promise<FeatureSettings> => {
+    const res = await apiClient.PUT('/core/feature_settings/' as any, { body: payload as any, headers: authHeaders() });
+    if (!res.data) {
+      const status = res.response?.status ?? 500;
+      throw new ApiError(friendlyErrorMessage(status, null, `HTTP ${status}`), status);
+    }
+    return res.data as unknown as FeatureSettings;
+  },
+};
+
+export type ReportingGroupCreatePayload = {
+  name?: string;
+  managerId?: number | null;
+  x?: number;
+  y?: number;
+};
+
+export type ReportingGroupUpdatePayload = {
+  name?: string;
+  managerId?: number | null;
+  x?: number;
+  y?: number;
+  sortOrder?: number;
+};
+
+export type ReportingGroupLayoutPayload = {
+  workspaceVersion: number;
+  departmentCard: {
+    x: number;
+    y: number;
+  };
+  groups: Array<{
+    id: number;
+    x: number;
+    y: number;
+    managerId?: number | null;
+    memberIds?: number[];
+    sortOrder?: number;
+  }>;
+};
+
+export const orgChartWorkspaceApi = {
+  get: async (departmentId: number): Promise<OrgChartWorkspace> => {
+    return fetchApi<OrgChartWorkspace>(`/departments/${departmentId}/org-chart-workspace/`);
+  },
+};
+
+export const reportingGroupsApi = {
+  create: async (
+    departmentId: number,
+    payload?: ReportingGroupCreatePayload,
+  ): Promise<{ group: ReportingGroup; workspaceVersion: number }> => {
+    return fetchApi<{ group: ReportingGroup; workspaceVersion: number }>(
+      `/departments/${departmentId}/reporting-groups/`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      },
+    );
+  },
+  update: async (
+    departmentId: number,
+    groupId: number,
+    payload: ReportingGroupUpdatePayload,
+  ): Promise<{ group: ReportingGroup; workspaceVersion: number }> => {
+    return fetchApi<{ group: ReportingGroup; workspaceVersion: number }>(
+      `/departments/${departmentId}/reporting-groups/${groupId}/`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+  remove: async (departmentId: number, groupId: number): Promise<{ workspaceVersion: number }> => {
+    return fetchApi<{ workspaceVersion: number }>(
+      `/departments/${departmentId}/reporting-groups/${groupId}/`,
+      { method: 'DELETE' },
+    );
+  },
+  saveLayout: async (departmentId: number, payload: ReportingGroupLayoutPayload): Promise<OrgChartWorkspace> => {
+    return fetchApi<OrgChartWorkspace>(`/departments/${departmentId}/reporting-groups/layout/`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
   },
 };
 

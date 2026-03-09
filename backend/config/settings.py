@@ -287,6 +287,10 @@ FEATURES.update({
     'WEEK_KEYS_TRANSITION_READ_BOTH': os.getenv('WEEK_KEYS_TRANSITION_READ_BOTH', 'true').lower() == 'true',
 })
 
+# Org chart reporting groups runtime kill-switch.
+# Effective runtime availability is: REPORTING_GROUPS_SYSTEM_ENABLED && FeatureToggleSettings.reporting_groups_enabled
+REPORTING_GROUPS_SYSTEM_ENABLED = os.getenv('REPORTING_GROUPS_SYSTEM_ENABLED', 'true').lower() == 'true'
+
 # PWA / Web Push rollout flags
 PWA_ENABLED = os.getenv('PWA_ENABLED', 'true').lower() == 'true'
 # Bootstrap default for WebPushGlobalSettings.get_active().

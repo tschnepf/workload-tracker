@@ -15,6 +15,7 @@ const defaultCaps: Capabilities = {
   cache: { shortTtlAggregates: false, aggregateTtlSeconds: 30 },
   projectRolesByDepartment: false,
   integrations: { enabled: false },
+  features: { reportingGroupsEnabled: false },
   personalDashboard: true,
 };
 
@@ -31,6 +32,7 @@ export function useCapabilities(options?: { enabled?: boolean }) {
       aggregates: { ...defaultCaps.aggregates, ...(data?.aggregates || {}) },
       cache: { ...defaultCaps.cache, ...(data?.cache || {}) },
       integrations: { ...defaultCaps.integrations, ...(data?.integrations || {}) },
+      features: { ...defaultCaps.features, ...(data?.features || {}) },
     }),
   });
 }

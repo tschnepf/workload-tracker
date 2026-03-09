@@ -119,3 +119,58 @@ class DepartmentSerializer(serializers.ModelSerializer):
                 })
 
         return data
+
+
+class ReportingGroupCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    managerId = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    x = serializers.IntegerField(required=False)
+    y = serializers.IntegerField(required=False)
+
+
+class ReportingGroupUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=False, max_length=120)
+    managerId = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    x = serializers.IntegerField(required=False)
+    y = serializers.IntegerField(required=False)
+    sortOrder = serializers.IntegerField(required=False)
+
+
+class ReportingGroupLayoutItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(min_value=1)
+    x = serializers.IntegerField()
+    y = serializers.IntegerField()
+    managerId = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    memberIds = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+    )
+    sortOrder = serializers.IntegerField(required=False)
+
+
+class ReportingGroupLayoutSaveSerializer(serializers.Serializer):
+    workspaceVersion = serializers.IntegerField(min_value=1)
+    departmentCard = serializers.DictField()
+    groups = ReportingGroupLayoutItemSerializer(many=True)
+
+    def validate_departmentCard(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('departmentCard must be an object')
+        if 'x' not in value or 'y' not in value:
+            raise serializers.ValidationError('departmentCard must include x and y')
+        try:
+            int(value.get('x'))
+            int(value.get('y'))
+        except Exception:
+            raise serializers.ValidationError('departmentCard coordinates must be integers')
+        return {'x': int(value['x']), 'y': int(value['y'])}
+
+
+class ReportingGroupWorkspaceSerializer(serializers.Serializer):
+    featureEnabled = serializers.BooleanField()
+    canEdit = serializers.BooleanField()
+    workspaceVersion = serializers.IntegerField()
+    departmentCard = serializers.DictField()
+    groups = serializers.ListField()
+    people = serializers.ListField()
+    unassignedPersonIds = serializers.ListField(child=serializers.IntegerField())

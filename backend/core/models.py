@@ -1265,3 +1265,26 @@ class JobAccessRecord(models.Model):
         if self.pk:
             raise ValidationError('JobAccessRecord is immutable once created')
         super().save(*args, **kwargs)
+
+
+class FeatureToggleSettings(models.Model):
+    """Singleton runtime feature toggles managed from Settings UI."""
+
+    key = models.CharField(max_length=20, default='default', unique=True)
+    reporting_groups_enabled = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Feature Toggle Settings'
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"FeatureToggleSettings({self.key})"
+
+    @classmethod
+    def get_active(cls):
+        obj, _ = cls.objects.get_or_create(
+            key='default',
+            defaults={'reporting_groups_enabled': False},
+        )
+        return obj

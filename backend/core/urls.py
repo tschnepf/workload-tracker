@@ -19,6 +19,7 @@ from .views import (
     NetworkGraphSettingsView,
     ProjectVisibilitySettingsView,
     TaskProgressColorSettingsView,
+    FeatureToggleSettingsView,
 )
 
 urlpatterns = [
@@ -41,4 +42,5 @@ urlpatterns = [
     path('network_graph_settings/', NetworkGraphSettingsView.as_view(), name='network_graph_settings'),
     path('settings/project-visibility/', ProjectVisibilitySettingsView.as_view(), name='project_visibility_settings'),
     path('task_progress_colors/', TaskProgressColorSettingsView.as_view(), name='task_progress_colors'),
+    path('feature_settings/', FeatureToggleSettingsView.as_view(), name='feature_settings'),
 ]

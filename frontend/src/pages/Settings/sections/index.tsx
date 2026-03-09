@@ -17,6 +17,7 @@ import DeliverableTaskTemplatesSection, { DELIVERABLE_TASK_TEMPLATES_SECTION_ID 
 import NetworkGraphSection, { NETWORK_GRAPH_SECTION_ID } from './NetworkGraphSection';
 import GeneralSettingsSection, { GENERAL_SETTINGS_SECTION_ID } from './GeneralSettingsSection';
 import LogsSection, { LOGS_SECTION_ID } from './LogsSection';
+import FeaturesSection, { FEATURES_SECTION_ID } from './FeaturesSection';
 
 export type SettingsSectionDefinition = {
   id: string;
@@ -124,6 +125,13 @@ export const settingsSections: SettingsSectionDefinition[] = [
     requiresAdmin: true,
     group: 'admin',
     component: GeneralSettingsSection,
+  },
+  {
+    id: FEATURES_SECTION_ID,
+    title: 'Features',
+    requiresAdmin: true,
+    group: 'admin',
+    component: FeaturesSection,
   },
   {
     id: BACKUP_RESTORE_SECTION_ID,

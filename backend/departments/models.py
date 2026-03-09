@@ -104,3 +104,146 @@ class Department(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class DepartmentOrgChartLayout(models.Model):
+    """Shared org chart workspace state for a department."""
+
+    department = models.OneToOneField(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='org_chart_layout',
+    )
+    department_card_x = models.IntegerField(default=64)
+    department_card_y = models.IntegerField(default=48)
+    workspace_version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Department Org Chart Layout'
+
+    @classmethod
+    def get_or_create_for_department(cls, department: Department):
+        obj, _ = cls.objects.get_or_create(
+            department=department,
+            defaults={
+                'department_card_x': 64,
+                'department_card_y': 48,
+                'workspace_version': 1,
+            },
+        )
+        return obj
+
+    def bump_workspace_version(self):
+        self.workspace_version = int(self.workspace_version or 0) + 1
+        self.save(update_fields=['workspace_version', 'updated_at'])
+
+    def __str__(self):
+        return f"DepartmentOrgChartLayout(department={self.department_id})"
+
+
+class DepartmentReportingGroup(models.Model):
+    """Reporting group under a department for org-chart workspace."""
+
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='reporting_groups',
+    )
+    name = models.CharField(max_length=120, default='New Reporting Group')
+    manager = models.ForeignKey(
+        'people.Person',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='managed_reporting_groups',
+    )
+    card_x = models.IntegerField(default=64)
+    card_y = models.IntegerField(default=240)
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['department', 'is_active', 'sort_order'], name='dept_rgroup_scope_idx'),
+            models.Index(fields=['department', 'manager'], name='dept_rgroup_manager_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['department', 'manager'],
+                condition=models.Q(manager__isnull=False, is_active=True),
+                name='uniq_active_reporting_group_manager_per_department',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.manager_id is None:
+            return
+        if self.manager is None:
+            return
+        if not self.manager.department_id:
+            raise ValidationError("Reporting group manager must belong to a department.")
+        if self.department_id and self.manager.department_id != self.department_id:
+            raise ValidationError("Reporting group manager must belong to the same department.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.department_id}:{self.name}"
+
+
+class DepartmentReportingGroupMember(models.Model):
+    """Department-scoped membership in a reporting group (single group per department)."""
+
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='reporting_group_memberships',
+    )
+    reporting_group = models.ForeignKey(
+        DepartmentReportingGroup,
+        on_delete=models.CASCADE,
+        related_name='memberships',
+    )
+    person = models.ForeignKey(
+        'people.Person',
+        on_delete=models.CASCADE,
+        related_name='reporting_group_memberships',
+    )
+    sort_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['reporting_group', 'sort_order'], name='rgroup_member_order_idx'),
+            models.Index(fields=['department', 'person'], name='dept_rgroup_person_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['reporting_group', 'person'], name='uniq_reporting_group_person'),
+            models.UniqueConstraint(fields=['department', 'person'], name='uniq_department_reporting_group_person'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.reporting_group_id and self.department_id:
+            if self.reporting_group.department_id != self.department_id:
+                raise ValidationError("Reporting group membership department mismatch.")
+        if self.person_id and self.department_id:
+            if self.person.department_id != self.department_id:
+                raise ValidationError("Reporting group member must belong to the same department.")
+        if self.reporting_group_id and self.person_id:
+            if self.reporting_group.manager_id == self.person_id:
+                raise ValidationError("A reporting group manager cannot also be listed as a member.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"group={self.reporting_group_id}, person={self.person_id}"

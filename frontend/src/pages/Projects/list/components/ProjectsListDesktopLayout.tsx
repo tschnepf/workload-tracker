@@ -6,7 +6,7 @@ type Props = {
 };
 
 const ProjectsListDesktopLayout: React.FC<Props> = ({ children, className }) => (
-  <div className={className || 'relative flex-1 min-h-0 min-w-0'}>
+  <div className={className || 'relative flex-1 h-full min-h-0 min-w-0 overflow-hidden'}>
     {children}
   </div>
 );

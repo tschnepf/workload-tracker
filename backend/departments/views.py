@@ -4,13 +4,26 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
-from django.db import connection
+from django.db import connection, transaction
+from django.shortcuts import get_object_or_404
 from functools import lru_cache
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from .models import Department
-from .serializers import DepartmentSerializer
+from accounts.permissions import IsAdminOrManager, is_admin_or_manager
+from .models import (
+    Department,
+    DepartmentOrgChartLayout,
+    DepartmentReportingGroup,
+    DepartmentReportingGroupMember,
+)
+from .serializers import (
+    DepartmentSerializer,
+    ReportingGroupCreateSerializer,
+    ReportingGroupUpdateSerializer,
+    ReportingGroupLayoutSaveSerializer,
+)
+from .reporting_groups_service import build_workspace_payload, reporting_groups_feature_enabled
 from people.models import Person
 from people.serializers import PersonSerializer
 from core.cache_keys import build_aggregate_cache_key
@@ -309,3 +322,336 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         
         # Use default pagination
         return super().list(request, *args, **kwargs)
+
+
+def _serialize_reporting_group(group: DepartmentReportingGroup) -> dict:
+    return {
+        'id': int(group.id),
+        'name': group.name,
+        'managerId': int(group.manager_id) if group.manager_id else None,
+        'card': {'x': int(group.card_x), 'y': int(group.card_y)},
+        'memberIds': list(
+            DepartmentReportingGroupMember.objects.filter(reporting_group=group)
+            .order_by('sort_order', 'id')
+            .values_list('person_id', flat=True)
+        ),
+        'sortOrder': int(group.sort_order or 0),
+        'updatedAt': group.updated_at.isoformat() if group.updated_at else None,
+    }
+
+
+def _active_department_or_404(department_id: int) -> Department:
+    return get_object_or_404(Department.objects.filter(is_active=True), pk=department_id)
+
+
+def _validate_manager_candidate(*, department: Department, manager_id: int | None, group_id: int | None = None) -> Person | None:
+    if manager_id is None:
+        return None
+    manager = Person.objects.filter(id=manager_id, is_active=True, department=department).first()
+    if not manager:
+        raise ValueError('Manager must be an active person in the selected department.')
+    existing_manager = DepartmentReportingGroup.objects.filter(
+        department=department,
+        is_active=True,
+        manager_id=manager_id,
+    )
+    if group_id is not None:
+        existing_manager = existing_manager.exclude(id=group_id)
+    if existing_manager.exists():
+        raise ValueError('This person already manages another reporting group in the department.')
+    existing_membership = DepartmentReportingGroupMember.objects.filter(
+        department=department,
+        person_id=manager_id,
+        reporting_group__is_active=True,
+    )
+    if group_id is not None:
+        existing_membership = existing_membership.exclude(reporting_group_id=group_id)
+    if existing_membership.exists():
+        raise ValueError('A manager cannot also be assigned as a member in a different reporting group.')
+    return manager
+
+
+class DepartmentOrgChartWorkspaceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department_id: int):
+        if not reporting_groups_feature_enabled():
+            return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        department = _active_department_or_404(department_id)
+        payload = build_workspace_payload(
+            department,
+            can_edit=is_admin_or_manager(getattr(request, 'user', None)),
+        )
+        return Response(payload)
+
+
+class DepartmentReportingGroupCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    def post(self, request, department_id: int):
+        if not reporting_groups_feature_enabled():
+            return Response({'detail': 'Reporting groups are disabled'}, status=status.HTTP_403_FORBIDDEN)
+        department = _active_department_or_404(department_id)
+        serializer = ReportingGroupCreateSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        manager_id = data.get('managerId')
+        try:
+            manager = _validate_manager_candidate(
+                department=department,
+                manager_id=manager_id,
+                group_id=None,
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        active_count = DepartmentReportingGroup.objects.filter(department=department, is_active=True).count()
+        max_sort = (
+            DepartmentReportingGroup.objects.filter(department=department, is_active=True)
+            .order_by('-sort_order')
+            .values_list('sort_order', flat=True)
+            .first()
+        )
+        sort_order = int(max_sort or 0) + 10
+        group = DepartmentReportingGroup.objects.create(
+            department=department,
+            name=(data.get('name') or '').strip() or 'New Reporting Group',
+            manager=manager,
+            card_x=int(data.get('x', 64 + (active_count * 260))),
+            card_y=int(data.get('y', 240)),
+            sort_order=sort_order,
+            is_active=True,
+        )
+        if manager_id is not None:
+            DepartmentReportingGroupMember.objects.filter(
+                department=department,
+                person_id=manager_id,
+            ).delete()
+        layout = DepartmentOrgChartLayout.get_or_create_for_department(department)
+        layout.bump_workspace_version()
+        return Response(
+            {
+                'group': _serialize_reporting_group(group),
+                'workspaceVersion': int(layout.workspace_version or 1),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DepartmentReportingGroupDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    def patch(self, request, department_id: int, group_id: int):
+        if not reporting_groups_feature_enabled():
+            return Response({'detail': 'Reporting groups are disabled'}, status=status.HTTP_403_FORBIDDEN)
+        department = _active_department_or_404(department_id)
+        group = get_object_or_404(
+            DepartmentReportingGroup.objects.filter(
+                department=department,
+                is_active=True,
+            ),
+            pk=group_id,
+        )
+        serializer = ReportingGroupUpdateSerializer(data=request.data or {}, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        manager_updated = False
+        if 'managerId' in data:
+            manager_updated = True
+            try:
+                manager = _validate_manager_candidate(
+                    department=department,
+                    manager_id=data.get('managerId'),
+                    group_id=group.id,
+                )
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            group.manager = manager
+        if 'name' in data:
+            group.name = (data.get('name') or '').strip() or group.name
+        if 'x' in data:
+            group.card_x = int(data['x'])
+        if 'y' in data:
+            group.card_y = int(data['y'])
+        if 'sortOrder' in data:
+            group.sort_order = int(data['sortOrder'])
+        group.save()
+
+        if manager_updated and group.manager_id:
+            DepartmentReportingGroupMember.objects.filter(
+                department=department,
+                person_id=group.manager_id,
+            ).delete()
+
+        layout = DepartmentOrgChartLayout.get_or_create_for_department(department)
+        layout.bump_workspace_version()
+        return Response(
+            {
+                'group': _serialize_reporting_group(group),
+                'workspaceVersion': int(layout.workspace_version or 1),
+            }
+        )
+
+    def delete(self, request, department_id: int, group_id: int):
+        if not reporting_groups_feature_enabled():
+            return Response({'detail': 'Reporting groups are disabled'}, status=status.HTTP_403_FORBIDDEN)
+        department = _active_department_or_404(department_id)
+        group = get_object_or_404(
+            DepartmentReportingGroup.objects.filter(
+                department=department,
+                is_active=True,
+            ),
+            pk=group_id,
+        )
+        with transaction.atomic():
+            group.is_active = False
+            group.save(update_fields=['is_active', 'updated_at'])
+            DepartmentReportingGroupMember.objects.filter(
+                department=department,
+                reporting_group=group,
+            ).delete()
+            layout = DepartmentOrgChartLayout.get_or_create_for_department(department)
+            layout.bump_workspace_version()
+        return Response({'workspaceVersion': int(layout.workspace_version or 1)})
+
+
+class DepartmentReportingGroupLayoutView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    def put(self, request, department_id: int):
+        if not reporting_groups_feature_enabled():
+            return Response({'detail': 'Reporting groups are disabled'}, status=status.HTTP_403_FORBIDDEN)
+        department = _active_department_or_404(department_id)
+        layout = DepartmentOrgChartLayout.get_or_create_for_department(department)
+        serializer = ReportingGroupLayoutSaveSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        incoming_version = int(data['workspaceVersion'])
+        if incoming_version != int(layout.workspace_version or 1):
+            payload = build_workspace_payload(department, can_edit=True)
+            return Response(
+                {'detail': 'workspace version conflict', 'code': 'workspace_version_conflict', 'workspace': payload},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        items = data.get('groups') or []
+        active_groups = list(
+            DepartmentReportingGroup.objects.filter(department=department, is_active=True).order_by('sort_order', 'id')
+        )
+        active_group_ids = {int(group.id) for group in active_groups}
+        incoming_group_ids = {int(item['id']) for item in items}
+        if incoming_group_ids != active_group_ids:
+            return Response(
+                {'error': 'groups payload must include all active reporting groups exactly once'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        group_by_id = {int(group.id): group for group in active_groups}
+        manager_ids: set[int] = set()
+        incoming_members_per_group: dict[int, list[int]] = {}
+
+        for item in items:
+            group_id = int(item['id'])
+            manager_id = item.get('managerId')
+            if manager_id is not None:
+                manager = Person.objects.filter(
+                    id=int(manager_id),
+                    department=department,
+                    is_active=True,
+                ).first()
+                if not manager:
+                    return Response(
+                        {'error': f'invalid managerId for group {group_id}'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if int(manager_id) in manager_ids:
+                    return Response(
+                        {'error': 'a manager may only lead one reporting group per department'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                manager_ids.add(int(manager_id))
+
+            member_ids_raw = item.get('memberIds') or []
+            member_ids: list[int] = []
+            seen_member_ids: set[int] = set()
+            for raw_id in member_ids_raw:
+                pid = int(raw_id)
+                if pid in seen_member_ids:
+                    continue
+                seen_member_ids.add(pid)
+                member_ids.append(pid)
+            incoming_members_per_group[group_id] = member_ids
+
+        all_member_ids = [pid for member_ids in incoming_members_per_group.values() for pid in member_ids]
+        if len(set(all_member_ids)) != len(all_member_ids):
+            return Response(
+                {'error': 'a person can belong to only one reporting group per department'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        manager_member_overlap = set(all_member_ids).intersection(manager_ids)
+        if manager_member_overlap:
+            return Response(
+                {'error': 'a reporting group manager cannot also be listed as a member'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if all_member_ids:
+            valid_people = set(
+                Person.objects.filter(
+                    id__in=all_member_ids,
+                    department=department,
+                    is_active=True,
+                ).values_list('id', flat=True)
+            )
+            invalid_people = sorted(pid for pid in all_member_ids if pid not in valid_people)
+            if invalid_people:
+                return Response(
+                    {'error': f'invalid memberIds: {invalid_people[:10]}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        with transaction.atomic():
+            dept_card = data.get('departmentCard') or {}
+            layout.department_card_x = int(dept_card.get('x', layout.department_card_x))
+            layout.department_card_y = int(dept_card.get('y', layout.department_card_y))
+
+            for item in items:
+                group_id = int(item['id'])
+                group = group_by_id[group_id]
+                group.card_x = int(item['x'])
+                group.card_y = int(item['y'])
+                if 'sortOrder' in item:
+                    group.sort_order = int(item['sortOrder'])
+                if 'managerId' in item:
+                    manager_id = item.get('managerId')
+                    group.manager_id = int(manager_id) if manager_id is not None else None
+                group.save()
+
+            DepartmentReportingGroupMember.objects.filter(
+                department=department,
+                reporting_group_id__in=active_group_ids,
+            ).delete()
+            new_memberships: list[DepartmentReportingGroupMember] = []
+            for item in items:
+                group_id = int(item['id'])
+                for idx, person_id in enumerate(incoming_members_per_group.get(group_id, [])):
+                    new_memberships.append(
+                        DepartmentReportingGroupMember(
+                            department=department,
+                            reporting_group_id=group_id,
+                            person_id=int(person_id),
+                            sort_order=(idx + 1) * 10,
+                        )
+                    )
+            if new_memberships:
+                DepartmentReportingGroupMember.objects.bulk_create(new_memberships)
+
+            layout.workspace_version = int(layout.workspace_version or 0) + 1
+            layout.save(update_fields=['department_card_x', 'department_card_y', 'workspace_version', 'updated_at'])
+
+        payload = build_workspace_payload(
+            department,
+            can_edit=is_admin_or_manager(getattr(request, 'user', None)),
+        )
+        return Response(payload)

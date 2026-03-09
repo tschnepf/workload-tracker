@@ -17,6 +17,7 @@ from .models import (
     CalendarFeedSettings,
     QATaskSettings,
     NetworkGraphSettings,
+    FeatureToggleSettings,
     TaskProgressColorSettings,
     WebPushGlobalSettings,
     NotificationTemplate,
@@ -638,3 +639,12 @@ class TaskProgressColorSettingsSerializer(serializers.ModelSerializer):
             if hasattr(exc, 'message_dict') and exc.message_dict.get('ranges'):
                 raise serializers.ValidationError(exc.message_dict['ranges'])
             raise serializers.ValidationError(str(exc))
+
+
+class FeatureToggleSettingsSerializer(serializers.ModelSerializer):
+    reportingGroupsEnabled = serializers.BooleanField(source='reporting_groups_enabled')
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = FeatureToggleSettings
+        fields = ['reportingGroupsEnabled', 'updatedAt']

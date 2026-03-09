@@ -18,10 +18,14 @@ import {
   getSecondaryManagersLabel,
 } from '@/utils/departmentManagers';
 import { getFlag } from '@/lib/flags';
+import { useCapabilities } from '@/hooks/useCapabilities';
+import ReportingGroupsWorkspace from '@/components/departments/ReportingGroupsWorkspace';
 
 const HierarchyView: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
   const snapshotsEnabled = getFlag('FF_MODERATE_PAGES_SNAPSHOTS', true);
+  const capsQuery = useCapabilities();
+  const reportingGroupsEnabled = Boolean(capsQuery.data?.features?.reportingGroupsEnabled);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -244,28 +248,34 @@ const HierarchyView: React.FC = () => {
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            {/* Hierarchy Visualization */}
-            <div className="xl:col-span-3">
-              <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6">
-                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-6">
-                  Organizational Chart
-                </h3>
-                <DepartmentHierarchy
-                  departments={departments}
-                  people={people}
-                  onDepartmentClick={handleDepartmentClick}
-                  selectedDepartmentId={selectedDepartment?.id}
-                />
-              </Card>
-            </div>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+              {/* Hierarchy Visualization */}
+              <div className="xl:col-span-3">
+                <Card className="bg-[var(--color-surface-elevated)] border-[var(--color-border)] p-6">
+                  <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-6">
+                    Organizational Chart
+                  </h3>
+                  <DepartmentHierarchy
+                    departments={departments}
+                    people={people}
+                    onDepartmentClick={handleDepartmentClick}
+                    selectedDepartmentId={selectedDepartment?.id}
+                  />
+                </Card>
+              </div>
 
-            {/* Department Details Panel */}
-            <div className="xl:col-span-1">
-              <div className="sticky top-6">
-                <DetailsPanel />
+              {/* Department Details Panel */}
+              <div className="xl:col-span-1">
+                <div className="sticky top-6">
+                  <DetailsPanel />
+                </div>
               </div>
             </div>
+
+            {selectedDepartment?.id && reportingGroupsEnabled ? (
+              <ReportingGroupsWorkspace department={selectedDepartment} />
+            ) : null}
           </div>
         )}
       </div>
