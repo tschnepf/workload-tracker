@@ -13,7 +13,7 @@ import { useUtilizationScheme } from '@/hooks/useUtilizationScheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { defaultUtilizationScheme, resolveUtilizationLevel, utilizationLevelToClasses } from '@/util/utilization';
 import type { Role as PeopleRole } from '@/types/models';
-import type { AutoHoursTemplate, DeliverablePhaseMappingPhase } from '@/types/models';
+import type { AutoHoursTemplate, AutoHoursTemplateMilestone, DeliverablePhaseMappingPhase } from '@/types/models';
 
 type TemplateId = number | 'global';
 
@@ -36,6 +36,41 @@ type RoleMeta = {
 
 const GROUP_STORAGE_PREFIX = 'auto-hours-template-groups:';
 const TEMPLATE_PANEL_COLLAPSED_STORAGE_KEY = 'auto-hours-template-panel-collapsed';
+const MILESTONE_KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const normalizeMilestoneKey = (value: string) => String(value || '').trim().toLowerCase();
+
+const deriveTemplateMilestones = (
+  template: AutoHoursTemplate | null,
+  phaseOptions: Array<{ value: string; label: string }>,
+  defaultWeeksCount: number
+): AutoHoursTemplateMilestone[] => {
+  if (template?.milestones && template.milestones.length > 0) {
+    return [...template.milestones]
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      .map((milestone, idx) => ({
+        key: normalizeMilestoneKey(milestone.key),
+        label: milestone.label || String(milestone.key || '').toUpperCase(),
+        weeksCount: Number.isFinite(Number(milestone.weeksCount)) ? Number(milestone.weeksCount) : defaultWeeksCount,
+        sortOrder: idx,
+        sourceType: milestone.sourceType || 'template_local',
+        ...(milestone.globalPhaseKey ? { globalPhaseKey: normalizeMilestoneKey(milestone.globalPhaseKey) } : {}),
+      }))
+      .filter((milestone) => milestone.key);
+  }
+  const phaseLabelMap = new Map(phaseOptions.map((opt) => [opt.value, opt.label]));
+  const legacyKeys = template?.phaseKeys && template.phaseKeys.length > 0
+    ? template.phaseKeys
+    : phaseOptions.map((opt) => opt.value);
+  return legacyKeys.map((key, idx) => ({
+    key: normalizeMilestoneKey(key),
+    label: phaseLabelMap.get(key) || String(key).toUpperCase(),
+    weeksCount: template?.weeksByPhase?.[key] ?? defaultWeeksCount,
+    sortOrder: idx,
+    sourceType: phaseLabelMap.has(key) ? 'global' : 'template_local',
+    ...(phaseLabelMap.has(key) ? { globalPhaseKey: key } : {}),
+  }));
+};
 
 const AutoHoursTemplatesEditor: React.FC = () => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -57,12 +92,17 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const [templates, setTemplates] = React.useState<AutoHoursTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = React.useState<boolean>(false);
   const [selectedTemplateId, setSelectedTemplateId] = React.useState<TemplateId>(GLOBAL_TEMPLATE_ID);
+  const previousSelectedTemplateIdRef = React.useRef<TemplateId | null>(null);
   const [newTemplateName, setNewTemplateName] = React.useState<string>('');
   const [templateName, setTemplateName] = React.useState<string>('');
   const [templateDescription, setTemplateDescription] = React.useState<string>('');
   const [renaming, setRenaming] = React.useState<boolean>(false);
   const [isEditingTitle, setIsEditingTitle] = React.useState<boolean>(false);
   const [isEditingDescription, setIsEditingDescription] = React.useState<boolean>(false);
+  const [isMilestoneEditMode, setIsMilestoneEditMode] = React.useState<boolean>(false);
+  const [editingMilestoneKey, setEditingMilestoneKey] = React.useState<string | null>(null);
+  const [editingMilestoneLabel, setEditingMilestoneLabel] = React.useState<string>('');
+  const [savingMilestoneLabel, setSavingMilestoneLabel] = React.useState<boolean>(false);
 
   const [allRoles, setAllRoles] = React.useState<AutoHoursRoleSetting[]>([]);
   const [peopleRoles, setPeopleRoles] = React.useState<PeopleRole[]>([]);
@@ -111,14 +151,60 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     return templates.find((t) => t.id === selectedTemplateId) || null;
   }, [selectedTemplateId, templates]);
 
+  const selectedTemplateMilestones = React.useMemo(
+    () => deriveTemplateMilestones(selectedTemplate, phaseOptions, defaultWeeksCount),
+    [defaultWeeksCount, phaseOptions, selectedTemplate]
+  );
+
+  const milestoneHeaderItems = React.useMemo(() => {
+    const activeKeys = new Set(
+      selectedTemplateMilestones
+        .map((milestone) => normalizeMilestoneKey(milestone.key))
+        .filter(Boolean)
+    );
+    if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
+      return phaseOptions.map((opt, idx) => ({
+        key: normalizeMilestoneKey(opt.value),
+        label: opt.label || opt.value.toUpperCase(),
+        sortOrder: idx,
+        isEnabled: true,
+      }));
+    }
+    const globalItems = phaseOptions.map((opt, idx) => {
+      const key = normalizeMilestoneKey(opt.value);
+      return {
+        key,
+        label: opt.label || opt.value.toUpperCase(),
+        sortOrder: idx,
+        isEnabled: activeKeys.has(key),
+      };
+    });
+    const globalKeys = new Set(globalItems.map((item) => item.key));
+    const templateLocalItems = selectedTemplateMilestones
+      .map((milestone, idx) => ({
+        key: normalizeMilestoneKey(milestone.key),
+        label: milestone.label || milestone.key?.toUpperCase() || '',
+        sortOrder: Number.isFinite(Number(milestone.sortOrder)) ? Number(milestone.sortOrder) : idx,
+        isEnabled: true,
+      }))
+      .filter((item) => item.key && !globalKeys.has(item.key));
+    return [...globalItems, ...templateLocalItems];
+  }, [GLOBAL_TEMPLATE_ID, phaseOptions, selectedTemplateId, selectedTemplateMilestones]);
+
   const activePhaseKeys = React.useMemo(() => {
-    const available = new Set(phaseOptions.map((opt) => opt.value));
-    if (!selectedTemplate || !selectedTemplate.phaseKeys || selectedTemplate.phaseKeys.length === 0) {
+    if (!selectedTemplate) {
       return phaseOptions.map((opt) => opt.value);
     }
-    const filtered = selectedTemplate.phaseKeys.filter((key) => available.has(key));
-    return filtered.length ? filtered : phaseOptions.map((opt) => opt.value);
-  }, [phaseOptions, selectedTemplate]);
+    const keys = selectedTemplateMilestones
+      .map((milestone) => normalizeMilestoneKey(milestone.key))
+      .filter((key, idx, arr) => key && arr.indexOf(key) === idx);
+    return keys.length > 0 ? keys : phaseOptions.map((opt) => opt.value);
+  }, [phaseOptions, selectedTemplate, selectedTemplateMilestones]);
+
+  const mobilePhaseTabItems = React.useMemo(
+    () => milestoneHeaderItems.filter((item) => activePhaseKeys.includes(item.key)),
+    [activePhaseKeys, milestoneHeaderItems]
+  );
 
   const templateKey = selectedTemplateId === GLOBAL_TEMPLATE_ID ? GLOBAL_TEMPLATE_ID : String(selectedTemplateId ?? '');
 
@@ -170,8 +256,13 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   const phaseLabelByKey = React.useMemo(() => {
     const map = new Map<string, string>();
     phaseOptions.forEach((phase) => map.set(phase.value, phase.label));
+    selectedTemplateMilestones.forEach((milestone) => {
+      const key = normalizeMilestoneKey(milestone.key);
+      if (!key) return;
+      map.set(key, milestone.label || key.toUpperCase());
+    });
     return map;
-  }, [phaseOptions]);
+  }, [phaseOptions, selectedTemplateMilestones]);
 
   const roleMetaById = React.useMemo(() => {
     const map = new Map<number, RoleMeta>();
@@ -850,17 +941,26 @@ const AutoHoursTemplatesEditor: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
+    const didTemplateSelectionChange = previousSelectedTemplateIdRef.current !== selectedTemplateId;
+    previousSelectedTemplateIdRef.current = selectedTemplateId;
+
     if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
       setTemplateName('');
       setTemplateDescription('');
       setIsEditingTitle(false);
       setIsEditingDescription(false);
+      if (didTemplateSelectionChange) {
+        setIsMilestoneEditMode(false);
+      }
       return;
     }
     setTemplateName(selectedTemplate?.name || '');
     setTemplateDescription(selectedTemplate?.description || '');
     setIsEditingTitle(false);
     setIsEditingDescription(false);
+    if (didTemplateSelectionChange) {
+      setIsMilestoneEditMode(false);
+    }
   }, [GLOBAL_TEMPLATE_ID, selectedTemplate, selectedTemplateId]);
 
   React.useEffect(() => {
@@ -1123,38 +1223,267 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     }
   }, [GLOBAL_TEMPLATE_ID, activePhaseKeys, getWeeksCountForPhase, phaseLabelByKey, selectedTemplateId]);
 
-  const toggleTemplatePhase = React.useCallback(async (phaseKey: string) => {
-    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
-    const current = new Set(activePhaseKeys);
-    if (current.has(phaseKey)) {
-      current.delete(phaseKey);
-    } else {
-      current.add(phaseKey);
-    }
+  const persistTemplateMilestones = React.useCallback(
+    async (
+      nextMilestonesRaw: AutoHoursTemplateMilestone[],
+      options?: { successMessage?: string; errorMessage?: string }
+    ): Promise<boolean> => {
+      if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return false;
+      const availableGlobalKeys = new Set(phaseOptions.map((opt) => normalizeMilestoneKey(opt.value)));
+      const seen = new Set<string>();
+      const nextMilestones: AutoHoursTemplateMilestone[] = [];
+      for (const milestone of nextMilestonesRaw || []) {
+        const key = normalizeMilestoneKey(milestone.key);
+        if (!key || !MILESTONE_KEY_RE.test(key)) {
+          showToast('Milestone keys must be normalized slugs (e.g. permit-set)', 'error');
+          return false;
+        }
+        if (seen.has(key)) {
+          showToast(`Duplicate milestone key: ${key}`, 'error');
+          return false;
+        }
+        seen.add(key);
+        const isGlobal = availableGlobalKeys.has(key);
+        nextMilestones.push({
+          key,
+          label: (milestone.label || key.toUpperCase()).trim() || key.toUpperCase(),
+          weeksCount: clampWeeksCount(Number(milestone.weeksCount ?? defaultWeeksCount)),
+          sortOrder: nextMilestones.length,
+          sourceType: milestone.sourceType || (isGlobal ? 'global' : 'template_local'),
+          ...(milestone.globalPhaseKey
+            ? { globalPhaseKey: normalizeMilestoneKey(milestone.globalPhaseKey) }
+            : (isGlobal ? { globalPhaseKey: key } : {})),
+        });
+      }
+      if (nextMilestones.length === 0) {
+        showToast('At least one milestone is required', 'error');
+        return false;
+      }
+      try {
+        const updated = await autoHoursTemplatesApi.update(Number(selectedTemplateId), { milestones: nextMilestones });
+        const nextKeys = nextMilestones.map((milestone) => milestone.key);
+        setTemplates((prev) => prev.map((t) => (t.id === selectedTemplateId ? updated : t)));
+        setDirtyPhases((prev) => {
+          const nextDirty = new Set(prev);
+          Array.from(nextDirty).forEach((phase) => {
+            if (!nextKeys.includes(phase)) nextDirty.delete(phase);
+          });
+          return nextDirty;
+        });
+        if (!nextKeys.includes(selectedPhase)) {
+          setSelectedPhase(nextKeys[0]);
+        }
+        if (options?.successMessage) {
+          showToast(options.successMessage, 'success');
+        }
+        return true;
+      } catch (e: any) {
+        showToast(options?.errorMessage || e?.message || 'Failed to update template milestones', 'error');
+        return false;
+      }
+    },
+    [GLOBAL_TEMPLATE_ID, clampWeeksCount, defaultWeeksCount, phaseOptions, selectedPhase, selectedTemplateId]
+  );
 
-    const next = phaseOptions.map((opt) => opt.value).filter((key) => current.has(key));
-    if (next.length === 0) {
-      showToast('At least one phase is required', 'error');
+  const cancelMilestoneRename = React.useCallback(() => {
+    setEditingMilestoneKey(null);
+    setEditingMilestoneLabel('');
+    setSavingMilestoneLabel(false);
+  }, []);
+
+  const beginMilestoneRename = React.useCallback((key: string, currentLabel?: string) => {
+    const normalizedKey = normalizeMilestoneKey(key);
+    setSelectedPhase(normalizedKey);
+    setEditingMilestoneKey(normalizedKey);
+    setEditingMilestoneLabel((currentLabel || normalizedKey.toUpperCase()).trim() || normalizedKey.toUpperCase());
+  }, []);
+
+  const commitMilestoneRename = React.useCallback(async (): Promise<boolean> => {
+    if (!editingMilestoneKey) return false;
+    if (savingMilestoneLabel) return false;
+    const nextLabel = editingMilestoneLabel.trim();
+    if (!nextLabel) {
+      showToast('Milestone name is required', 'error');
+      return false;
+    }
+    const currentMilestones = deriveTemplateMilestones(selectedTemplate, phaseOptions, defaultWeeksCount);
+    const existing = currentMilestones.find(
+      (milestone) => normalizeMilestoneKey(milestone.key) === normalizeMilestoneKey(editingMilestoneKey)
+    );
+    if (!existing) {
+      cancelMilestoneRename();
+      return false;
+    }
+    if ((existing.label || '').trim() === nextLabel) {
+      cancelMilestoneRename();
+      return true;
+    }
+    const nextMilestones = currentMilestones.map((milestone) => {
+      if (normalizeMilestoneKey(milestone.key) !== normalizeMilestoneKey(editingMilestoneKey)) return milestone;
+      return {
+        ...milestone,
+        label: nextLabel,
+      };
+    });
+    try {
+      setSavingMilestoneLabel(true);
+      const saved = await persistTemplateMilestones(nextMilestones, {
+        successMessage: 'Milestone renamed',
+        errorMessage: 'Failed to rename milestone',
+      });
+      if (saved) {
+        cancelMilestoneRename();
+      }
+      return saved;
+    } finally {
+      setSavingMilestoneLabel(false);
+    }
+  }, [
+    cancelMilestoneRename,
+    defaultWeeksCount,
+    editingMilestoneKey,
+    editingMilestoneLabel,
+    persistTemplateMilestones,
+    phaseOptions,
+    savingMilestoneLabel,
+    selectedTemplate,
+  ]);
+
+  const handleToggleMilestone = React.useCallback(async (milestoneKey: string) => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    const normalizedKey = normalizeMilestoneKey(milestoneKey);
+    if (!normalizedKey) return;
+    const currentMilestones = deriveTemplateMilestones(selectedTemplate, phaseOptions, defaultWeeksCount);
+    const existingIdx = currentMilestones.findIndex(
+      (milestone) => normalizeMilestoneKey(milestone.key) === normalizedKey
+    );
+
+    if (existingIdx >= 0) {
+      const nextMilestones = currentMilestones.filter(
+        (milestone) => normalizeMilestoneKey(milestone.key) !== normalizedKey
+      );
+      await persistTemplateMilestones(nextMilestones, {
+        errorMessage: 'Failed to update template milestones',
+      });
+      if (editingMilestoneKey && normalizeMilestoneKey(editingMilestoneKey) === normalizedKey) {
+        cancelMilestoneRename();
+      }
       return;
     }
 
-    try {
-      const updated = await autoHoursTemplatesApi.update(Number(selectedTemplateId), { phaseKeys: next });
-      setTemplates((prev) => prev.map((t) => (t.id === selectedTemplateId ? updated : t)));
-      setDirtyPhases((prev) => {
-        const nextDirty = new Set(prev);
-        Array.from(nextDirty).forEach((phase) => {
-          if (!next.includes(phase)) nextDirty.delete(phase);
-        });
-        return nextDirty;
-      });
-      if (!next.includes(selectedPhase)) {
-        setSelectedPhase(next[0]);
-      }
-    } catch (e: any) {
-      showToast(e?.message || 'Failed to update template phases', 'error');
+    const isGlobalOption = phaseOptions.some((opt) => normalizeMilestoneKey(opt.value) === normalizedKey);
+    const nextMilestones = [
+      ...currentMilestones,
+      {
+        key: normalizedKey,
+        label: phaseLabelByKey.get(normalizedKey) || normalizedKey.toUpperCase(),
+        weeksCount: defaultWeeksCount,
+        sortOrder: currentMilestones.length,
+        sourceType: isGlobalOption ? 'global' : 'template_local',
+        ...(isGlobalOption ? { globalPhaseKey: normalizedKey } : {}),
+      } as AutoHoursTemplateMilestone,
+    ];
+    const updated = await persistTemplateMilestones(nextMilestones, {
+      errorMessage: 'Failed to update template milestones',
+    });
+    if (updated) {
+      setSelectedPhase(normalizedKey);
     }
-  }, [GLOBAL_TEMPLATE_ID, activePhaseKeys, phaseOptions, selectedPhase, selectedTemplateId]);
+  }, [
+    GLOBAL_TEMPLATE_ID,
+    cancelMilestoneRename,
+    defaultWeeksCount,
+    editingMilestoneKey,
+    persistTemplateMilestones,
+    phaseLabelByKey,
+    phaseOptions,
+    selectedTemplate,
+    selectedTemplateId,
+  ]);
+
+  const handleAddCustomMilestone = React.useCallback(async () => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    const currentMilestones = deriveTemplateMilestones(selectedTemplate, phaseOptions, defaultWeeksCount);
+    const currentKeys = new Set(currentMilestones.map((milestone) => normalizeMilestoneKey(milestone.key)));
+    let suffix = currentMilestones.length + 1;
+    let nextKey = `milestone-${suffix}`;
+    while (currentKeys.has(nextKey)) {
+      suffix += 1;
+      nextKey = `milestone-${suffix}`;
+    }
+    const nextMilestones = [
+      ...currentMilestones,
+      {
+        key: nextKey,
+        label: `Milestone ${suffix}`,
+        weeksCount: defaultWeeksCount,
+        sortOrder: currentMilestones.length,
+        sourceType: 'template_local',
+      } as AutoHoursTemplateMilestone,
+    ];
+    const updated = await persistTemplateMilestones(nextMilestones, {
+      successMessage: 'Milestone added',
+      errorMessage: 'Failed to add milestone',
+    });
+    if (updated) {
+      setSelectedPhase(nextKey);
+      beginMilestoneRename(nextKey, `Milestone ${suffix}`);
+    }
+  }, [GLOBAL_TEMPLATE_ID, beginMilestoneRename, defaultWeeksCount, persistTemplateMilestones, phaseOptions, selectedTemplate, selectedTemplateId]);
+
+  const handleRemoveMilestone = React.useCallback(async (milestoneKey: string) => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    const currentMilestones = deriveTemplateMilestones(selectedTemplate, phaseOptions, defaultWeeksCount);
+    const nextMilestones = currentMilestones.filter(
+      (milestone) => normalizeMilestoneKey(milestone.key) !== normalizeMilestoneKey(milestoneKey)
+    );
+    await persistTemplateMilestones(nextMilestones, {
+      successMessage: 'Milestone removed',
+      errorMessage: 'Failed to remove milestone',
+    });
+    if (editingMilestoneKey && normalizeMilestoneKey(editingMilestoneKey) === normalizeMilestoneKey(milestoneKey)) {
+      cancelMilestoneRename();
+    }
+  }, [GLOBAL_TEMPLATE_ID, cancelMilestoneRename, defaultWeeksCount, editingMilestoneKey, persistTemplateMilestones, phaseOptions, selectedTemplate, selectedTemplateId]);
+
+  const handleMoveMilestone = React.useCallback(async (milestoneKey: string, delta: number) => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
+    const currentMilestones = deriveTemplateMilestones(selectedTemplate, phaseOptions, defaultWeeksCount);
+    const idx = currentMilestones.findIndex(
+      (milestone) => normalizeMilestoneKey(milestone.key) === normalizeMilestoneKey(milestoneKey)
+    );
+    if (idx < 0) return;
+    const targetIdx = idx + delta;
+    if (targetIdx < 0 || targetIdx >= currentMilestones.length) return;
+    const nextMilestones = [...currentMilestones];
+    const [moved] = nextMilestones.splice(idx, 1);
+    nextMilestones.splice(targetIdx, 0, moved);
+    await persistTemplateMilestones(nextMilestones, {
+      errorMessage: 'Failed to reorder milestones',
+    });
+  }, [GLOBAL_TEMPLATE_ID, defaultWeeksCount, persistTemplateMilestones, phaseOptions, selectedTemplate, selectedTemplateId]);
+
+  React.useEffect(() => {
+    if (!editingMilestoneKey) return;
+    const exists = selectedTemplateMilestones.some(
+      (milestone) => normalizeMilestoneKey(milestone.key) === normalizeMilestoneKey(editingMilestoneKey)
+    );
+    if (!exists) {
+      cancelMilestoneRename();
+    }
+  }, [cancelMilestoneRename, editingMilestoneKey, selectedTemplateMilestones]);
+
+  React.useEffect(() => {
+    if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) {
+      cancelMilestoneRename();
+    }
+  }, [GLOBAL_TEMPLATE_ID, cancelMilestoneRename, selectedTemplateId]);
+
+  React.useEffect(() => {
+    if (!isMilestoneEditMode) {
+      cancelMilestoneRename();
+    }
+  }, [cancelMilestoneRename, isMilestoneEditMode]);
 
   const handleCreateTemplate = React.useCallback(async () => {
     const name = newTemplateName.trim();
@@ -1201,11 +1530,12 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     const copyName = `${baseName} Copy`;
 
     try {
-      const phaseKeys = base?.phaseKeys && base.phaseKeys.length ? base.phaseKeys : phaseOptions.map((opt) => opt.value);
-      if (!phaseKeys.length) {
-        showToast('No phases available to duplicate', 'error');
+      const milestones = deriveTemplateMilestones(base, phaseOptions, defaultWeeksCount);
+      if (!isDefault && !milestones.length) {
+        showToast('No milestones available to duplicate', 'error');
         return;
       }
+      const phaseKeys = phaseOptions.map((opt) => normalizeMilestoneKey(opt.value)).filter(Boolean);
 
       const created = isDefault
         ? await autoHoursTemplatesApi.duplicateDefault({ name: copyName, phaseKeys })
@@ -1217,7 +1547,7 @@ const AutoHoursTemplatesEditor: React.FC = () => {
     } catch (e: any) {
       showToast(e?.message || 'Failed to duplicate template', 'error');
     }
-  }, [GLOBAL_TEMPLATE_ID, phaseOptions, selectedTemplateId, templates]);
+  }, [GLOBAL_TEMPLATE_ID, defaultWeeksCount, phaseOptions, selectedTemplateId, templates]);
 
   const handleRenameTemplate = React.useCallback(async (nextName?: string) => {
     if (selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID) return;
@@ -2197,36 +2527,157 @@ const AutoHoursTemplatesEditor: React.FC = () => {
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between pb-3 mb-4 border-b border-[var(--border)]">
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-sm text-[var(--muted)] cursor-help"
-                  title="Enable which deliverable phases this template applies to. Disabled phases are hidden in this matrix."
-                >
-                  Select Applicable Phase
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-[var(--muted)]">Milestones</span>
                 <div className="flex items-center rounded border border-[var(--border)] overflow-hidden">
-                  {phaseOptions.map((opt) => {
-                    const isActive = activePhaseKeys.includes(opt.value);
+                  {milestoneHeaderItems.map((item) => {
+                    const key = normalizeMilestoneKey(item.key);
+                    const isSelected = selectedPhase === key;
+                    const isEnabled = item.isEnabled;
                     return (
                       <button
-                        key={opt.value}
+                        key={`milestone-header-${key}`}
                         type="button"
                         className={`px-2 py-1 text-xs transition-colors border-r border-[var(--border)] last:border-r-0 ${
-                          isActive
+                          isEnabled
                             ? 'bg-[var(--surfaceHover)] text-[var(--text)]'
-                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                            : 'text-[var(--muted)] opacity-60 hover:opacity-100 hover:text-[var(--text)]'
+                        } ${
+                          isSelected ? 'font-semibold' : ''
                         }`}
                         onClick={() => {
-                          void toggleTemplatePhase(opt.value);
+                          if (selectedTemplateId === GLOBAL_TEMPLATE_ID) {
+                            setSelectedPhase(key);
+                            return;
+                          }
+                          void handleToggleMilestone(key);
                         }}
-                        disabled={selectedTemplateId == null || selectedTemplateId === GLOBAL_TEMPLATE_ID}
+                        disabled={selectedTemplateId == null || saving}
                       >
-                        {opt.label}
+                        {item.label || key.toUpperCase()}
                       </button>
                     );
                   })}
                 </div>
+                {selectedTemplateId !== GLOBAL_TEMPLATE_ID && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsMilestoneEditMode((prev) => !prev);
+                    }}
+                  >
+                    {isMilestoneEditMode ? 'Done' : 'Add/Edit'}
+                  </Button>
+                )}
               </div>
+              {selectedTemplateId !== GLOBAL_TEMPLATE_ID && isMilestoneEditMode && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedTemplateMilestones.map((milestone, idx) => {
+                    const key = normalizeMilestoneKey(milestone.key);
+                    const selected = selectedPhase === key;
+                    return (
+                      <div
+                        key={`milestone-pill-${key}`}
+                        className={`inline-flex flex-col gap-1 rounded border px-2 py-1 text-xs ${
+                          selected ? 'border-[var(--primary)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--muted)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          {editingMilestoneKey === key ? (
+                            <input
+                              type="text"
+                              value={editingMilestoneLabel}
+                              className="min-w-[120px] bg-transparent border border-[var(--border)] rounded px-1 py-0.5 text-xs text-[var(--text)]"
+                              onChange={(e) => setEditingMilestoneLabel(e.target.value)}
+                              onBlur={() => {
+                                void commitMilestoneRename();
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void commitMilestoneRename();
+                                }
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  cancelMilestoneRename();
+                                }
+                              }}
+                              autoFocus
+                              disabled={savingMilestoneLabel}
+                              aria-label={`Rename ${milestone.label || key.toUpperCase()}`}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="font-medium hover:text-[var(--text)]"
+                              onClick={() => {
+                                if (selectedPhase !== key) {
+                                  setSelectedPhase(key);
+                                  return;
+                                }
+                                beginMilestoneRename(key, milestone.label);
+                              }}
+                              onDoubleClick={() => beginMilestoneRename(key, milestone.label)}
+                              title="Click to rename"
+                            >
+                              {milestone.label || key.toUpperCase()}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="px-1 text-red-600 hover:text-red-500"
+                            onClick={() => {
+                              void handleRemoveMilestone(key);
+                            }}
+                            disabled={editingMilestoneKey === key}
+                            title="Remove milestone"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            className="px-1 text-xl font-black leading-none hover:text-[var(--text)] disabled:opacity-40"
+                            onClick={() => {
+                              void handleMoveMilestone(key, -1);
+                            }}
+                            disabled={idx === 0 || editingMilestoneKey === key}
+                            title="Move left"
+                            aria-label="Move milestone left"
+                          >
+                            ⬅
+                          </button>
+                          <button
+                            type="button"
+                            className="px-1 text-xl font-black leading-none hover:text-[var(--text)] disabled:opacity-40"
+                            onClick={() => {
+                              void handleMoveMilestone(key, 1);
+                            }}
+                            disabled={idx === selectedTemplateMilestones.length - 1 || editingMilestoneKey === key}
+                            title="Move right"
+                            aria-label="Move milestone right"
+                          >
+                            ➡
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      void handleAddCustomMilestone();
+                    }}
+                  >
+                    + Milestone
+                  </Button>
+                </div>
+              )}
 
               <div className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
                 <span>Input mode</span>
@@ -2282,28 +2733,27 @@ const AutoHoursTemplatesEditor: React.FC = () => {
             {isMobileLayout && (
               <div className="flex flex-wrap items-center gap-3 px-3 pt-3 border-b border-[var(--border)]">
                 <div role="tablist" aria-label="Template phases" className="inline-flex items-center">
-                  {phaseOptions
-                    .filter((opt) => activePhaseKeys.includes(opt.value))
-                    .map((opt) => {
-                      const isActive = selectedPhase === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive}
-                          className={`px-3 py-1 text-sm transition-colors ${
-                            isActive
-                              ? 'relative bg-[var(--surfaceHover)] text-[var(--text)] font-semibold border border-[var(--border)] border-b-transparent border-t-4 border-t-[var(--primary)] rounded-t -mb-px after:content-[\'\'] after:absolute after:left-0 after:right-0 after:bottom-[-1px] after:h-[2px] after:bg-[var(--card)]'
-                              : 'text-[var(--muted)] hover:text-[var(--text)]'
-                          }`}
-                          onClick={() => setSelectedPhase(opt.value)}
-                          disabled={loading || saving}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
+                  {mobilePhaseTabItems.map((item) => {
+                    const key = normalizeMilestoneKey(item.key);
+                    const isActive = selectedPhase === key;
+                    return (
+                      <button
+                        key={`mobile-phase-${key}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        className={`px-3 py-1 text-sm transition-colors ${
+                          isActive
+                            ? 'relative bg-[var(--surfaceHover)] text-[var(--text)] font-semibold border border-[var(--border)] border-b-transparent border-t-4 border-t-[var(--primary)] rounded-t -mb-px after:content-[\'\'] after:absolute after:left-0 after:right-0 after:bottom-[-1px] after:h-[2px] after:bg-[var(--card)]'
+                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                        }`}
+                        onClick={() => setSelectedPhase(key)}
+                        disabled={loading || saving}
+                      >
+                        {item.label || key.toUpperCase()}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

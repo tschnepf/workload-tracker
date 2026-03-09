@@ -31,14 +31,14 @@ def _ordered_phase_keys() -> list[str]:
     return keys or list(_DEFAULT_PHASE_KEYS)
 
 
-def _normalize_phase_keys(raw: object) -> list[str]:
-    if not isinstance(raw, list):
-        return []
-    out: list[str] = []
-    for item in raw:
-        key = str(item).strip().lower()
-        if key and key not in out:
-            out.append(key)
+def _phase_label_by_key() -> dict[str, str]:
+    rows = DeliverablePhaseDefinition.objects.order_by("sort_order", "id").values("key", "label")
+    out: dict[str, str] = {}
+    for row in rows:
+        key = str(row.get("key") or "").strip().lower()
+        if not key:
+            continue
+        out[key] = str(row.get("label") or "").strip() or key.upper()
     return out
 
 
@@ -66,62 +66,70 @@ def _coerce_percent(raw: object) -> float:
     return max(0.0, min(100.0, value))
 
 
-def _resolve_weeks_count(project: Project, phase: str, global_settings: AutoHoursGlobalSettings) -> int:
+def _project_milestones(project: Project, global_settings: AutoHoursGlobalSettings) -> list[dict[str, Any]]:
     template = getattr(project, "auto_hours_template", None)
-    if template and phase in _normalize_phase_keys(getattr(template, "phase_keys", None)):
-        return _coerce_weeks_count((template.weeks_by_phase or {}).get(phase))
-    return _coerce_weeks_count((global_settings.weeks_by_phase or {}).get(phase))
-
-
-def _enabled_phase_keys_for_project(
-    project: Project,
-    *,
-    ordered_phase_keys: list[str],
-    global_settings: AutoHoursGlobalSettings,
-) -> list[str]:
-    template = getattr(project, "auto_hours_template", None)
-    template_keys = _normalize_phase_keys(getattr(template, "phase_keys", None)) if template else []
-    base = [k for k in ordered_phase_keys if (not template_keys or k in template_keys)]
-    if template_keys:
-        # Include template keys not present in phase definitions at the tail, preserving template order.
-        for key in template_keys:
-            if key not in base:
-                base.append(key)
-    if not base:
-        base = list(ordered_phase_keys or _DEFAULT_PHASE_KEYS)
-    enabled: list[str] = []
-    for phase in base:
-        if _resolve_weeks_count(project, phase, global_settings) > 0:
-            enabled.append(phase)
-    return enabled
+    phase_labels = _phase_label_by_key()
+    global_phase_keys = set(phase_labels.keys())
+    if template:
+        milestones = template.effective_milestones(
+            global_phase_keys=global_phase_keys,
+            phase_label_by_key=phase_labels,
+        )
+    else:
+        keys = _ordered_phase_keys()
+        milestones = []
+        for idx, key in enumerate(keys):
+            milestones.append(
+                {
+                    "key": key,
+                    "label": str(phase_labels.get(key) or key.upper()),
+                    "weeksCount": _coerce_weeks_count((global_settings.weeks_by_phase or {}).get(key)),
+                    "sortOrder": idx,
+                    "sourceType": "global",
+                    "globalPhaseKey": key,
+                }
+            )
+    normalized: list[dict[str, Any]] = []
+    for idx, row in enumerate(milestones or []):
+        key = str(row.get("key") or "").strip().lower()
+        if not key:
+            continue
+        normalized.append(
+            {
+                "key": key,
+                "label": str(row.get("label") or phase_labels.get(key) or key.upper()),
+                "weeksCount": _coerce_weeks_count(row.get("weeksCount")),
+                "sortOrder": idx,
+                "sourceType": str(row.get("sourceType") or "").strip().lower() or ("global" if key in global_phase_keys else "template_local"),
+                "globalPhaseKey": str(row.get("globalPhaseKey") or "").strip().lower() or None,
+            }
+        )
+    return normalized
 
 
 def _build_phase_windows(
     project: Project,
     *,
-    ordered_phase_keys: list[str],
     global_settings: AutoHoursGlobalSettings,
 ) -> list[dict[str, Any]]:
     if not getattr(project, "start_date", None):
         return []
-    phases = _enabled_phase_keys_for_project(
-        project,
-        ordered_phase_keys=ordered_phase_keys,
-        global_settings=global_settings,
-    )
-    if not phases:
+    milestones = _project_milestones(project, global_settings)
+    if not milestones:
         return []
     start_week = sunday_of_week(project.start_date)
     cursor = start_week
     windows: list[dict[str, Any]] = []
-    for phase in phases:
-        weeks_count = _resolve_weeks_count(project, phase, global_settings)
+    for milestone in milestones:
+        phase = str(milestone.get("key") or "").strip().lower()
+        weeks_count = _coerce_weeks_count(milestone.get("weeksCount"))
         if weeks_count <= 0:
             continue
         end_week = cursor + timedelta(weeks=weeks_count - 1)
         windows.append(
             {
                 "phase": phase,
+                "label": str(milestone.get("label") or phase.upper()),
                 "weeksCount": weeks_count,
                 "startWeek": cursor,
                 "endWeek": end_week,
@@ -250,7 +258,11 @@ def _upsert_placeholder_deliverables(project: Project, phase_windows: list[dict[
     )
     by_phase: dict[str, Any] = {}
     for row in existing:
-        phase_key = classify_deliverable_phase(getattr(row, "description", None), getattr(row, "percentage", None))
+        tagged_phase_key = str(getattr(row, "template_milestone_key", "") or "").strip().lower()
+        if tagged_phase_key:
+            phase_key = tagged_phase_key
+        else:
+            phase_key = classify_deliverable_phase(getattr(row, "description", None), getattr(row, "percentage", None))
         if phase_key in by_phase:
             continue
         by_phase[phase_key] = row
@@ -259,6 +271,7 @@ def _upsert_placeholder_deliverables(project: Project, phase_windows: list[dict[
     updated = 0
     for idx, window in enumerate(phase_windows):
         phase = str(window["phase"])
+        label = str(window.get("label") or phase.upper()).strip() or phase.upper()
         target_date = window["endWeek"] + timedelta(days=6)
         target_sort = (idx + 1) * 10
         target_notes = "Placeholder"
@@ -267,10 +280,11 @@ def _upsert_placeholder_deliverables(project: Project, phase_windows: list[dict[
             row = Deliverable.objects.create(
                 project=project,
                 percentage=_default_percentage_for_phase(phase, fallback_index=idx),
-                description=phase.upper(),
+                description=label,
                 date=target_date,
                 notes=target_notes,
                 sort_order=target_sort,
+                template_milestone_key=phase,
             )
             by_phase[phase] = row
             created += 1
@@ -287,6 +301,10 @@ def _upsert_placeholder_deliverables(project: Project, phase_windows: list[dict[
         if (row.notes or "") != next_notes:
             row.notes = next_notes
             changed_fields.append("notes")
+        current_milestone_key = str(getattr(row, "template_milestone_key", "") or "").strip().lower()
+        if current_milestone_key != phase:
+            row.template_milestone_key = phase
+            changed_fields.append("template_milestone_key")
         if changed_fields:
             row.save(update_fields=[*changed_fields, "updated_at"])
             updated += 1
@@ -300,7 +318,7 @@ def seed_project_auto_hours_placeholders(project: Project) -> int:
     """Create unassigned placeholder assignments from auto-hours settings.
 
     Seed behavior:
-    - Builds sequential phase windows from project start date (SD -> DD -> IFP -> IFC).
+    - Builds sequential milestone windows from project start date.
     - Anchors week 0 to each phase's deliverable week (end of that phase window).
     - Uses template role settings when available, else global role settings.
     - Creates `roleCount` placeholders per role with merged weekly hours across enabled phases.
@@ -323,7 +341,6 @@ def seed_project_auto_hours_placeholders(project: Project) -> int:
     global_settings = AutoHoursGlobalSettings.get_active()
     phase_windows = _build_phase_windows(
         project,
-        ordered_phase_keys=_ordered_phase_keys(),
         global_settings=global_settings,
     )
     if not phase_windows:
@@ -331,7 +348,15 @@ def seed_project_auto_hours_placeholders(project: Project) -> int:
     _upsert_placeholder_deliverables(project, phase_windows)
 
     template = getattr(project, "auto_hours_template", None)
-    template_enabled_phases = set(_normalize_phase_keys(getattr(template, "phase_keys", None))) if template else set()
+    template_enabled_phases = set()
+    if template:
+        for row in template.effective_milestones(
+            global_phase_keys=set(_phase_label_by_key().keys()),
+            phase_label_by_key=_phase_label_by_key(),
+        ):
+            key = str(row.get("key") or "").strip().lower()
+            if key:
+                template_enabled_phases.add(key)
     full_capacity_hours = _resolve_full_capacity_hours()
     profiles_by_role = _desired_role_profiles(
         project,
@@ -467,7 +492,6 @@ def reseed_project_assignment_hours(project: Project) -> dict[str, int]:
     global_settings = AutoHoursGlobalSettings.get_active()
     phase_windows = _build_phase_windows(
         project,
-        ordered_phase_keys=_ordered_phase_keys(),
         global_settings=global_settings,
     )
     if not phase_windows:
@@ -481,9 +505,16 @@ def reseed_project_assignment_hours(project: Project) -> dict[str, int]:
     deliverable_summary = _upsert_placeholder_deliverables(project, phase_windows)
 
     full_capacity_hours = _resolve_full_capacity_hours()
-    template_enabled_phases = set(
-        _normalize_phase_keys(getattr(getattr(project, "auto_hours_template", None), "phase_keys", None))
-    )
+    template_enabled_phases = set()
+    template = getattr(project, "auto_hours_template", None)
+    if template:
+        for row in template.effective_milestones(
+            global_phase_keys=set(_phase_label_by_key().keys()),
+            phase_label_by_key=_phase_label_by_key(),
+        ):
+            key = str(row.get("key") or "").strip().lower()
+            if key:
+                template_enabled_phases.add(key)
     profiles_by_role = _desired_role_profiles(
         project,
         phase_windows=phase_windows,

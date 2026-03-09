@@ -16,6 +16,7 @@ from django.db import transaction
 from decimal import Decimal
 from datetime import timedelta
 from django.utils import timezone
+import re
 
 from .serializers import (
     PreDeliverableGlobalSettingsItemSerializer,
@@ -88,6 +89,13 @@ from skills.serializers import SkillTagSerializer, PersonSkillSerializer, Person
 from core.search_tokens import parse_search_tokens, apply_token_filter
 from projects.serializers import ProjectStatusDefinitionSerializer
 from core.vertical_scope import get_request_enforced_vertical_id
+from core.auto_hours_milestones import (
+    AUTO_HOURS_DEFAULT_MILESTONE_KEYS,
+    milestones_from_legacy,
+    milestones_to_legacy,
+    normalize_milestone_key,
+    normalize_milestones_payload,
+)
 
 AUTO_HOURS_MAX_WEEKS_BEFORE = 17
 AUTO_HOURS_MAX_WEEKS_COUNT = AUTO_HOURS_MAX_WEEKS_BEFORE + 1
@@ -1688,8 +1696,18 @@ class AutoHoursTemplatesView(APIView):
                     return None, None, f'unknown departmentId(s): {missing}'
         return excluded_roles, excluded_departments, None
 
+    def _phase_definitions(self) -> list[DeliverablePhaseDefinition]:
+        return list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id'))
+
     def _valid_phase_keys(self) -> list[str]:
-        return list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id').values_list('key', flat=True))
+        keys = [normalize_milestone_key(p.key) for p in self._phase_definitions() if normalize_milestone_key(p.key)]
+        return keys or list(AUTO_HOURS_DEFAULT_MILESTONE_KEYS)
+
+    def _phase_label_by_key(self) -> dict[str, str]:
+        labels = {normalize_milestone_key(p.key): str(p.label or '').strip() for p in self._phase_definitions()}
+        for key in AUTO_HOURS_DEFAULT_MILESTONE_KEYS:
+            labels.setdefault(key, key.upper())
+        return labels
 
     def _normalize_weeks_by_phase(self, data) -> tuple[dict[str, int] | None, str | None]:
         if 'weeksByPhase' not in data:
@@ -1699,12 +1717,13 @@ class AutoHoursTemplatesView(APIView):
             return {}, None
         if not isinstance(raw, dict):
             return None, 'weeksByPhase must be an object'
-        valid = set(self._valid_phase_keys())
         normalized: dict[str, int] = {}
         for key, value in raw.items():
-            phase = str(key).strip().lower()
-            if phase not in valid:
-                return None, 'weeksByPhase must match existing phase mappings'
+            phase = normalize_milestone_key(key)
+            if not phase:
+                return None, 'weeksByPhase keys must be normalized milestone slugs'
+            if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', phase):
+                return None, 'weeksByPhase keys must be normalized milestone slugs'
             try:
                 count = int(value)
             except Exception:
@@ -1714,10 +1733,31 @@ class AutoHoursTemplatesView(APIView):
             normalized[phase] = count
         return normalized, None
 
+    def _parse_milestones(self, data) -> tuple[list[dict] | None, str | None]:
+        if 'milestones' not in data:
+            return None, None
+        return normalize_milestones_payload(
+            data.get('milestones'),
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+            require_non_empty=True,
+        )
+
     def _weeks_by_phase_response(self, template: AutoHoursTemplate) -> dict[str, int]:
-        valid = self._valid_phase_keys()
-        raw = template.weeks_by_phase or {}
-        return {phase: int(raw.get(phase, AUTO_HOURS_DEFAULT_WEEKS_COUNT)) for phase in valid}
+        milestones = template.effective_milestones(
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+        )
+        _, weeks_by_phase = milestones_to_legacy(milestones)
+        return weeks_by_phase
+
+    def _phase_keys_response(self, template: AutoHoursTemplate) -> list[str]:
+        milestones = template.effective_milestones(
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+        )
+        phase_keys, _ = milestones_to_legacy(milestones)
+        return phase_keys
 
     def _parse_phase_keys(self, data) -> tuple[list[str] | None, str | None]:
         if 'phaseKeys' not in data:
@@ -1727,18 +1767,97 @@ class AutoHoursTemplatesView(APIView):
             return None, 'phaseKeys must include at least one phase'
         if not isinstance(raw, list):
             return None, 'phaseKeys must be a list'
-        valid = self._valid_phase_keys()
         normalized: list[str] = []
         for item in raw:
-            key = str(item).strip().lower()
-            if key not in valid:
-                return None, 'phaseKeys must match existing phase mappings'
+            key = normalize_milestone_key(item)
+            if not key:
+                continue
+            if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', key):
+                return None, 'phaseKeys must use normalized milestone slugs'
             if key not in normalized:
                 normalized.append(key)
         if not normalized:
             return None, 'phaseKeys must include at least one phase'
-        ordered = [k for k in valid if k in normalized]
-        return ordered, None
+        return normalized, None
+
+    def _resolve_milestones_for_create(self, data) -> tuple[list[dict] | None, str | None]:
+        milestones, milestones_err = self._parse_milestones(data)
+        if milestones_err:
+            return None, milestones_err
+        if milestones is not None:
+            return milestones, None
+
+        phase_keys, phase_err = self._parse_phase_keys(data)
+        if phase_err:
+            return None, phase_err
+        weeks_by_phase, weeks_err = self._normalize_weeks_by_phase(data)
+        if weeks_err:
+            return None, weeks_err
+
+        if phase_keys is None:
+            phase_keys = list(AUTO_HOURS_DEFAULT_MILESTONE_KEYS)
+        milestones = milestones_from_legacy(
+            phase_keys=phase_keys,
+            weeks_by_phase=weeks_by_phase or {},
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+        )
+        return milestones, None
+
+    def _resolve_milestones_for_update(self, template: AutoHoursTemplate, data) -> tuple[list[dict] | None, str | None]:
+        milestones, milestones_err = self._parse_milestones(data)
+        if milestones_err:
+            return None, milestones_err
+        if milestones is not None:
+            return milestones, None
+
+        phase_keys, phase_err = self._parse_phase_keys(data)
+        if phase_err:
+            return None, phase_err
+        weeks_by_phase, weeks_err = self._normalize_weeks_by_phase(data)
+        if weeks_err:
+            return None, weeks_err
+        if phase_keys is None and weeks_by_phase is None:
+            return None, None
+
+        current = template.effective_milestones(
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+        )
+        current_phase_keys, current_weeks_by_phase = milestones_to_legacy(current)
+        next_phase_keys = phase_keys if phase_keys is not None else list(current_phase_keys)
+        next_weeks_by_phase = dict(current_weeks_by_phase)
+        if weeks_by_phase is not None:
+            next_weeks_by_phase.update(weeks_by_phase)
+        milestones = milestones_from_legacy(
+            phase_keys=next_phase_keys,
+            weeks_by_phase=next_weeks_by_phase,
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+        )
+        return milestones, None
+
+    def _serialize_template(self, template: AutoHoursTemplate) -> dict:
+        milestones = template.effective_milestones(
+            global_phase_keys=set(self._valid_phase_keys()),
+            phase_label_by_key=self._phase_label_by_key(),
+        )
+        phase_keys, weeks_by_phase = milestones_to_legacy(milestones)
+        return {
+            'id': template.id,
+            'name': template.name,
+            'description': template.description or '',
+            'excludedRoleIds': list(template.excluded_roles.values_list('id', flat=True)),
+            'excludedDepartmentIds': list(template.excluded_departments.values_list('id', flat=True)),
+            'isActive': template.is_active,
+            'milestones': milestones,
+            'phaseKeys': phase_keys,
+            'weeksByPhase': weeks_by_phase,
+            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
+            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
+            'createdAt': template.created_at,
+            'updatedAt': template.updated_at,
+        }
 
     @extend_schema(
         responses=inline_serializer(
@@ -1750,6 +1869,7 @@ class AutoHoursTemplatesView(APIView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
+                'milestones': serializers.ListField(child=serializers.DictField()),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
                 'maxWeeksCount': serializers.IntegerField(),
@@ -1763,22 +1883,7 @@ class AutoHoursTemplatesView(APIView):
     def get(self, request):
         items = []
         for t in AutoHoursTemplate.objects.all().prefetch_related('excluded_roles', 'excluded_departments').order_by('name'):
-            excluded_role_ids = list(t.excluded_roles.values_list('id', flat=True))
-            excluded_department_ids = list(t.excluded_departments.values_list('id', flat=True))
-            items.append({
-                'id': t.id,
-                'name': t.name,
-                'description': t.description or '',
-                'excludedRoleIds': excluded_role_ids,
-                'excludedDepartmentIds': excluded_department_ids,
-                'isActive': t.is_active,
-                'phaseKeys': t.phase_keys or [],
-                'weeksByPhase': self._weeks_by_phase_response(t),
-                'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
-                'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
-                'createdAt': t.created_at,
-                'updatedAt': t.updated_at,
-            })
+            items.append(self._serialize_template(t))
         return Response(items)
 
     @extend_schema(
@@ -1790,6 +1895,7 @@ class AutoHoursTemplatesView(APIView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'isActive': serializers.BooleanField(required=False),
+                'milestones': serializers.ListField(child=serializers.DictField(), required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField(), required=False),
             },
@@ -1803,6 +1909,7 @@ class AutoHoursTemplatesView(APIView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
+                'milestones': serializers.ListField(child=serializers.DictField()),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
                 'maxWeeksCount': serializers.IntegerField(),
@@ -1827,62 +1934,27 @@ class AutoHoursTemplatesView(APIView):
         excluded_roles, excluded_departments, excl_err = self._parse_exclusions(data)
         if excl_err:
             return Response({'error': excl_err}, status=400)
-        phase_keys, phase_err = self._parse_phase_keys(data)
-        if phase_err:
-            return Response({'error': phase_err}, status=400)
-        weeks_by_phase, weeks_err = self._normalize_weeks_by_phase(data)
-        if weeks_err:
-            return Response({'error': weeks_err}, status=400)
+        milestones, milestones_err = self._resolve_milestones_for_create(data)
+        if milestones_err:
+            return Response({'error': milestones_err}, status=400)
+        assert milestones is not None
         obj = AutoHoursTemplate.objects.create(
             name=name,
             description=description,
             is_active=is_active,
-            phase_keys=phase_keys if phase_keys is not None else self._valid_phase_keys(),
-            weeks_by_phase=weeks_by_phase or {},
+            milestones=milestones,
         )
+        obj.apply_milestones(milestones)
+        obj.save(update_fields=['milestones', 'phase_keys', 'weeks_by_phase', 'updated_at'])
         if excluded_roles is not None:
             obj.excluded_roles.set(excluded_roles)
         if excluded_departments is not None:
             obj.excluded_departments.set(excluded_departments)
-        return Response({
-            'id': obj.id,
-            'name': obj.name,
-            'description': obj.description or '',
-            'excludedRoleIds': list(obj.excluded_roles.values_list('id', flat=True)),
-            'excludedDepartmentIds': list(obj.excluded_departments.values_list('id', flat=True)),
-            'isActive': obj.is_active,
-            'phaseKeys': obj.phase_keys or [],
-            'weeksByPhase': self._weeks_by_phase_response(obj),
-            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
-            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
-            'createdAt': obj.created_at,
-            'updatedAt': obj.updated_at,
-        }, status=201)
+        return Response(self._serialize_template(obj), status=201)
 
 
 class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
-
-    def _parse_phase_keys(self, data) -> tuple[list[str] | None, str | None]:
-        if 'phaseKeys' not in data:
-            return None, None
-        raw = data.get('phaseKeys')
-        if raw is None:
-            return None, 'phaseKeys must include at least one phase'
-        if not isinstance(raw, list):
-            return None, 'phaseKeys must be a list'
-        valid = list(DeliverablePhaseDefinition.objects.order_by('sort_order', 'id').values_list('key', flat=True))
-        normalized: list[str] = []
-        for item in raw:
-            key = str(item).strip().lower()
-            if key not in valid:
-                return None, 'phaseKeys must match existing phase mappings'
-            if key not in normalized:
-                normalized.append(key)
-        if not normalized:
-            return None, 'phaseKeys must include at least one phase'
-        ordered = [k for k in valid if k in normalized]
-        return ordered, None
 
     @extend_schema(
         responses=inline_serializer(
@@ -1894,6 +1966,7 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
+                'milestones': serializers.ListField(child=serializers.DictField()),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
                 'maxWeeksCount': serializers.IntegerField(),
@@ -1907,20 +1980,7 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
         obj = AutoHoursTemplate.objects.filter(id=template_id).first()
         if not obj:
             return Response({'error': 'template not found'}, status=404)
-        return Response({
-            'id': obj.id,
-            'name': obj.name,
-            'description': obj.description or '',
-            'excludedRoleIds': list(obj.excluded_roles.values_list('id', flat=True)),
-            'excludedDepartmentIds': list(obj.excluded_departments.values_list('id', flat=True)),
-            'isActive': obj.is_active,
-            'phaseKeys': obj.phase_keys or [],
-            'weeksByPhase': self._weeks_by_phase_response(obj),
-            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
-            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
-            'createdAt': obj.created_at,
-            'updatedAt': obj.updated_at,
-        })
+        return Response(self._serialize_template(obj))
 
     @extend_schema(
         request=inline_serializer(
@@ -1931,6 +1991,7 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'isActive': serializers.BooleanField(required=False),
+                'milestones': serializers.ListField(child=serializers.DictField(), required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField(), required=False),
             },
@@ -1944,6 +2005,7 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
+                'milestones': serializers.ListField(child=serializers.DictField()),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
                 'maxWeeksCount': serializers.IntegerField(),
@@ -1972,37 +2034,19 @@ class AutoHoursTemplateDetailView(AutoHoursTemplatesView):
             return Response({'error': excl_err}, status=400)
         if 'isActive' in data:
             obj.is_active = bool(data.get('isActive'))
-        phase_keys, phase_err = self._parse_phase_keys(data)
-        if phase_err:
-            return Response({'error': phase_err}, status=400)
-        weeks_by_phase, weeks_err = self._normalize_weeks_by_phase(data)
-        if weeks_err:
-            return Response({'error': weeks_err}, status=400)
-        if phase_keys is not None:
-            obj.phase_keys = phase_keys
-        if weeks_by_phase is not None:
-            next_weeks = obj.weeks_by_phase or {}
-            next_weeks.update(weeks_by_phase)
-            obj.weeks_by_phase = next_weeks
-        obj.save(update_fields=['name', 'description', 'is_active', 'phase_keys', 'weeks_by_phase', 'updated_at'])
+        milestones, milestones_err = self._resolve_milestones_for_update(obj, data)
+        if milestones_err:
+            return Response({'error': milestones_err}, status=400)
+        update_fields = ['name', 'description', 'is_active', 'updated_at']
+        if milestones is not None:
+            obj.apply_milestones(milestones)
+            update_fields.extend(['milestones', 'phase_keys', 'weeks_by_phase'])
+        obj.save(update_fields=update_fields)
         if excluded_roles is not None:
             obj.excluded_roles.set(excluded_roles)
         if excluded_departments is not None:
             obj.excluded_departments.set(excluded_departments)
-        return Response({
-            'id': obj.id,
-            'name': obj.name,
-            'description': obj.description or '',
-            'excludedRoleIds': list(obj.excluded_roles.values_list('id', flat=True)),
-            'excludedDepartmentIds': list(obj.excluded_departments.values_list('id', flat=True)),
-            'isActive': obj.is_active,
-            'phaseKeys': obj.phase_keys or [],
-            'weeksByPhase': self._weeks_by_phase_response(obj),
-            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
-            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
-            'createdAt': obj.created_at,
-            'updatedAt': obj.updated_at,
-        })
+        return Response(self._serialize_template(obj))
 
     @extend_schema(
         responses=inline_serializer(
@@ -2039,6 +2083,7 @@ class AutoHoursTemplateDuplicateView(AutoHoursTemplatesView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
+                'milestones': serializers.ListField(child=serializers.DictField()),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
                 'maxWeeksCount': serializers.IntegerField(),
@@ -2063,9 +2108,13 @@ class AutoHoursTemplateDuplicateView(AutoHoursTemplatesView):
                 name=name,
                 description=base.description or '',
                 is_active=base.is_active,
-                phase_keys=base.phase_keys or [],
-                weeks_by_phase=base.weeks_by_phase or {},
+                milestones=base.effective_milestones(
+                    global_phase_keys=set(self._valid_phase_keys()),
+                    phase_label_by_key=self._phase_label_by_key(),
+                ),
             )
+            obj.apply_milestones(obj.milestones or [])
+            obj.save(update_fields=['milestones', 'phase_keys', 'weeks_by_phase', 'updated_at'])
             obj.excluded_roles.set(base.excluded_roles.all())
             obj.excluded_departments.set(base.excluded_departments.all())
 
@@ -2081,20 +2130,7 @@ class AutoHoursTemplateDuplicateView(AutoHoursTemplatesView):
                 )
                 cloned.people_roles.set(setting.people_roles.values_list('id', flat=True))
 
-        return Response({
-            'id': obj.id,
-            'name': obj.name,
-            'description': obj.description or '',
-            'excludedRoleIds': list(obj.excluded_roles.values_list('id', flat=True)),
-            'excludedDepartmentIds': list(obj.excluded_departments.values_list('id', flat=True)),
-            'isActive': obj.is_active,
-            'phaseKeys': obj.phase_keys or [],
-            'weeksByPhase': self._weeks_by_phase_response(obj),
-            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
-            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
-            'createdAt': obj.created_at,
-            'updatedAt': obj.updated_at,
-        })
+        return Response(self._serialize_template(obj))
 
 
 class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
@@ -2138,7 +2174,9 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField(), required=False),
                 'isActive': serializers.BooleanField(required=False),
+                'milestones': serializers.ListField(child=serializers.DictField(), required=False),
                 'phaseKeys': serializers.ListField(child=serializers.CharField(), required=False),
+                'weeksByPhase': serializers.DictField(child=serializers.IntegerField(), required=False),
             },
         ),
         responses=inline_serializer(
@@ -2150,6 +2188,7 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
                 'excludedRoleIds': serializers.ListField(child=serializers.IntegerField()),
                 'excludedDepartmentIds': serializers.ListField(child=serializers.IntegerField()),
                 'isActive': serializers.BooleanField(),
+                'milestones': serializers.ListField(child=serializers.DictField()),
                 'phaseKeys': serializers.ListField(child=serializers.CharField()),
                 'weeksByPhase': serializers.DictField(child=serializers.IntegerField()),
                 'maxWeeksCount': serializers.IntegerField(),
@@ -2171,13 +2210,15 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
         excluded_roles, excluded_departments, excl_err = self._parse_exclusions(data)
         if excl_err:
             return Response({'error': excl_err}, status=400)
+        milestones, milestones_err = self._parse_milestones(data)
+        if milestones_err:
+            return Response({'error': milestones_err}, status=400)
         phase_keys, phase_err = self._parse_phase_keys(data)
         if phase_err:
             return Response({'error': phase_err}, status=400)
-        if phase_keys is None:
-            phase_keys = self._valid_phase_keys()
-        if not phase_keys:
-            return Response({'error': 'phaseKeys must include at least one phase'}, status=400)
+        weeks_by_phase, weeks_err = self._normalize_weeks_by_phase(data)
+        if weeks_err:
+            return Response({'error': weeks_err}, status=400)
 
         excluded_role_set = set(excluded_roles or [])
         excluded_department_set = set(excluded_departments or [])
@@ -2189,14 +2230,28 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
         }
 
         global_settings = AutoHoursGlobalSettings.get_active()
+        if milestones is None:
+            fallback_phase_keys = phase_keys if phase_keys is not None else list(AUTO_HOURS_DEFAULT_MILESTONE_KEYS)
+            global_weeks = global_settings.weeks_by_phase or {}
+            if weeks_by_phase:
+                global_weeks = {**global_weeks, **weeks_by_phase}
+            milestones = milestones_from_legacy(
+                phase_keys=fallback_phase_keys,
+                weeks_by_phase=global_weeks,
+                global_phase_keys=set(self._valid_phase_keys()),
+                phase_label_by_key=self._phase_label_by_key(),
+            )
+        milestone_keys, _ = milestones_to_legacy(milestones)
+
         with transaction.atomic():
             obj = AutoHoursTemplate.objects.create(
                 name=name,
                 description=description,
                 is_active=is_active,
-                phase_keys=phase_keys,
-                weeks_by_phase=global_settings.weeks_by_phase or {},
+                milestones=milestones,
             )
+            obj.apply_milestones(milestones)
+            obj.save(update_fields=['milestones', 'phase_keys', 'weeks_by_phase', 'updated_at'])
             if excluded_roles is not None:
                 obj.excluded_roles.set(excluded_roles)
             if excluded_departments is not None:
@@ -2208,31 +2263,18 @@ class AutoHoursTemplateDuplicateDefaultView(AutoHoursTemplatesView):
                     continue
                 setting = settings_map.get(role.id)
                 by_phase = {}
-                for phase in phase_keys:
+                for phase in milestone_keys:
                     by_phase[phase] = self._resolve_hours_by_week(setting, phase)
                 new_settings.append(AutoHoursTemplateRoleSetting(
                     template_id=obj.id,
                     role_id=role.id,
                     ramp_percent_by_phase=by_phase,
-                    role_count_by_phase={phase: 1 for phase in phase_keys},
+                    role_count_by_phase={phase: 1 for phase in milestone_keys},
                 ))
             if new_settings:
                 AutoHoursTemplateRoleSetting.objects.bulk_create(new_settings)
 
-        return Response({
-            'id': obj.id,
-            'name': obj.name,
-            'description': obj.description or '',
-            'excludedRoleIds': list(obj.excluded_roles.values_list('id', flat=True)),
-            'excludedDepartmentIds': list(obj.excluded_departments.values_list('id', flat=True)),
-            'isActive': obj.is_active,
-            'phaseKeys': obj.phase_keys or [],
-            'weeksByPhase': self._weeks_by_phase_response(obj),
-            'maxWeeksCount': AUTO_HOURS_MAX_WEEKS_COUNT,
-            'defaultWeeksCount': AUTO_HOURS_DEFAULT_WEEKS_COUNT,
-            'createdAt': obj.created_at,
-            'updatedAt': obj.updated_at,
-        })
+        return Response(self._serialize_template(obj))
 
 
 class AutoHoursTemplateRoleSettingsView(APIView):
@@ -2249,17 +2291,33 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         return count, None
 
     def _get_weeks_count(self, template: AutoHoursTemplate, phase: str) -> int:
-        raw = (template.weeks_by_phase or {}).get(phase)
-        try:
-            return int(raw)
-        except Exception:
-            return AUTO_HOURS_DEFAULT_WEEKS_COUNT
+        milestones = template.effective_milestones(
+            global_phase_keys={normalize_milestone_key(k) for k in DeliverablePhaseDefinition.objects.values_list('key', flat=True)},
+            phase_label_by_key={normalize_milestone_key(p.key): p.label for p in DeliverablePhaseDefinition.objects.all()},
+        )
+        for row in milestones:
+            if normalize_milestone_key(row.get('key')) != normalize_milestone_key(phase):
+                continue
+            try:
+                return int(row.get('weeksCount'))
+            except Exception:
+                return AUTO_HOURS_DEFAULT_WEEKS_COUNT
+        return AUTO_HOURS_DEFAULT_WEEKS_COUNT
 
     def _set_weeks_count(self, template: AutoHoursTemplate, phase: str, count: int) -> None:
-        weeks_by_phase = template.weeks_by_phase or {}
-        weeks_by_phase[str(phase).strip().lower()] = int(count)
-        template.weeks_by_phase = weeks_by_phase
-        template.save(update_fields=['weeks_by_phase', 'updated_at'])
+        target_phase = normalize_milestone_key(phase)
+        milestones = template.effective_milestones(
+            global_phase_keys={normalize_milestone_key(k) for k in DeliverablePhaseDefinition.objects.values_list('key', flat=True)},
+            phase_label_by_key={normalize_milestone_key(p.key): p.label for p in DeliverablePhaseDefinition.objects.all()},
+        )
+        next_milestones: list[dict] = []
+        for row in milestones:
+            item = dict(row)
+            if normalize_milestone_key(item.get('key')) == target_phase:
+                item['weeksCount'] = int(count)
+            next_milestones.append(item)
+        template.apply_milestones(next_milestones)
+        template.save(update_fields=['milestones', 'phase_keys', 'weeks_by_phase', 'updated_at'])
 
     def _empty_hours_by_week(self) -> dict:
         return {str(i): 0 for i in range(self.MAX_WEEKS_BEFORE + 1)}
@@ -2305,11 +2363,12 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         phase = request.query_params.get('phase')
         if not phase:
             return None, 'phase is required'
-        norm = str(phase).strip().lower()
-        valid = set(DeliverablePhaseDefinition.objects.values_list('key', flat=True))
-        if norm in valid:
-            return norm, None
-        return None, 'phase must match an existing phase mapping'
+        norm = normalize_milestone_key(phase)
+        if not norm:
+            return None, 'phase is required'
+        if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', norm):
+            return None, 'phase must use a normalized milestone key'
+        return norm, None
 
     @extend_schema(
         responses=inline_serializer(
@@ -2336,7 +2395,11 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         template = AutoHoursTemplate.objects.filter(id=template_id).first()
         if not template:
             return Response({'error': 'template not found'}, status=404)
-        if phase not in (template.phase_keys or []):
+        template_phase_keys, _ = milestones_to_legacy(template.effective_milestones(
+            global_phase_keys={normalize_milestone_key(k) for k in DeliverablePhaseDefinition.objects.values_list('key', flat=True)},
+            phase_label_by_key={normalize_milestone_key(p.key): p.label for p in DeliverablePhaseDefinition.objects.all()},
+        ))
+        if phase not in set(template_phase_keys):
             return Response([])
         weeks_count = self._get_weeks_count(template, phase)
         dept_id = request.query_params.get('department_id')
@@ -2444,7 +2507,11 @@ class AutoHoursTemplateRoleSettingsView(APIView):
         template = AutoHoursTemplate.objects.filter(id=template_id).first()
         if not template:
             return Response({'error': 'template not found'}, status=404)
-        if phase not in (template.phase_keys or []):
+        template_phase_keys, _ = milestones_to_legacy(template.effective_milestones(
+            global_phase_keys={normalize_milestone_key(k) for k in DeliverablePhaseDefinition.objects.values_list('key', flat=True)},
+            phase_label_by_key={normalize_milestone_key(p.key): p.label for p in DeliverablePhaseDefinition.objects.all()},
+        ))
+        if phase not in set(template_phase_keys):
             return Response({'error': 'phase is not enabled for this template'}, status=400)
         payload = request.data or {}
         weeks_count = None

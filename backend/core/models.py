@@ -17,10 +17,16 @@ from core.notification_matrix import (
     legacy_global_matrix_from_settings,
     normalize_notification_channel_matrix,
 )
+from core.auto_hours_milestones import (
+    AUTO_HOURS_DEFAULT_MILESTONE_KEYS,
+    milestones_from_legacy,
+    milestones_to_legacy,
+    normalize_milestones_payload,
+)
 
 
 def default_auto_hours_phase_keys():
-    return ['sd', 'dd', 'ifp', 'ifc']
+    return list(AUTO_HOURS_DEFAULT_MILESTONE_KEYS)
 
 
 _TASK_PROGRESS_COLOR_HEX_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
@@ -534,6 +540,7 @@ class AutoHoursTemplate(models.Model):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True, default='')
     weeks_by_phase = models.JSONField(default=dict, blank=True)
+    milestones = models.JSONField(default=list, blank=True)
     excluded_roles = models.ManyToManyField(
         'projects.ProjectRole',
         blank=True,
@@ -555,6 +562,34 @@ class AutoHoursTemplate(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"AutoHoursTemplate({self.name})"
+
+    def effective_milestones(
+        self,
+        *,
+        global_phase_keys: set[str] | None = None,
+        phase_label_by_key: dict[str, str] | None = None,
+    ) -> list[dict]:
+        raw = self.milestones if isinstance(self.milestones, list) else []
+        milestones, err = normalize_milestones_payload(
+            raw,
+            global_phase_keys=global_phase_keys,
+            phase_label_by_key=phase_label_by_key,
+            require_non_empty=False,
+        )
+        if not err and milestones:
+            return milestones
+        return milestones_from_legacy(
+            phase_keys=self.phase_keys,
+            weeks_by_phase=self.weeks_by_phase,
+            global_phase_keys=global_phase_keys,
+            phase_label_by_key=phase_label_by_key,
+        )
+
+    def apply_milestones(self, milestones: list[dict]) -> None:
+        phase_keys, weeks_by_phase = milestones_to_legacy(milestones or [])
+        self.milestones = milestones or []
+        self.phase_keys = phase_keys
+        self.weeks_by_phase = weeks_by_phase
 
 
 class AutoHoursTemplateRoleSetting(models.Model):

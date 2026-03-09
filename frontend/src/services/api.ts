@@ -18,6 +18,7 @@ import {
   QATaskSettings,
   TaskProgressColorSettings,
   AutoHoursTemplate,
+  AutoHoursTemplateMilestone,
   PersonCapacityHeatmapItem,
   WorkloadForecastItem,
   PersonUtilization,
@@ -1132,14 +1133,32 @@ export const autoHoursTemplatesApi = {
   list: async (): Promise<AutoHoursTemplate[]> => {
     return fetchApi<AutoHoursTemplate[]>(`/core/project-templates/`, { headers: authHeaders() });
   },
-  create: async (payload: { name: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[]; weeksByPhase?: Record<string, number> }): Promise<AutoHoursTemplate> => {
+  create: async (payload: {
+    name: string;
+    description?: string;
+    excludedRoleIds?: number[];
+    excludedDepartmentIds?: number[];
+    isActive?: boolean;
+    milestones?: AutoHoursTemplateMilestone[];
+    phaseKeys?: string[];
+    weeksByPhase?: Record<string, number>;
+  }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
   },
-  update: async (templateId: number, payload: { name?: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[]; weeksByPhase?: Record<string, number> }): Promise<AutoHoursTemplate> => {
+  update: async (templateId: number, payload: {
+    name?: string;
+    description?: string;
+    excludedRoleIds?: number[];
+    excludedDepartmentIds?: number[];
+    isActive?: boolean;
+    milestones?: AutoHoursTemplateMilestone[];
+    phaseKeys?: string[];
+    weeksByPhase?: Record<string, number>;
+  }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/${templateId}/`, {
       method: 'PUT',
       headers: authHeaders(),
@@ -1153,7 +1172,16 @@ export const autoHoursTemplatesApi = {
       body: JSON.stringify(payload),
     });
   },
-  duplicateDefault: async (payload: { name: string; description?: string; excludedRoleIds?: number[]; excludedDepartmentIds?: number[]; isActive?: boolean; phaseKeys?: string[]; weeksByPhase?: Record<string, number> }): Promise<AutoHoursTemplate> => {
+  duplicateDefault: async (payload: {
+    name: string;
+    description?: string;
+    excludedRoleIds?: number[];
+    excludedDepartmentIds?: number[];
+    isActive?: boolean;
+    milestones?: AutoHoursTemplateMilestone[];
+    phaseKeys?: string[];
+    weeksByPhase?: Record<string, number>;
+  }): Promise<AutoHoursTemplate> => {
     return fetchApi<AutoHoursTemplate>(`/core/project-templates/duplicate-default/`, {
       method: 'POST',
       headers: authHeaders(),

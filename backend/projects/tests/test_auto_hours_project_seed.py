@@ -97,6 +97,7 @@ class ProjectCreateAutoHoursSeedTests(TestCase):
         assert sd is not None
         self.assertEqual(sd.date, sunday_of_week(start_date + timedelta(weeks=2)) + timedelta(days=6))
         self.assertIn("placeholder", (sd.notes or "").lower())
+        self.assertEqual((sd.template_milestone_key or "").lower(), "sd")
 
     def test_create_project_without_template_uses_global_defaults(self):
         AutoHoursRoleSetting.objects.create(
@@ -384,3 +385,51 @@ class ProjectCreateAutoHoursSeedTests(TestCase):
         self.assertEqual(dd.date, sunday_of_week(start_date + timedelta(weeks=4)) + timedelta(days=6))
         self.assertIn("placeholder", (sd.notes or "").lower())
         self.assertIn("placeholder", (dd.notes or "").lower())
+        self.assertEqual((sd.template_milestone_key or "").lower(), "sd")
+        self.assertEqual((dd.template_milestone_key or "").lower(), "dd")
+
+    def test_single_custom_milestone_template_seeds_tagged_deliverable(self):
+        template = AutoHoursTemplate.objects.create(
+            name=f"Permit Set Template {uuid4().hex[:8]}",
+            milestones=[
+                {
+                    "key": "permit-set",
+                    "label": "Permit Set",
+                    "weeksCount": 2,
+                    "sortOrder": 0,
+                    "sourceType": "template_local",
+                }
+            ],
+            phase_keys=["permit-set"],
+            weeks_by_phase={"permit-set": 2},
+            is_active=True,
+        )
+        AutoHoursTemplateRoleSetting.objects.create(
+            template=template,
+            role=self.project_role,
+            ramp_percent_by_phase={"permit-set": {"0": 50}},
+            role_count_by_phase={"permit-set": 1},
+        )
+
+        start_date = date(2026, 8, 12)
+        resp = self.client.post(
+            "/api/projects/",
+            {
+                "name": f"Permit Set Project {uuid4().hex[:8]}",
+                "client": "Internal",
+                "status": "active",
+                "startDate": start_date.isoformat(),
+                "autoHoursTemplateId": template.id,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)
+        project_id = int(resp.json()["id"])
+
+        deliverables = list(Deliverable.objects.filter(project_id=project_id).order_by("sort_order", "id"))
+        tagged = [row for row in deliverables if (row.template_milestone_key or "").strip()]
+        self.assertEqual(len(tagged), 1)
+        row = tagged[0]
+        self.assertEqual((row.template_milestone_key or "").lower(), "permit-set")
+        self.assertEqual((row.description or "").strip(), "Permit Set")
+        self.assertEqual(row.date, sunday_of_week(start_date + timedelta(weeks=1)) + timedelta(days=6))

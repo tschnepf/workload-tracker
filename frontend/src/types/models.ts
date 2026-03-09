@@ -181,6 +181,7 @@ export interface Deliverable {
   project: number; // Project ID (FK)
   percentage?: number | null; // 0-100, truly optional
   description?: string; // Brief description (SD, DD, IFP, IFC)
+  templateMilestoneKey?: string | null;
   date?: string | null; // YYYY-MM-DD format, can be removed for projects on hold
   notes?: string; // Additional details
   sortOrder?: number; // Manual ordering control
@@ -251,6 +252,15 @@ export interface TaskProgressColorSettings {
   updatedAt?: string;
 }
 
+export interface AutoHoursTemplateMilestone {
+  key: string;
+  label: string;
+  weeksCount: number;
+  sortOrder: number;
+  sourceType: 'global' | 'template_local';
+  globalPhaseKey?: string;
+}
+
 export interface AutoHoursTemplate {
   id: number;
   name: string;
@@ -258,6 +268,7 @@ export interface AutoHoursTemplate {
   excludedRoleIds?: number[];
   excludedDepartmentIds?: number[];
   isActive: boolean;
+  milestones?: AutoHoursTemplateMilestone[];
   phaseKeys?: string[];
   weeksByPhase?: Record<string, number>;
   maxWeeksCount?: number;

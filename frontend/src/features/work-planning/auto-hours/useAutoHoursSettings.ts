@@ -118,7 +118,12 @@ export function useAutoHoursSettings(options: UseAutoHoursSettingsOptions): UseA
   const autoHoursTemplatePhaseKeysById = React.useMemo(() => {
     const map = new Map<number, Set<string>>();
     (autoHoursTemplates || []).forEach((template) => {
-      const keys = template.phaseKeys && template.phaseKeys.length ? template.phaseKeys : autoHoursPhases;
+      const milestoneKeys = (template.milestones || [])
+        .map((milestone) => String(milestone?.key || '').trim().toLowerCase())
+        .filter((key, idx, arr) => key && arr.indexOf(key) === idx);
+      const keys = milestoneKeys.length > 0
+        ? milestoneKeys
+        : (template.phaseKeys && template.phaseKeys.length ? template.phaseKeys : autoHoursPhases);
       map.set(template.id, new Set(keys));
     });
     return map;

@@ -102,9 +102,49 @@ class AssignmentsPageSnapshotAutoHoursTests(TestCase):
         self.assertIn('templateSettingsByPhase', bundle)
         self.assertIn('sd', bundle['defaultSettingsByPhase'])
         self.assertEqual(bundle['defaultSettingsByPhase']['sd'][0]['roleId'], self.role.id)
+        self.assertIn('milestones', bundle['templates'][0])
         self.assertEqual(
             bundle['templateSettingsByPhase'][str(self.template.id)]['sd'][0]['roleId'],
             self.role.id,
+        )
+
+    def test_auto_hours_bundle_includes_custom_template_milestones(self):
+        custom_template = AutoHoursTemplate.objects.create(
+            name='Permit Set Snapshot Template',
+            milestones=[
+                {
+                    'key': 'permit-set',
+                    'label': 'Permit Set',
+                    'weeksCount': 3,
+                    'sortOrder': 0,
+                    'sourceType': 'template_local',
+                }
+            ],
+            phase_keys=['permit-set'],
+            weeks_by_phase={'permit-set': 3},
+            is_active=True,
+        )
+        AutoHoursTemplateRoleSetting.objects.create(
+            template=custom_template,
+            role=self.role,
+            ramp_percent_by_phase={'permit-set': {'0': 50}},
+            role_count_by_phase={'permit-set': 1},
+        )
+        self.client.force_authenticate(user=self.manager)
+        res = self.client.get(
+            f'/api/ui/assignments-page/?include=auto_hours&template_ids={custom_template.id}'
+        )
+        self.assertEqual(res.status_code, 200)
+        payload = res.json()
+        bundle = payload.get('autoHoursBundle')
+        self.assertIsNotNone(bundle)
+        templates = bundle.get('templates') or []
+        template_row = next(item for item in templates if int(item['id']) == custom_template.id)
+        self.assertEqual(template_row.get('phaseKeys'), ['permit-set'])
+        self.assertEqual((template_row.get('milestones') or [])[0].get('key'), 'permit-set')
+        self.assertIn(
+            'permit-set',
+            (bundle.get('templateSettingsByPhase') or {}).get(str(custom_template.id), {}),
         )
 
     def test_auto_hours_bundle_reports_missing_template_ids(self):

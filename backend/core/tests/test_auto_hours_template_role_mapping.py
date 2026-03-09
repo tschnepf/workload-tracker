@@ -89,6 +89,74 @@ class AutoHoursTemplateRoleMappingApiTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, resp.content)
         self.assertIn('unknown peopleRoleIds', str(resp.json().get('error', '')))
 
+    def test_template_settings_put_supports_template_local_milestone_key(self):
+        template = AutoHoursTemplate.objects.create(
+            name=f'Template Local Milestone {uuid4().hex[:8]}',
+            milestones=[
+                {
+                    'key': 'permit-set',
+                    'label': 'Permit Set',
+                    'weeksCount': 3,
+                    'sortOrder': 0,
+                    'sourceType': 'template_local',
+                }
+            ],
+            phase_keys=['permit-set'],
+            weeks_by_phase={'permit-set': 3},
+            is_active=True,
+        )
+        payload = {
+            'settings': [
+                {
+                    'roleId': self.project_role.id,
+                    'percentByWeek': {'0': 55},
+                    'roleCount': 2,
+                    'peopleRoleIds': [self.people_role_a.id],
+                }
+            ]
+        }
+        resp = self.client.put(
+            f'/api/core/project-template-settings/{template.id}/?phase=permit-set',
+            payload,
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        rows = resp.json()
+        row = next(item for item in rows if int(item['roleId']) == self.project_role.id)
+        self.assertEqual(int(row['roleCount']), 2)
+        self.assertEqual(row.get('peopleRoleIds'), [self.people_role_a.id])
+
+    def test_create_template_with_milestones_returns_compatibility_fields(self):
+        payload = {
+            'name': f'Template Milestones API {uuid4().hex[:8]}',
+            'milestones': [
+                {
+                    'key': 'sd',
+                    'label': 'Schematic Design',
+                    'weeksCount': 4,
+                    'sortOrder': 0,
+                    'sourceType': 'global',
+                    'globalPhaseKey': 'sd',
+                },
+                {
+                    'key': 'permit-set',
+                    'label': 'Permit Set',
+                    'weeksCount': 2,
+                    'sortOrder': 1,
+                    'sourceType': 'template_local',
+                },
+            ],
+        }
+        resp = self.client.post('/api/core/project-templates/', payload, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)
+        body = resp.json()
+        self.assertEqual(body.get('phaseKeys'), ['sd', 'permit-set'])
+        self.assertEqual(body.get('weeksByPhase', {}).get('sd'), 4)
+        self.assertEqual(body.get('weeksByPhase', {}).get('permit-set'), 2)
+        milestones = body.get('milestones') or []
+        self.assertEqual(len(milestones), 2)
+        self.assertEqual(milestones[1].get('key'), 'permit-set')
+
     def test_template_duplicate_copies_people_role_mappings(self):
         setting = AutoHoursTemplateRoleSetting.objects.create(
             template=self.template,

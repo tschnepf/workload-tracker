@@ -27,6 +27,13 @@ class Deliverable(models.Model):
         blank=True,
         help_text="Brief description (e.g., SD, DD, IFP, IFC)"
     )
+
+    template_milestone_key = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Template milestone key used for stable auto-hours matching",
+    )
     
     date = models.DateField(
         blank=True, 
@@ -63,6 +70,9 @@ class Deliverable(models.Model):
     
     class Meta:
         ordering = ['sort_order', 'percentage', 'date', 'created_at']
+        indexes = [
+            models.Index(fields=['project', 'template_milestone_key'], name='deliverable_proj_mskey'),
+        ]
         
     def clean(self):
         """Optional validation - all fields truly optional per requirements"""

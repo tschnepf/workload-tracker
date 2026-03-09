@@ -17,6 +17,7 @@ class DeliverableSerializer(serializers.ModelSerializer):
     
     # Map snake_case model fields to camelCase API fields
     sortOrder = serializers.IntegerField(source='sort_order', required=False)
+    templateMilestoneKey = serializers.CharField(source='template_milestone_key', required=False, allow_null=True, read_only=True)
     isCompleted = serializers.BooleanField(source='is_completed', required=False)
     completedDate = serializers.DateField(source='completed_date', required=False, allow_null=True, format='%Y-%m-%d')
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
@@ -36,6 +37,7 @@ class DeliverableSerializer(serializers.ModelSerializer):
             'date',
             'notes',
             'sortOrder',
+            'templateMilestoneKey',
             'isCompleted', 
             'completedDate',
             'createdAt',

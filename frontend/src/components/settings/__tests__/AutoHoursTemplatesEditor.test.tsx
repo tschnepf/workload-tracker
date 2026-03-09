@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const {
@@ -8,6 +8,7 @@ const {
   showToastMock,
   listMock,
   updateMock,
+  templateUpdateMock,
   listTemplatesMock,
   listTemplateSettingsMock,
   phaseMappingGetMock,
@@ -17,6 +18,7 @@ const {
   showToastMock: vi.fn(),
   listMock: vi.fn(),
   updateMock: vi.fn(),
+  templateUpdateMock: vi.fn(),
   listTemplatesMock: vi.fn(),
   listTemplateSettingsMock: vi.fn(),
   phaseMappingGetMock: vi.fn(),
@@ -48,7 +50,7 @@ vi.mock('@/services/api', () => ({
     list: (...args: any[]) => listTemplatesMock(...args),
     listSettings: (...args: any[]) => listTemplateSettingsMock(...args),
     create: vi.fn(),
-    update: vi.fn(),
+    update: (...args: any[]) => templateUpdateMock(...args),
     duplicate: vi.fn(),
     duplicateDefault: vi.fn(),
     delete: vi.fn(),
@@ -99,6 +101,17 @@ describe('AutoHoursTemplatesEditor', () => {
     useMediaQueryMock.mockReturnValue(false);
     listTemplatesMock.mockResolvedValue([]);
     listTemplateSettingsMock.mockResolvedValue([]);
+    templateUpdateMock.mockResolvedValue({
+      id: 1,
+      name: 'Template 1',
+      description: '',
+      milestones: [
+        { key: 'sd', label: 'SD', weeksCount: 6, sortOrder: 0, sourceType: 'global', globalPhaseKey: 'sd' },
+        { key: 'dd', label: 'DD', weeksCount: 4, sortOrder: 1, sourceType: 'global', globalPhaseKey: 'dd' },
+      ],
+      phaseKeys: ['sd', 'dd'],
+      weeksByPhase: { sd: 6, dd: 4 },
+    });
     phaseMappingGetMock.mockResolvedValue({
       useDescriptionMatch: true,
       phases: [
@@ -214,5 +227,87 @@ describe('AutoHoursTemplatesEditor', () => {
     const ddTab = screen.getByRole('tab', { name: 'DD' });
     await userEvent.click(ddTab);
     expect(ddTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps milestone edit mode active after reordering a milestone', async () => {
+    listTemplatesMock.mockResolvedValue([
+      {
+        id: 1,
+        name: 'Template 1',
+        description: '',
+        milestones: [
+          { key: 'sd', label: 'SD', weeksCount: 6, sortOrder: 0, sourceType: 'global', globalPhaseKey: 'sd' },
+          { key: 'dd', label: 'DD', weeksCount: 4, sortOrder: 1, sourceType: 'global', globalPhaseKey: 'dd' },
+        ],
+        phaseKeys: ['sd', 'dd'],
+        weeksByPhase: { sd: 6, dd: 4 },
+      },
+    ] as any);
+    templateUpdateMock.mockResolvedValue({
+      id: 1,
+      name: 'Template 1',
+      description: '',
+      milestones: [
+        { key: 'dd', label: 'DD', weeksCount: 4, sortOrder: 0, sourceType: 'global', globalPhaseKey: 'dd' },
+        { key: 'sd', label: 'SD', weeksCount: 6, sortOrder: 1, sourceType: 'global', globalPhaseKey: 'sd' },
+      ],
+      phaseKeys: ['dd', 'sd'],
+      weeksByPhase: { sd: 6, dd: 4 },
+    });
+
+    render(<AutoHoursTemplatesEditor />);
+
+    const templateButton = await screen.findByRole('button', { name: 'Template 1' });
+    await userEvent.click(templateButton);
+
+    const editToggleButton = await screen.findByRole('button', { name: 'Add/Edit' });
+    await userEvent.click(editToggleButton);
+    await screen.findByRole('button', { name: 'Done' });
+
+    const moveRightButtons = await screen.findAllByLabelText('Move milestone right');
+    await userEvent.click(moveRightButtons[0]);
+
+    await waitFor(() => expect(templateUpdateMock).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: 'Done' })).toBeTruthy();
+  });
+
+  it('toggles milestone enabled state from milestone chips', async () => {
+    listTemplatesMock.mockResolvedValue([
+      {
+        id: 1,
+        name: 'Template 1',
+        description: '',
+        milestones: [
+          { key: 'sd', label: 'SD', weeksCount: 6, sortOrder: 0, sourceType: 'global', globalPhaseKey: 'sd' },
+          { key: 'dd', label: 'DD', weeksCount: 4, sortOrder: 1, sourceType: 'global', globalPhaseKey: 'dd' },
+        ],
+        phaseKeys: ['sd', 'dd'],
+        weeksByPhase: { sd: 6, dd: 4 },
+      },
+    ] as any);
+    templateUpdateMock.mockResolvedValue({
+      id: 1,
+      name: 'Template 1',
+      description: '',
+      milestones: [
+        { key: 'dd', label: 'DD', weeksCount: 4, sortOrder: 0, sourceType: 'global', globalPhaseKey: 'dd' },
+      ],
+      phaseKeys: ['dd'],
+      weeksByPhase: { dd: 4 },
+    });
+
+    render(<AutoHoursTemplatesEditor />);
+
+    const templateButton = await screen.findByRole('button', { name: 'Template 1' });
+    await userEvent.click(templateButton);
+
+    const milestoneHeaderRow = (await screen.findByText('Milestones')).parentElement as HTMLElement;
+    const sdMilestoneChip = within(milestoneHeaderRow).getByRole('button', { name: 'SD' });
+    await userEvent.click(sdMilestoneChip);
+
+    await waitFor(() => expect(templateUpdateMock).toHaveBeenCalledTimes(1));
+    expect(templateUpdateMock.mock.calls[0][1]).toMatchObject({
+      milestones: [{ key: 'dd' }],
+    });
   });
 });

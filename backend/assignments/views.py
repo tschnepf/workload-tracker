@@ -4590,22 +4590,33 @@ class AssignmentsPageSnapshotView(APIView):
         templates = list(AutoHoursTemplate.objects.all().prefetch_related('excluded_roles', 'excluded_departments').order_by('name'))
         template_by_id = {t.id: t for t in templates}
         templates_payload = []
+        phase_label_by_key = {str(p.get('key') or '').strip().lower(): str(p.get('label') or '').strip() for p in (phase_mapping_payload.get('phases') or [])}
+        global_phase_keys = set(phase_label_by_key.keys())
         for t in templates:
             excluded_role_ids = list(t.excluded_roles.values_list('id', flat=True))
             excluded_department_ids = list(t.excluded_departments.values_list('id', flat=True))
-            weeks_by_phase_raw = t.weeks_by_phase or {}
+            milestones = t.effective_milestones(
+                global_phase_keys=global_phase_keys,
+                phase_label_by_key=phase_label_by_key,
+            )
+            phase_keys = []
             weeks_by_phase = {}
-            for phase in phases:
+            for milestone in milestones:
+                key = str(milestone.get('key') or '').strip().lower()
+                if not key or key in phase_keys:
+                    continue
+                phase_keys.append(key)
                 try:
-                    weeks_by_phase[phase] = int(weeks_by_phase_raw.get(phase, 6))
+                    weeks_by_phase[key] = int(milestone.get('weeksCount'))
                 except Exception:
-                    weeks_by_phase[phase] = 6
+                    weeks_by_phase[key] = 6
             templates_payload.append({
                 'id': t.id,
                 'name': t.name,
                 'description': t.description or '',
                 'isActive': bool(t.is_active),
-                'phaseKeys': t.phase_keys or [],
+                'milestones': milestones,
+                'phaseKeys': phase_keys,
                 'weeksByPhase': weeks_by_phase,
                 'maxWeeksCount': self._AUTO_HOURS_MAX_WEEKS_BEFORE + 1,
                 'defaultWeeksCount': 6,
@@ -4634,14 +4645,22 @@ class AssignmentsPageSnapshotView(APIView):
                     role for role in roles
                     if role.id not in excluded_roles and role.department_id not in excluded_departments
                 ]
-                allowed_phases = set(template.phase_keys or [])
+                template_milestones = template.effective_milestones(
+                    global_phase_keys=global_phase_keys,
+                    phase_label_by_key=phase_label_by_key,
+                )
+                template_phase_keys = []
+                for milestone in template_milestones:
+                    key = str(milestone.get('key') or '').strip().lower()
+                    if key and key not in template_phase_keys:
+                        template_phase_keys.append(key)
                 per_phase: Dict[str, List[dict]] = {}
-                for phase in phases:
-                    if phase not in allowed_phases:
-                        per_phase[phase] = []
-                        continue
+                for phase in template_phase_keys:
                     try:
-                        template_weeks_count = int((template.weeks_by_phase or {}).get(phase, 6))
+                        template_weeks_count = int(next(
+                            (row.get('weeksCount') for row in template_milestones if str(row.get('key') or '').strip().lower() == phase),
+                            6,
+                        ))
                     except Exception:
                         template_weeks_count = 6
                     per_phase[phase] = [
