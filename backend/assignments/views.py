@@ -134,6 +134,32 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             return enforced_vertical
         return vertical_param
 
+    def _is_truthy(self, value) -> bool:
+        return str(value or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+    def _request_person_id(self, request) -> Optional[int]:
+        try:
+            person_id = getattr(getattr(request.user, 'profile', None), 'person_id', None)
+        except Exception:
+            person_id = None
+        try:
+            person_id = int(person_id)
+        except Exception:
+            return None
+        return person_id if person_id > 0 else None
+
+    def _mine_project_ids_queryset(self, request):
+        person_id = self._request_person_id(request)
+        if not person_id:
+            return None
+        return (
+            Assignment.objects
+            .filter(is_active=True, person_id=person_id)
+            .exclude(project_id__isnull=True)
+            .values_list('project_id', flat=True)
+            .distinct()
+        )
+
     def get_queryset(self):
         qs = (
             Assignment.objects.filter(is_active=True)
@@ -430,6 +456,16 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(person_id=person_id)
             except ValueError:
                 pass
+
+        mine_only_raw = request.query_params.get('mine_only')
+        if isinstance(data, dict) and data.get('mine_only') is not None:
+            mine_only_raw = data.get('mine_only')
+        mine_only = self._is_truthy(mine_only_raw)
+        if mine_only:
+            mine_project_ids_qs = self._mine_project_ids_queryset(request)
+            if mine_project_ids_qs is None:
+                return queryset.none()
+            queryset = queryset.filter(project_id__in=mine_project_ids_qs)
 
         dept_param = request.query_params.get('department')
         if isinstance(data, dict) and data.get('department') is not None:
@@ -794,6 +830,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 'vertical': serializers.IntegerField(required=False),
                 'status_in': serializers.CharField(required=False),
                 'include_placeholders': serializers.IntegerField(required=False),
+                'mine_only': serializers.BooleanField(required=False),
                 'project': serializers.IntegerField(required=False),
                 'person': serializers.IntegerField(required=False),
                 'meta_only': serializers.BooleanField(required=False),
@@ -959,6 +996,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             except Exception:
                 pass
 
+        mine_only_raw = data.get('mine_only') if isinstance(data, dict) else None
+        if mine_only_raw is None:
+            mine_only_raw = request.query_params.get('mine_only')
+        if self._is_truthy(mine_only_raw):
+            people_qs = people_qs.filter(
+                id__in=queryset.filter(person_id__isnull=False).values_list('person_id', flat=True).distinct()
+            )
+
         person_match_ids, person_text_match_ids, person_workload_match_ids = self._filter_people_ids_by_tokens(
             people_qs=people_qs,
             tokens=tokens,
@@ -1081,6 +1126,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters'),
             OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1'),
             OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (optional)'),
+            OpenApiParameter(name='mine_only', type=bool, required=False, description='1|true to scope to projects assigned to current user'),
         ],
         responses=inline_serializer(
             name='ProjectGridSnapshotResponse',
@@ -1128,6 +1174,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='project_grid_snapshot', throttle_classes=[GridSnapshotThrottle])
     def project_grid_snapshot(self, request):
         from deliverables.models import Deliverable  # lazy import
+        mine_only = self._is_truthy(request.query_params.get('mine_only'))
+        mine_person_id = self._request_person_id(request) if mine_only else None
         # Cache key based on inputs to avoid recomputation within short TTL
         try:
             cache_key = None
@@ -1147,6 +1195,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                         'status_in': request.query_params.get('status_in', ''),
                         'has_future_deliverables': request.query_params.get('has_future_deliverables', ''),
                         'project_ids': request.query_params.get('project_ids', ''),
+                        'mine_only': 1 if mine_only else 0,
+                        'mine_person_id': mine_person_id or '',
                     },
                 )
             except Exception:
@@ -1203,11 +1253,28 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         # Optional project scoping
         scope_ids = request.query_params.get('project_ids')
         scope_set = None
+        scope_filter_active = False
         if scope_ids:
             try:
                 scope_set = set(int(x) for x in scope_ids.split(',') if x.strip().isdigit())
+                scope_filter_active = True
             except Exception:
                 scope_set = None
+                scope_filter_active = False
+        if mine_only:
+            mine_project_ids: set[int] = set()
+            if mine_person_id:
+                mine_project_ids = set(
+                    Assignment.objects
+                    .filter(is_active=True, person_id=mine_person_id)
+                    .exclude(project_id__isnull=True)
+                    .values_list('project_id', flat=True)
+                )
+            if scope_filter_active and scope_set is not None:
+                scope_set = scope_set.intersection(mine_project_ids)
+            else:
+                scope_set = set(mine_project_ids)
+                scope_filter_active = True
 
         # Status filter
         status_in = request.query_params.get('status_in')
@@ -1239,8 +1306,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     qs = qs.filter(person__department_id__in=dept_ids)
             if dept_filters:
                 qs = self._apply_assignment_department_filters(qs, dept_filters, include_placeholders)
-            if scope_set:
-                qs = qs.filter(project_id__in=scope_set)
+            if scope_filter_active:
+                qs = qs.filter(project_id__in=list(scope_set or []))
             if project_ids:
                 qs = qs.filter(project_id__in=project_ids)
             return qs
@@ -1287,8 +1354,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         hours_qs = ProjectWeeklyHoursRollup.objects.filter(week_start__in=week_keys)
         if dept_ids:
             hours_qs = hours_qs.filter(department_id__in=dept_ids)
-        if scope_set:
-            hours_qs = hours_qs.filter(project_id__in=scope_set)
+        if scope_filter_active:
+            hours_qs = hours_qs.filter(project_id__in=list(scope_set or []))
         if vertical_param not in (None, ""):
             try:
                 hours_qs = hours_qs.filter(project__vertical_id=int(vertical_param))
@@ -1312,8 +1379,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         counts_qs = ProjectAssignmentCountsRollup.objects.all()
         if dept_ids:
             counts_qs = counts_qs.filter(department_id__in=dept_ids)
-        if scope_set:
-            counts_qs = counts_qs.filter(project_id__in=scope_set)
+        if scope_filter_active:
+            counts_qs = counts_qs.filter(project_id__in=list(scope_set or []))
         if vertical_param not in (None, ""):
             try:
                 counts_qs = counts_qs.filter(project__vertical_id=int(vertical_param))
@@ -1338,14 +1405,14 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     placeholders_per_project[pid] = placeholders
 
         assignment_last_by_project = {}
-        expected_projects: set[int] = set(scope_set or [])
+        expected_projects: set[int] = set(scope_set or []) if scope_filter_active else set()
         try:
             for row in _assignment_scope_queryset().values('project_id').annotate(last=Max('updated_at')):
                 pid = row.get('project_id')
                 if pid is None:
                     continue
                 assignment_last_by_project[pid] = row.get('last')
-            if not scope_set:
+            if not scope_filter_active:
                 expected_projects = set(assignment_last_by_project.keys())
         except Exception:  # nosec B110
             assignment_last_by_project = {}
@@ -1377,8 +1444,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 pass
 
         project_ids = list(set(project_hours.keys()) | set(people_per_project.keys()) | set(placeholders_per_project.keys()))
-        if not project_ids and scope_set:
-            project_ids = list(scope_set)
+        if not project_ids and scope_filter_active:
+            project_ids = list(scope_set or [])
 
         # Fallback to live compute if rollups are missing
         if not project_ids:
@@ -3421,6 +3488,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='include_children', type=int, required=False, description='0|1'),
             OpenApiParameter(name='department_filters', type=str, required=False, description='JSON array of department filter clauses'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='mine_only', type=bool, required=False, description='1|true to scope to projects assigned to current user'),
         ],
         responses=inline_serializer(
             name='GridSnapshotResponse',
@@ -3464,6 +3532,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             dept_param = request.query_params.get('department')
             include_children = request.query_params.get('include_children') == '1'
             vertical_param = self._effective_vertical_param(request.query_params.get('vertical'))
+            mine_only = self._is_truthy(request.query_params.get('mine_only'))
+            mine_person_id = self._request_person_id(request) if mine_only else None
             cache_scope = 'all'
             if dept_param not in (None, ""):
                 try:
@@ -3508,6 +3578,21 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 except Exception:  # nosec B110
                     pass
 
+            mine_project_ids_qs = None
+            if mine_only:
+                if not mine_person_id:
+                    people_qs = people_qs.none()
+                    cache_scope = f"{cache_scope}_mine_none"
+                else:
+                    mine_project_ids_qs = self._mine_project_ids_queryset(request)
+                    has_assignment = Assignment.objects.filter(
+                        is_active=True,
+                        person_id=OuterRef('pk'),
+                        project_id__in=mine_project_ids_qs,
+                    )
+                    people_qs = people_qs.annotate(_mine_project_match=Exists(has_assignment)).filter(_mine_project_match=True)
+                    cache_scope = f"{cache_scope}_mine_{mine_person_id}"
+
             # Prefetch active assignments with minimal fields
             asn_qs = Assignment.objects.filter(is_active=True)
             if vertical_param not in (None, ""):
@@ -3515,6 +3600,11 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                     asn_qs = asn_qs.filter(project__vertical_id=int(vertical_param))
                 except Exception:  # nosec B110
                     pass
+            if mine_only:
+                if mine_project_ids_qs is None:
+                    asn_qs = asn_qs.none()
+                else:
+                    asn_qs = asn_qs.filter(project_id__in=mine_project_ids_qs)
             asn_qs = asn_qs.only('weekly_hours', 'person_id', 'updated_at')
             people_qs = people_qs.prefetch_related(Prefetch('assignments', queryset=asn_qs))
 
@@ -3540,7 +3630,13 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
             # Compute conservative validators across People + Assignments
             ppl_aggr = people_qs.aggregate(last_modified=Max('updated_at'))
-            asn_aggr = Assignment.objects.filter(person__in=people_qs).aggregate(last_modified=Max('updated_at'))
+            asn_for_lm = Assignment.objects.filter(person__in=people_qs)
+            if mine_only:
+                if mine_project_ids_qs is None:
+                    asn_for_lm = asn_for_lm.none()
+                else:
+                    asn_for_lm = asn_for_lm.filter(project_id__in=mine_project_ids_qs)
+            asn_aggr = asn_for_lm.aggregate(last_modified=Max('updated_at'))
             lm_candidates = [ppl_aggr.get('last_modified'), asn_aggr.get('last_modified')]
             last_modified = max([dt for dt in lm_candidates if dt]) if any(lm_candidates) else None
             try:
@@ -3606,7 +3702,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                             time.sleep(0.05)
                     if payload is None:
                         storage_mode = getattr(settings, 'ASSIGNMENT_HOURS_STORAGE_MODE', 'dual')
-                        use_normalized = storage_mode == 'normalized'
+                        use_normalized = storage_mode == 'normalized' and not mine_only
                         if use_normalized:
                             try:
                                 payload = build_grid_snapshot_payload_normalized(
@@ -3991,6 +4087,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             OpenApiParameter(name='page', type=int, required=False, description='Page number (optional pagination)'),
             OpenApiParameter(name='page_size', type=int, required=False, description='Page size (optional pagination)'),
             OpenApiParameter(name='vertical', type=int, required=False, description='Filter by vertical id'),
+            OpenApiParameter(name='mine_only', type=bool, required=False, description='1|true to scope to projects assigned to current user'),
         ]
     )
     @action(detail=False, methods=['get'])
@@ -4007,6 +4104,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(project__vertical_id=int(vertical_param))
             except Exception:  # nosec B110
                 pass
+        if self._is_truthy(request.query_params.get('mine_only')):
+            mine_project_ids_qs = self._mine_project_ids_queryset(request)
+            if mine_project_ids_qs is None:
+                queryset = queryset.none()
+            else:
+                queryset = queryset.filter(project_id__in=mine_project_ids_qs)
 
         # Opt-in pagination: only paginate when page/page_size is provided
         if request.query_params.get('page') or request.query_params.get('page_size'):
@@ -4239,6 +4342,7 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
         OpenApiParameter(name='status_in', type=str, required=False, description='CSV of project status filters (project grid)'),
         OpenApiParameter(name='has_future_deliverables', type=int, required=False, description='0|1 (project grid)'),
         OpenApiParameter(name='project_ids', type=str, required=False, description='CSV of project IDs to scope totals (project grid)'),
+        OpenApiParameter(name='mine_only', type=bool, required=False, description='1|true to scope to projects assigned to current user'),
         OpenApiParameter(name='include', type=str, required=False, description='CSV: assignment,project,auto_hours (default assignment,project)'),
         OpenApiParameter(name='auto_hours_phases', type=str, required=False, description='CSV of phase keys for auto-hours bundle'),
         OpenApiParameter(name='template_ids', type=str, required=False, description='CSV of template IDs for templateSettingsByPhase (max 200)'),
@@ -4252,6 +4356,32 @@ class AssignmentsPageSnapshotView(APIView):
     _INCLUDE_ALLOWED = {'assignment', 'project', 'auto_hours'}
     _DEFAULT_INCLUDE = ['assignment', 'project']
     _MAX_INCLUDE_TOKENS = 10
+
+    def _is_truthy(self, value) -> bool:
+        return str(value or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+    def _request_person_id(self, request) -> Optional[int]:
+        try:
+            person_id = getattr(getattr(request.user, 'profile', None), 'person_id', None)
+        except Exception:
+            person_id = None
+        try:
+            person_id = int(person_id)
+        except Exception:
+            return None
+        return person_id if person_id > 0 else None
+
+    def _mine_project_ids_queryset(self, request):
+        person_id = self._request_person_id(request)
+        if not person_id:
+            return None
+        return (
+            Assignment.objects
+            .filter(is_active=True, person_id=person_id)
+            .exclude(project_id__isnull=True)
+            .values_list('project_id', flat=True)
+            .distinct()
+        )
 
     def _parse_include(self, request, body: dict | None = None):
         raw = None
@@ -4547,6 +4677,9 @@ class AssignmentsPageSnapshotView(APIView):
         if include_err:
             return None, Response({'error': include_err}, status=status.HTTP_400_BAD_REQUEST)
         include_set = set(include_tokens or [])
+        mine_only = self._is_truthy(request.query_params.get('mine_only'))
+        mine_person_id = self._request_person_id(request) if mine_only else None
+        mine_project_ids_qs = self._mine_project_ids_queryset(request) if mine_only else None
         include_auto_hours = 'auto_hours' in include_set
         if include_auto_hours and (not is_admin_or_manager(request.user)):
             return None, Response(self._forbidden_auto_hours_payload(), status=status.HTTP_403_FORBIDDEN)
@@ -4580,6 +4713,8 @@ class AssignmentsPageSnapshotView(APIView):
                     'status_in': request.query_params.get('status_in', ''),
                     'has_future_deliverables': request.query_params.get('has_future_deliverables', ''),
                     'project_ids': request.query_params.get('project_ids', ''),
+                    'mine_only': 1 if mine_only else 0,
+                    'mine_person_id': mine_person_id or '',
                     'include': include_tokens or [],
                     'auto_hours_enabled': 1 if bundle_enabled else 0,
                     'auto_hours_phases': auto_hours_phases if bundle_enabled else [],
@@ -4602,7 +4737,7 @@ class AssignmentsPageSnapshotView(APIView):
         try:
             if 'assignment' in include_set:
                 storage_mode = getattr(settings, 'ASSIGNMENT_HOURS_STORAGE_MODE', 'dual')
-                if storage_mode == 'normalized':
+                if storage_mode == 'normalized' and not mine_only:
                     try:
                         weeks = int(request.query_params.get('weeks', 12))
                     except Exception:
@@ -4745,6 +4880,11 @@ class AssignmentsPageSnapshotView(APIView):
             projects_qs = Project.objects.filter(is_active=True).only(
                 'id', 'name', 'client', 'project_number', 'status', 'is_active', 'auto_hours_template_id'
             ).order_by('name')
+            if mine_only:
+                if mine_project_ids_qs is None:
+                    projects_qs = projects_qs.none()
+                else:
+                    projects_qs = projects_qs.filter(id__in=mine_project_ids_qs)
             projects_payload = [
                 {
                     'id': p.id,
@@ -4768,6 +4908,11 @@ class AssignmentsPageSnapshotView(APIView):
                 start = date.fromisoformat(week_keys[0])
                 end_date = date.fromisoformat(week_keys[-1]) + timedelta(days=6)
                 qs = Deliverable.objects.filter(date__gte=start, date__lte=end_date).select_related('project')
+                if mine_only:
+                    if mine_project_ids_qs is None:
+                        qs = qs.none()
+                    else:
+                        qs = qs.filter(project_id__in=mine_project_ids_qs)
                 for d in qs:
                     if d.description:
                         desc = d.description

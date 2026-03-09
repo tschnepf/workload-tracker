@@ -683,22 +683,26 @@ def _build_recommendation(
     role_rows: list[dict[str, Any]],
     total_unmapped: list[float],
     thresholds: dict[str, float],
+    decision_start_idx: int = 0,
 ) -> dict[str, Any]:
+    window_start = max(0, min(int(decision_start_idx or 0), len(week_keys)))
     first_team_over = None
     first_role_over = None
     first_unmapped_over = None
-    for idx, value in enumerate(team_utilization):
+    for idx in range(window_start, len(team_utilization)):
+        value = team_utilization[idx]
         if value > thresholds["teamUtilizationPct"]:
             first_team_over = idx
             break
-    for idx, value in enumerate(total_unmapped):
+    for idx in range(window_start, len(total_unmapped)):
+        value = total_unmapped[idx]
         if value > thresholds["unmappedHoursPerWeek"]:
             first_unmapped_over = idx
             break
     role_overages: list[dict[str, Any]] = []
     for row in role_rows:
         utilizations = row.get("utilization") or []
-        peak = max((float(v or 0.0) for v in utilizations), default=0.0)
+        peak = max((float(v or 0.0) for v in utilizations[window_start:]), default=0.0)
         if peak > thresholds["roleUtilizationPct"]:
             role_overages.append(
                 {
@@ -708,7 +712,8 @@ def _build_recommendation(
                 }
             )
             if first_role_over is None:
-                for idx, value in enumerate(utilizations):
+                for idx in range(window_start, len(utilizations)):
+                    value = utilizations[idx]
                     if float(value or 0.0) > thresholds["roleUtilizationPct"]:
                         first_role_over = idx
                         break
@@ -716,8 +721,8 @@ def _build_recommendation(
     role_overages.sort(key=lambda item: float(item.get("peakUtilizationPct") or 0.0), reverse=True)
     top_bottlenecks = role_overages[:3]
 
-    peak_team_util = max((float(v or 0.0) for v in team_utilization), default=0.0)
-    peak_unmapped = max((float(v or 0.0) for v in total_unmapped), default=0.0)
+    peak_team_util = max((float(v or 0.0) for v in team_utilization[window_start:]), default=0.0)
+    peak_unmapped = max((float(v or 0.0) for v in total_unmapped[window_start:]), default=0.0)
 
     decision = "Go"
     reasons: list[str] = []
@@ -777,7 +782,7 @@ def _earliest_feasible_for_project(
 
     for candidate_idx in range(max(0, start_idx_min), len(week_keys)):
         feasible = True
-        for wk_idx in range(len(week_keys)):
+        for wk_idx in range(candidate_idx, len(week_keys)):
             add_total = 0.0
             rel_idx = wk_idx - candidate_idx
             if 0 <= rel_idx < len(total_series):
@@ -883,6 +888,10 @@ def evaluate_forecast_planner(
     total_demand = [float(baseline_total[i] or 0.0) + float(proposed_total[i] or 0.0) for i in range(scope.weeks)]
     total_unmapped = [float(baseline_unmapped[i] or 0.0) + float(proposed_unmapped[i] or 0.0) for i in range(scope.weeks)]
     team_utilization = _series_ratio_pct(total_demand, team_capacity)
+    decision_start_idx = min(
+        (max(0, int(profile.get("startIndex") or 0)) for profile in project_profiles),
+        default=0,
+    )
 
     recommendation = _build_recommendation(
         week_keys=scope.week_keys,
@@ -890,7 +899,8 @@ def evaluate_forecast_planner(
         role_rows=role_rows,
         total_unmapped=total_unmapped,
         thresholds=thresholds,
-        )
+        decision_start_idx=decision_start_idx,
+    )
 
     start_options: list[dict[str, Any]] = []
     feasible_start_rows: list[dict[str, Any]] = []

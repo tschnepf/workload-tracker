@@ -19,6 +19,7 @@ type Params = {
   includeChildren?: boolean;
   departmentFilters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   vertical?: number;
+  mineOnly?: boolean;
   includePlaceholders?: boolean;
   statusIn?: string;
   hasFutureDeliverables?: 0 | 1;
@@ -122,6 +123,7 @@ export function useAssignmentsPageSnapshot(params: Params) {
       inc,
       deptFiltersKey,
       verticalKey,
+      params.mineOnly ? 1 : 0,
       params.includePlaceholders ? 1 : 0,
       params.statusIn ?? null,
       params.hasFutureDeliverables ?? null,
@@ -136,6 +138,7 @@ export function useAssignmentsPageSnapshot(params: Params) {
       inc,
       deptFiltersKey,
       verticalKey,
+      params.mineOnly,
       params.includePlaceholders,
       params.statusIn,
       params.hasFutureDeliverables,
@@ -159,6 +162,7 @@ export function useAssignmentsPageSnapshot(params: Params) {
         include_children: params.includeChildren ? 1 : 0,
         department_filters: params.departmentFilters,
         vertical: params.vertical,
+        mine_only: params.mineOnly ? 1 : 0,
         include_placeholders: params.includePlaceholders ? 1 : 0,
         status_in: params.statusIn,
         has_future_deliverables: params.hasFutureDeliverables,

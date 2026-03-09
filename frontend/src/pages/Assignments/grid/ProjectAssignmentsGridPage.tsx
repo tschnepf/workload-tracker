@@ -80,6 +80,8 @@ const ProjectAssignmentsGrid: React.FC = () => {
   const { state: verticalState } = useVerticalFilter();
   const { state: routeUiState, update: updateRouteUiState } = useRouteUiState('project-assignments');
   const auth = useAuth();
+  const hasLinkedPerson = auth?.person?.id != null;
+  const [myProjectsOnly, setMyProjectsOnly] = useState(false);
   const canUseAutoHours = isAdminOrManager(auth.user);
   const canManageAssignmentLifecycle = isAdminOrManager(auth.user);
   const canEditAssignments = true;
@@ -155,6 +157,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     includeChildren: deptState.includeChildren,
     departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
     vertical: verticalState.selectedVerticalId ?? undefined,
+    mineOnly: myProjectsOnly,
     include: 'assignment',
     requestAutoHoursBundle: canUseAutoHours && getFlag('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', true),
     autoHoursPhases: snapshotAutoHoursPhases,
@@ -236,7 +239,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
   useEffect(() => {
     setLoadedProjectIds(new Set());
     setLoadingAssignments(new Set());
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon, myProjectsOnly]);
 
   const { statusFilterOptions, selectedStatusFilters, formatFilterStatus, toggleStatusFilter } = useProjectStatusFilters(deliverables);
   const { definitionMap, statusOptionKeys } = useProjectStatusDefinitions();
@@ -260,7 +263,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     setMobileAssignmentPageByProject({});
     setMobileHasMoreAssignmentsByProject({});
     setMobileLoadingMoreByProject(new Set());
-  }, [isMobileLayout, deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon, statusFilterCsv, searchTokenPayload]);
+  }, [isMobileLayout, deptState.selectedDepartmentId, deptState.includeChildren, deptState.filters, verticalState.selectedVerticalId, weeksHorizon, statusFilterCsv, searchTokenPayload, myProjectsOnly]);
 
   const addSearchToken = useCallback(() => {
     const term = searchInput.trim();
@@ -301,6 +304,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         ...(searchTokenPayload.length ? { search_tokens: searchTokenPayload } : {}),
         workload_week_start: workloadWeekStart,
         workload_weeks: weeksHorizon,
+        ...(myProjectsOnly ? { mine_only: 1 as const } : {}),
         ...(dept != null ? { department: dept, include_children: inc } : {}),
         ...(deptFilters ? { department_filters: deptFilters } : {}),
         ...(verticalState.selectedVerticalId != null ? { vertical: Number(verticalState.selectedVerticalId) } : {}),
@@ -336,6 +340,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     workloadWeekStart,
     weeksHorizon,
     statusFilterCsv,
+    myProjectsOnly,
     deptState.selectedDepartmentId,
     deptState.includeChildren,
     departmentFiltersPayload,
@@ -1253,6 +1258,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         include_children: inc,
         department_filters: deptFilters,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        mine_only: myProjectsOnly ? 1 : undefined,
         search_tokens: assignmentRowTokenPayload.length ? assignmentRowTokenPayload : undefined,
       });
       const rows = Array.isArray((res as any)) ? (res as any) : (res?.results || []);
@@ -1277,6 +1283,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
       include_children: inc,
       department_filters: deptFilters,
       vertical: verticalState.selectedVerticalId ?? undefined,
+      mine_only: myProjectsOnly ? 1 : undefined,
       search_tokens: assignmentRowTokenPayload.length ? assignmentRowTokenPayload : undefined,
     });
     const rows = Array.isArray(res as any) ? (res as any) : (res?.results || []);
@@ -1288,6 +1295,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     departmentFiltersPayload,
     verticalState.selectedVerticalId,
     assignmentRowTokenPayload,
+    myProjectsOnly,
   ]);
 
   const loadProjectAssignmentsPage = useCallback(async (projectId: number, page: number, opts?: { append?: boolean }) => {
@@ -1365,6 +1373,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
         department_filters: deptFilters,
         include_placeholders: 1,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        mine_only: myProjectsOnly ? 1 : undefined,
         search_tokens: assignmentRowTokenPayload.length ? assignmentRowTokenPayload : undefined,
       }, { noCache: true });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
@@ -1379,7 +1388,7 @@ const ProjectAssignmentsGrid: React.FC = () => {
     } finally {
       setLoadingAssignments(new Set());
     }
-  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, assignmentRowTokenPayload, projectsData]);
+  }, [deptState.selectedDepartmentId, deptState.includeChildren, departmentFiltersPayload, verticalState.selectedVerticalId, assignmentRowTokenPayload, myProjectsOnly, projectsData]);
 
   const toggleProjectExpanded = (projectId: number) => {
     const getMainScrollContainer = () => bodyScrollRef.current?.closest('main') as HTMLElement | null;
@@ -2048,6 +2057,20 @@ const ProjectAssignmentsGrid: React.FC = () => {
         buttonLabel="Filter"
         buttonTitle="Filter project assignments"
       />
+      <button
+        type="button"
+        className={`h-10 inline-flex items-center px-3 rounded border text-xs shrink-0 disabled:opacity-60 disabled:cursor-not-allowed ${
+          myProjectsOnly
+            ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--text)]'
+            : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+        }`}
+        onClick={() => setMyProjectsOnly((prev) => !prev)}
+        disabled={!hasLinkedPerson}
+        aria-pressed={myProjectsOnly}
+        title="Show only projects where you are assigned"
+      >
+        My Projects
+      </button>
       <a
         href={buildAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
         className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"

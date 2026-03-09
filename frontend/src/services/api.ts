@@ -1636,7 +1636,7 @@ export const departmentsApi = {
 // Assignment API
 export const assignmentsApi = {
   // Get all assignments with pagination support and optional project filtering
-  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>; workload_week_start?: string; workload_weeks?: number }) => {
+  list: (params?: { page?: number; page_size?: number; project?: number; project_ids?: number[]; person?: number; department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; ordering?: string; vertical?: number; mine_only?: 0 | 1; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>; workload_week_start?: string; workload_weeks?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.set('page', params.page.toString());
     if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
@@ -1648,6 +1648,7 @@ export const assignmentsApi = {
     if (params?.include_placeholders != null) queryParams.set('include_placeholders', String(params.include_placeholders));
     if (params?.ordering) queryParams.set('ordering', params.ordering);
     if (params?.vertical != null) queryParams.set('vertical', String(params.vertical));
+    if (params?.mine_only != null) queryParams.set('mine_only', String(params.mine_only));
     if (params?.department_filters && params.department_filters.length) {
       queryParams.set('department_filters', JSON.stringify(params.department_filters));
     }
@@ -1677,6 +1678,7 @@ export const assignmentsApi = {
     workload_week_start?: string;
     workload_weeks?: number;
     search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>;
+    mine_only?: 0 | 1;
   }): Promise<PaginatedResponse<Assignment> & {
     people: Array<{ id: number; name: string; weeklyCapacity: number; department: number | null }>;
     assignmentCountsByPerson: Record<string, number>;
@@ -1709,7 +1711,7 @@ export const assignmentsApi = {
 
   // Grid snapshot (server-side aggregation for grid)
   getGridSnapshot: (
-    opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> },
+    opts?: { weeks?: number; department?: number; include_children?: 0 | 1; vertical?: number; mine_only?: 0 | 1; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }> },
     options?: RequestInit
   ) => {
     const sp = new URLSearchParams();
@@ -1717,6 +1719,7 @@ export const assignmentsApi = {
     if (opts?.department != null) sp.set('department', String(opts.department));
     if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
     if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.mine_only != null) sp.set('mine_only', String(opts.mine_only));
     if (opts?.department_filters && opts.department_filters.length) {
       sp.set('department_filters', JSON.stringify(opts.department_filters));
     }
@@ -1738,7 +1741,7 @@ export const assignmentsApi = {
 
   // Get all assignments (bulk API - Phase 2 optimization)
   listAll: async (
-    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>; workload_week_start?: string; workload_weeks?: number },
+    filters?: { department?: number; include_children?: 0 | 1; include_placeholders?: 0 | 1; project_ids?: number[]; vertical?: number; mine_only?: 0 | 1; department_filters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>; search_tokens?: Array<{ term: string; op: 'or' | 'and' | 'not' }>; workload_week_start?: string; workload_weeks?: number },
     options?: { noCache?: boolean }
   ): Promise<Assignment[]> => {
     const sp = new URLSearchParams();
@@ -1748,6 +1751,7 @@ export const assignmentsApi = {
     if (filters?.include_children != null) sp.set('include_children', String(filters.include_children));
     if (filters?.include_placeholders != null) sp.set('include_placeholders', String(filters.include_placeholders));
     if (filters?.vertical != null) sp.set('vertical', String(filters.vertical));
+    if (filters?.mine_only != null) sp.set('mine_only', String(filters.mine_only));
     if (filters?.department_filters && filters.department_filters.length) {
       sp.set('department_filters', JSON.stringify(filters.department_filters));
     }
@@ -1764,10 +1768,11 @@ export const assignmentsApi = {
   },
 
   // Get assignments for specific person
-  byPerson: (personId: number, opts?: { vertical?: number }) => {
+  byPerson: (personId: number, opts?: { vertical?: number; mine_only?: 0 | 1 }) => {
     const sp = new URLSearchParams();
     sp.set('person_id', String(personId));
     if (opts?.vertical != null) sp.set('vertical', String(opts.vertical));
+    if (opts?.mine_only != null) sp.set('mine_only', String(opts.mine_only));
     return fetchApi<Assignment[]>(`/assignments/by_person/?${sp.toString()}`);
   },
 

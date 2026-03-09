@@ -205,6 +205,8 @@ const AssignmentGrid: React.FC = () => {
   const { editingCell, setEditingCell, editingValue, setEditingValue, startEditing, cancelEdit, sanitizeHours } = useEditingCellHook();
   const caps = useCapabilities({ enabled: false });
   const auth = useAuth();
+  const hasLinkedPerson = auth?.person?.id != null;
+  const [myProjectsOnly, setMyProjectsOnly] = useState(false);
   const canUseAutoHours = isAdminOrManager(auth.user);
   const canManageAssignmentLifecycle = isAdminOrManager(auth.user);
   const isMobileLayout = useMediaQuery('(max-width: 1023px)');
@@ -235,7 +237,7 @@ const AssignmentGrid: React.FC = () => {
     () => normalizedSearchTokens.length > 0,
     [normalizedSearchTokens.length]
   );
-  const serverFilterActive = searchTokensActive;
+  const serverFilterActive = searchTokensActive || myProjectsOnly;
   const textCompatibleSearchTokens = useMemo(
     () => filterTextCompatibleTokens(normalizedSearchTokens),
     [normalizedSearchTokens]
@@ -282,6 +284,7 @@ const AssignmentGrid: React.FC = () => {
       workload_week_start: workloadWeekStart,
       workload_weeks: weeksHorizon,
       vertical: verticalState.selectedVerticalId ?? undefined,
+      mine_only: myProjectsOnly ? 1 as const : undefined,
       project: overrides?.project,
       person: overrides?.person,
       meta_only: overrides?.meta_only,
@@ -295,6 +298,7 @@ const AssignmentGrid: React.FC = () => {
     weeksHorizon,
     statusIn,
     verticalState.selectedVerticalId,
+    myProjectsOnly,
   ]);
   const hoursByPersonView = useMemo(() => {
     if (!serverFilterActive) return hoursByPerson;
@@ -427,6 +431,7 @@ const AssignmentGrid: React.FC = () => {
     statusIn,
     searchTokensPayload,
     weeksHorizon,
+    myProjectsOnly,
   ]);
 
   const handleAssignmentRoleChange = async (personId: number, assignmentId: number, roleId: number | null, roleName: string | null) => {
@@ -459,6 +464,7 @@ const AssignmentGrid: React.FC = () => {
     includeChildren: deptState.includeChildren,
     departmentFilters: deptState.selectedDepartmentId == null ? departmentFiltersPayload : undefined,
     vertical: verticalState.selectedVerticalId ?? undefined,
+    mineOnly: myProjectsOnly,
     include: 'assignment',
     requestAutoHoursBundle: canUseAutoHours && getFlag('FF_ASSIGNMENTS_AUTO_HOURS_BUNDLE', true),
     autoHoursPhases: snapshotAutoHoursPhases,
@@ -1669,6 +1675,7 @@ const AssignmentGrid: React.FC = () => {
         include_children: dept != null ? inc : undefined,
         department_filters: dept == null && departmentFiltersPayload.length ? departmentFiltersPayload : undefined,
         vertical: verticalState.selectedVerticalId ?? undefined,
+        mine_only: myProjectsOnly ? 1 : undefined,
       });
       const allAssignments = Array.isArray(bulk) ? bulk : [];
 
@@ -2865,6 +2872,20 @@ const AssignmentGrid: React.FC = () => {
         buttonLabel="Filter"
         buttonTitle="Filter assignments"
       />
+      <button
+        type="button"
+        className={`h-10 inline-flex items-center px-3 rounded border text-xs shrink-0 disabled:opacity-60 disabled:cursor-not-allowed ${
+          myProjectsOnly
+            ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--text)]'
+            : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+        }`}
+        onClick={() => setMyProjectsOnly((prev) => !prev)}
+        disabled={!hasLinkedPerson}
+        aria-pressed={myProjectsOnly}
+        title="Show only projects where you are assigned"
+      >
+        My Projects
+      </button>
       <a
         href={buildProjectAssignmentsLink({ weeks: weeksHorizon, statuses: (Array.from(selectedStatusFilters) || []).filter(s => s !== 'Show All') })}
         className="h-10 inline-flex items-center px-2 rounded border border-[var(--border)] text-xs text-[var(--muted)] hover:text-[var(--text)] shrink-0"
@@ -2977,6 +2998,20 @@ const AssignmentGrid: React.FC = () => {
           buttonTitle="Filter assignments"
           align="left"
         />
+        <button
+          type="button"
+          className={`h-8 px-2 rounded border text-xs shrink-0 disabled:opacity-60 disabled:cursor-not-allowed ${
+            myProjectsOnly
+              ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--text)]'
+              : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'
+          }`}
+          onClick={() => setMyProjectsOnly((prev) => !prev)}
+          disabled={!hasLinkedPerson}
+          aria-pressed={myProjectsOnly}
+          title="Show only projects where you are assigned"
+        >
+          My Projects
+        </button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[200px]">
@@ -3055,6 +3090,9 @@ const AssignmentGrid: React.FC = () => {
               selectedStatusFilters={selectedStatusFilters as unknown as Set<string>}
               formatFilterStatus={(status) => formatFilterStatus(status as any)}
               toggleStatusFilter={(status) => toggleStatusFilter(status as any)}
+              myProjectsOnly={myProjectsOnly}
+              onToggleMyProjectsOnly={() => setMyProjectsOnly((prev) => !prev)}
+              disableMyProjectsOnly={!hasLinkedPerson}
               departmentsOverride={departments}
               searchBar={searchBar}
             />

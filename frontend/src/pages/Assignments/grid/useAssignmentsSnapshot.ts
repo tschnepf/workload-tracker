@@ -10,6 +10,7 @@ export interface UseAssignmentsSnapshotArgs {
   includeChildren?: boolean;
   departmentFilters?: Array<{ departmentId: number; op: 'or' | 'and' | 'not' }>;
   vertical?: number;
+  mineOnly?: boolean;
   include?: string;
   requestAutoHoursBundle?: boolean;
   autoHoursPhases?: string[];
@@ -49,6 +50,7 @@ export function useAssignmentsSnapshot(args: UseAssignmentsSnapshotArgs) {
     includeChildren: args.includeChildren,
     departmentFilters: args.departmentFilters,
     vertical: args.vertical,
+    mineOnly: args.mineOnly,
     include: args.include || 'assignment',
     requestAutoHoursBundle: args.requestAutoHoursBundle,
     autoHoursPhases: args.autoHoursPhases,

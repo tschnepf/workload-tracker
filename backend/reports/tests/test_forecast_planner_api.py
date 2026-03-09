@@ -226,6 +226,77 @@ class ForecastPlannerApiTests(TestCase):
         self.assertEqual(len(expected), len(high))
         self.assertTrue(all((high[idx] or 0) >= (expected[idx] or 0) for idx in range(len(expected))))
 
+    def test_evaluate_recommendation_ignores_overload_before_proposed_start(self):
+        sunday = date.today() - timedelta(days=(date.today().weekday() + 1) % 7)
+        week0 = sunday.isoformat()
+        week2 = (sunday + timedelta(days=14)).isoformat()
+        Assignment.objects.create(
+            person=self.person,
+            project=self.active_project,
+            weekly_hours={week0: 30},
+            is_active=True,
+        )
+
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            "/api/reports/forecast/evaluate/",
+            {
+                "weeks": 8,
+                "statusKeys": ["active"],
+                "projects": [
+                    {
+                        "templateId": self.template.id,
+                        "name": "Future Pursuit",
+                        "startDate": week2,
+                        "probabilityPct": 100,
+                        "quantity": 1,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        recommendation = resp.json()["result"]["recommendation"]
+        start_options = resp.json()["result"].get("startOptions") or []
+        self.assertEqual(recommendation["decision"], "Go")
+        self.assertIsNone(recommendation["firstOverloadedWeek"])
+        self.assertTrue(any("No threshold exceedances" in reason for reason in (recommendation.get("reasons") or [])))
+        self.assertEqual(start_options[0]["earliestFeasibleStartDate"], week2)
+
+    def test_evaluate_recommendation_flags_overload_from_proposed_start(self):
+        sunday = date.today() - timedelta(days=(date.today().weekday() + 1) % 7)
+        week0 = sunday.isoformat()
+        week2 = (sunday + timedelta(days=14)).isoformat()
+        Assignment.objects.create(
+            person=self.person,
+            project=self.active_project,
+            weekly_hours={week0: 30, week2: 25},
+            is_active=True,
+        )
+
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            "/api/reports/forecast/evaluate/",
+            {
+                "weeks": 8,
+                "statusKeys": ["active"],
+                "projects": [
+                    {
+                        "templateId": self.template.id,
+                        "name": "Future Pursuit",
+                        "startDate": week2,
+                        "probabilityPct": 100,
+                        "quantity": 1,
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        recommendation = resp.json()["result"]["recommendation"]
+        self.assertEqual(recommendation["decision"], "No-Go")
+        self.assertEqual(recommendation["firstOverloadedWeek"], week2)
+
     def test_scenario_crud_and_shared_access(self):
         self.client.force_authenticate(self.manager)
         create = self.client.post(

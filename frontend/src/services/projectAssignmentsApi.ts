@@ -38,6 +38,7 @@ type GridSnapshotOpts = {
   department?: number;
   include_children?: 0 | 1;
   include_placeholders?: 0 | 1;
+  mine_only?: 0 | 1;
   status_in?: string; // CSV of statuses
   has_future_deliverables?: 0 | 1;
   project_ids?: number[]; // optional scope
@@ -50,6 +51,7 @@ export async function getProjectGridSnapshot(opts?: GridSnapshotOpts) {
   if (opts?.department != null) sp.set('department', String(opts.department));
   if (opts?.include_children != null) sp.set('include_children', String(opts.include_children));
   if (opts?.include_placeholders != null) sp.set('include_placeholders', String(opts.include_placeholders));
+  if (opts?.mine_only != null) sp.set('mine_only', String(opts.mine_only));
   if (opts?.status_in) sp.set('status_in', opts.status_in);
   if (opts?.has_future_deliverables != null) sp.set('has_future_deliverables', String(opts.has_future_deliverables));
   if (opts?.project_ids && opts.project_ids.length) sp.set('project_ids', opts.project_ids.join(','));

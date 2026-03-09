@@ -24,6 +24,9 @@ export interface HeaderBarProps {
   selectedStatusFilters: Set<string>;
   formatFilterStatus: (s: string) => string;
   toggleStatusFilter: (s: string) => void;
+  myProjectsOnly?: boolean;
+  onToggleMyProjectsOnly?: () => void;
+  disableMyProjectsOnly?: boolean;
   departmentsOverride?: Department[];
   searchBar?: React.ReactNode;
 }
@@ -50,6 +53,9 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   selectedStatusFilters,
   formatFilterStatus,
   toggleStatusFilter,
+  myProjectsOnly = false,
+  onToggleMyProjectsOnly,
+  disableMyProjectsOnly = false,
   departmentsOverride,
   searchBar,
 }) => {
@@ -155,6 +161,23 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
+          {onToggleMyProjectsOnly ? (
+            <button
+              type="button"
+              onClick={onToggleMyProjectsOnly}
+              disabled={disableMyProjectsOnly}
+              className={`px-2 py-0.5 text-xs rounded border transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                myProjectsOnly
+                  ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
+                  : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surfaceHover)]'
+              }`}
+              aria-pressed={myProjectsOnly}
+              aria-label="Toggle my projects filter"
+              title="Show only projects where you are assigned"
+            >
+              My Projects
+            </button>
+          ) : null}
           {statusFilterOptions.map((status) => {
             const isActive =
               status === 'Show All'
