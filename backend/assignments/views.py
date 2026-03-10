@@ -386,24 +386,52 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             queryset = queryset.exclude(department_id__in=list(exclude_only))
         return queryset
 
-    def _first_pre_hire_week_key(self, person: Person | None, weekly_hours: dict | None) -> str | None:
-        if person is None or not isinstance(weekly_hours, dict):
+    @staticmethod
+    def _coerce_week_hours_map(weekly_hours: dict | None) -> dict[str, float]:
+        if not isinstance(weekly_hours, dict):
+            return {}
+        normalized: dict[str, float] = {}
+        for raw_week_key, raw_value in weekly_hours.items():
+            week_key = str(raw_week_key)
+            try:
+                datetime.strptime(week_key, '%Y-%m-%d').date()
+            except Exception:
+                continue
+            try:
+                normalized[week_key] = float(raw_value or 0.0)
+            except Exception:
+                continue
+        return normalized
+
+    def _first_pre_hire_week_key(
+        self,
+        person: Person | None,
+        weekly_hours: dict | None,
+        *,
+        current_weekly_hours: dict | None = None,
+        only_changed: bool = False,
+    ) -> str | None:
+        if person is None:
             return None
         hire_date = getattr(person, 'hire_date', None)
         if hire_date is None:
             return None
-        for raw_week_key, raw_value in weekly_hours.items():
-            week_key = str(raw_week_key)
-            try:
-                hours = float(raw_value or 0.0)
-            except Exception:
-                continue
+        incoming = self._coerce_week_hours_map(weekly_hours)
+        if not incoming:
+            return None
+        baseline = (
+            self._coerce_week_hours_map(current_weekly_hours)
+            if only_changed
+            else {}
+        )
+        for week_key, hours in incoming.items():
             if hours <= 0:
                 continue
-            try:
-                week_start = datetime.strptime(week_key, '%Y-%m-%d').date()
-            except Exception:
-                continue
+            if only_changed:
+                previous_hours = baseline.get(week_key, 0.0)
+                if abs(previous_hours - hours) < 1e-9:
+                    continue
+            week_start = datetime.strptime(week_key, '%Y-%m-%d').date()
             if not is_hired_in_week(hire_date, week_start):
                 return week_key
         return None
@@ -3897,7 +3925,8 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         assignment_map: dict[int, Assignment] = {}
 
-        # Preflight validation for pre-hire week writes. Reject the request before any writes.
+        # Preflight validation for pre-hire week writes. Reject before writes.
+        # Only validate incoming weeks that changed for each assignment payload.
         preflight_map = {
             assignment.id: assignment
             for assignment in Assignment.objects.select_related('person').filter(id__in=dedup_order)
@@ -3910,7 +3939,12 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
             if not serializer.is_valid():
                 continue
             incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
-            pre_hire_week = self._first_pre_hire_week_key(getattr(assignment, 'person', None), incoming_weekly_hours)
+            pre_hire_week = self._first_pre_hire_week_key(
+                getattr(assignment, 'person', None),
+                incoming_weekly_hours,
+                current_weekly_hours=assignment.weekly_hours,
+                only_changed=True,
+            )
             if pre_hire_week is not None:
                 return self._pre_hire_locked_response(pre_hire_week)
 
@@ -4034,10 +4068,29 @@ class AssignmentViewSet(ETagConditionalMixin, viewsets.ModelViewSet):
 
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        if ('weekly_hours' in serializer.validated_data) or ('person' in serializer.validated_data):
+        has_weekly_hours_update = 'weekly_hours' in serializer.validated_data
+        has_person_update = 'person' in serializer.validated_data
+        if has_weekly_hours_update or has_person_update:
             target_person = serializer.validated_data.get('person', instance.person)
-            incoming_weekly_hours = serializer.validated_data.get('weekly_hours', instance.weekly_hours or {})
-            pre_hire_week = self._first_pre_hire_week_key(target_person, incoming_weekly_hours)
+            person_changed = has_person_update and (
+                getattr(target_person, 'id', None) != getattr(instance.person, 'id', None)
+            )
+            pre_hire_week = None
+            if has_weekly_hours_update:
+                incoming_weekly_hours = serializer.validated_data.get('weekly_hours', {})
+                if person_changed:
+                    # Person reassignment should validate all incoming positive weeks.
+                    pre_hire_week = self._first_pre_hire_week_key(target_person, incoming_weekly_hours)
+                else:
+                    pre_hire_week = self._first_pre_hire_week_key(
+                        target_person,
+                        incoming_weekly_hours,
+                        current_weekly_hours=instance.weekly_hours or {},
+                        only_changed=True,
+                    )
+            elif person_changed:
+                # Person changed without weeklyHours payload; validate existing hours on assignment.
+                pre_hire_week = self._first_pre_hire_week_key(target_person, instance.weekly_hours or {})
             if pre_hire_week is not None:
                 return self._pre_hire_locked_response(pre_hire_week)
         assignment = serializer.save()

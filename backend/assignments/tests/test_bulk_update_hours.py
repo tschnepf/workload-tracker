@@ -106,6 +106,70 @@ class BulkUpdateHoursTests(TestCase):
         self.assertEqual(body.get('code'), 'PRE_HIRE_WEEK_LOCKED')
         self.assertEqual(body.get('detail'), 'Cannot assign hours before employee hire week')
 
+    def test_bulk_update_hours_ignores_unchanged_prehire_weeks(self):
+        sunday_date = date.fromisoformat(self.sunday)
+        eligible_week = (sunday_date + timedelta(days=14)).isoformat()
+        self.person.hire_date = sunday_date + timedelta(days=14)
+        self.person.save(update_fields=['hire_date', 'updated_at'])
+        self.assignment_a.weekly_hours = {
+            self.sunday: 8,      # pre-hire for this person (unchanged in request)
+            eligible_week: 4,    # eligible week (changed in request)
+        }
+        self.assignment_a.save(update_fields=['weekly_hours', 'updated_at'])
+
+        response = self.client.patch(
+            '/api/assignments/bulk_update_hours/',
+            {
+                'updates': [
+                    {
+                        'assignmentId': self.assignment_a.id,
+                        'weeklyHours': {self.sunday: 8, eligible_week: 10},
+                    },
+                ]
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assignment_a.refresh_from_db()
+        self.assertEqual(float(self.assignment_a.weekly_hours[self.sunday]), 8.0)
+        self.assertEqual(float(self.assignment_a.weekly_hours[eligible_week]), 10.0)
+
+    def test_update_assignment_rejects_changed_prehire_week_write(self):
+        sunday_date = date.fromisoformat(self.sunday)
+        self.person.hire_date = sunday_date + timedelta(days=14)
+        self.person.save(update_fields=['hire_date', 'updated_at'])
+
+        response = self.client.patch(
+            f'/api/assignments/{self.assignment_a.id}/',
+            {'weeklyHours': {self.sunday: 6}},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body.get('code'), 'PRE_HIRE_WEEK_LOCKED')
+        self.assertEqual(body.get('detail'), 'Cannot assign hours before employee hire week')
+
+    def test_update_assignment_ignores_unchanged_prehire_weeks(self):
+        sunday_date = date.fromisoformat(self.sunday)
+        eligible_week = (sunday_date + timedelta(days=14)).isoformat()
+        self.person.hire_date = sunday_date + timedelta(days=14)
+        self.person.save(update_fields=['hire_date', 'updated_at'])
+        self.assignment_a.weekly_hours = {
+            self.sunday: 8,      # pre-hire for this person (unchanged in request)
+            eligible_week: 4,    # eligible week (changed in request)
+        }
+        self.assignment_a.save(update_fields=['weekly_hours', 'updated_at'])
+
+        response = self.client.patch(
+            f'/api/assignments/{self.assignment_a.id}/',
+            {'weeklyHours': {self.sunday: 8, eligible_week: 12}},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assignment_a.refresh_from_db()
+        self.assertEqual(float(self.assignment_a.weekly_hours[self.sunday]), 8.0)
+        self.assertEqual(float(self.assignment_a.weekly_hours[eligible_week]), 12.0)
+
     def test_create_assignment_rejects_pre_hire_week_writes(self):
         sunday_date = date.fromisoformat(self.sunday)
         self.person.hire_date = sunday_date + timedelta(days=14)
